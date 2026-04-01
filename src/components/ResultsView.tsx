@@ -277,10 +277,10 @@ const StatCard = ({
 // ─── Attempt Row ──────────────────────────────────────────────────────────────
 const AttemptRow = ({
 	attempt,
-	classId,
-	subjectId,
+	// classId,
+	// subjectId,
 	onGradeAttempt,
-	onUpdateStatus,
+	// onUpdateStatus,
 }: {
 	attempt: StudentAttempt;
 	classId: string;
@@ -310,7 +310,7 @@ const AttemptRow = ({
 			{/* Student name */}
 			<td className="px-5 py-3.5">
 				<div className="flex items-center gap-2.5">
-					<div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+					<div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
 						<User className="w-3.5 h-3.5 text-gray-500" />
 					</div>
 					<span className="text-sm font-medium text-gray-800">
