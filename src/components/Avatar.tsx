@@ -10,7 +10,7 @@ export const Avatar = ({
 }) => {
 	return (
 		<AvatarComponent className={cn(className)}>
-			<AvatarImage src={url || "/images/avatar.svg"} />
+			<AvatarImage src={url || ""} />
 		</AvatarComponent>
 	);
 };
