@@ -6,8 +6,7 @@ import { BookOpen, ChevronRight } from "lucide-react";
 import { Subject } from "@/types";
 import { useCBTStore } from "@/store";
 import { Button, Skeleton } from "./ui";
-// import { useBreadcrumbStore } from "@/store/breadcrumb";
-// import { useSearchParams } from "next/navigation";
+import Layout from "./Layout";
 
 function groupByName(subjects: Subject[]): Record<string, Subject[]> {
 	return subjects.reduce(
@@ -46,56 +45,64 @@ export const MySubjectsView = () => {
 
 	if (loading) {
 		return (
-			<div className="space-y-4 p-8">
-				<Skeleton className="h-6 w-32" />
-				{[1, 2].map((i) => (
-					<div
-						key={i}
-						className="overflow-hidden rounded-xl border border-gray-200"
-					>
-						<div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
-							<Skeleton className="h-4 w-24" />
-						</div>
-						{[1, 2, 3].map((j) => (
-							<div
-								key={j}
-								className="flex items-center justify-between border-b border-gray-50 px-4 py-3"
-							>
-								<Skeleton className="h-4 w-20" />
-								<Skeleton className="h-8 w-24 rounded-lg" />
+			<Layout>
+				<div className="space-y-4">
+					<Skeleton className="h-6 w-32" />
+					{[1, 2].map((i) => (
+						<div
+							key={i}
+							className="overflow-hidden rounded-xl border border-gray-200"
+						>
+							<div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
+								<Skeleton className="h-4 w-24" />
 							</div>
-						))}
-					</div>
-				))}
-			</div>
+							{[1, 2, 3].map((j) => (
+								<div
+									key={j}
+									className="flex items-center justify-between border-b border-gray-50 px-4 py-3"
+								>
+									<Skeleton className="h-4 w-20" />
+									<Skeleton className="h-8 w-24 rounded-lg" />
+								</div>
+							))}
+						</div>
+					))}
+				</div>
+			</Layout>
 		);
 	}
 
 	if (Object.keys(grouped).length === 0) {
 		return (
-			<div className="flex flex-col items-center justify-center p-8 py-20 text-center">
-				<BookOpen className="mb-4 h-12 w-12 text-gray-200" />
-				<p className="text-sm font-medium text-gray-500">
-					No subjects assigned
-				</p>
-				<p className="mt-1 text-xs text-gray-400">
-					Subjects assigned to you will appear here
-				</p>
-			</div>
+			<Layout>
+				<div className="flex flex-col items-center justify-center py-20 text-center">
+					<BookOpen className="mb-4 h-12 w-12 text-gray-200" />
+					<p className="text-sm font-medium text-gray-500">
+						No subjects assigned
+					</p>
+					<p className="mt-1 text-xs text-gray-400">
+						Subjects assigned to you will appear here
+					</p>
+				</div>
+			</Layout>
 		);
 	}
 
 	return (
-		<div className="space-y-5 p-8">
-			<h2 className="text-base font-semibold text-gray-900">My Subjects</h2>
-			{Object.entries(grouped).map(([subjectName, subjectList]) => (
-				<SubjectGroup
-					key={subjectName}
-					name={subjectName}
-					subjects={subjectList}
-				/>
-			))}
-		</div>
+		<Layout>
+			<div className="space-y-5">
+				<h2 className="text-base font-semibold text-gray-900">
+					My Subjects
+				</h2>
+				{Object.entries(grouped).map(([subjectName, subjectList]) => (
+					<SubjectGroup
+						key={subjectName}
+						name={subjectName}
+						subjects={subjectList}
+					/>
+				))}
+			</div>
+		</Layout>
 	);
 };
 

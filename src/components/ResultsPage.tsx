@@ -1,11 +1,11 @@
 "use client";
 
+import { useCBTStore } from "@/store";
 import { use } from "react";
-import { TestListView } from "@/components/TestListView";
-import { useCBTStore } from "@/src/store";
-import Layout from "@/components/Layout";
+import { ResultsView } from "./ResultsView";
+import Layout from "./Layout";
 
-export default function AssessmentsPage({
+export default function ResultsPage({
 	params,
 }: {
 	params: Promise<{ classId: string; subjectId: string }>;
@@ -18,7 +18,7 @@ export default function AssessmentsPage({
 
 	return (
 		<Layout href={`/classes/${classId}/subjects/${subjectId}`}>
-			<TestListView
+			<ResultsView
 				subjectId={subjectId}
 				classId={classId}
 				className={cls?.name || classId}

@@ -400,3 +400,161 @@ export const mockQuestions: Question[] = [
 		updatedAt: "2024-01-01",
 	},
 ];
+import { StudentAttempt } from "@/types";
+
+// ─── Mock Tests (for demo results page) ──────────────────────────────────────
+// These reference the "algebra" topic questions above. In production, tests
+// would be created via the Test Editor and stored in the tests[] slice.
+
+export const DEMO_TEST_ID = "demo-mid-term-math";
+export const DEMO_SUBJECT_ID = "jss2a-mathematics";
+export const DEMO_CLASS_ID = "jss2a";
+
+// ─── Mock Student Attempts ─────────────────────────────────────────────────────
+
+const STUDENTS = [
+	{ id: "s1", name: "Damilare John", cls: "JSS 2 A" },
+	{ id: "s2", name: "Amaka Okonkwo", cls: "JSS 2 A" },
+	{ id: "s3", name: "Tunde Adeyemi", cls: "JSS 2 A" },
+	{ id: "s4", name: "Fatima Bello", cls: "JSS 2 A" },
+	{ id: "s5", name: "Chukwuemeka Eze", cls: "JSS 2 A" },
+	{ id: "s6", name: "Ngozi Uchenna", cls: "JSS 2 A" },
+	{ id: "s7", name: "Ibrahim Lawal", cls: "JSS 2 A" },
+];
+
+export const mockAttempts: StudentAttempt[] = [
+	{
+		id: "attempt-s1",
+		testId: DEMO_TEST_ID,
+		subjectId: DEMO_SUBJECT_ID,
+		classId: DEMO_CLASS_ID,
+		studentId: "s1",
+		studentName: "Damilare John",
+		studentClass: "SS1 Commercial",
+		status: "in-progress",
+		answers: [],
+		startedAt: "2025-01-10T09:00:00Z",
+	},
+	{
+		id: "attempt-s2",
+		testId: DEMO_TEST_ID,
+		subjectId: DEMO_SUBJECT_ID,
+		classId: DEMO_CLASS_ID,
+		studentId: "s2",
+		studentName: "Amaka Okonkwo",
+		studentClass: "JSS 2 A",
+		status: "submitted",
+		answers: [
+			{ questionId: "q1", selectedOptionIds: ["b"] },
+			{ questionId: "q2", selectedOptionIds: ["true"] },
+			{
+				questionId: "q3",
+				textAnswer:
+					"Climate change is caused by burning fossil fuels and deforestation. Effects include rising temperatures and sea level rise.",
+			},
+			{ questionId: "q5", textAnswer: "Paris" },
+			{ questionId: "q8", textAnswer: "O" },
+			{ questionId: "q9", textAnswer: "O" },
+		],
+		totalMarks: 20,
+		startedAt: "2025-01-10T09:00:00Z",
+		submittedAt: "2025-01-10T09:44:00Z",
+	},
+	{
+		id: "attempt-s3",
+		testId: DEMO_TEST_ID,
+		subjectId: DEMO_SUBJECT_ID,
+		classId: DEMO_CLASS_ID,
+		studentId: "s3",
+		studentName: "Tunde Adeyemi",
+		studentClass: "JSS 2 A",
+		status: "missed",
+		answers: [],
+		startedAt: "2025-01-10T09:00:00Z",
+	},
+	{
+		id: "attempt-s4",
+		testId: DEMO_TEST_ID,
+		subjectId: DEMO_SUBJECT_ID,
+		classId: DEMO_CLASS_ID,
+		studentId: "s4",
+		studentName: "Fatima Bello",
+		studentClass: "JSS 2 A",
+		status: "graded",
+		answers: [
+			{ questionId: "q1", selectedOptionIds: ["b"], awardedMarks: 1 },
+			{ questionId: "q2", selectedOptionIds: ["true"], awardedMarks: 1 },
+			{
+				questionId: "q3",
+				textAnswer:
+					"Greenhouse gases trap heat in the atmosphere. Effects: rising sea levels and extreme weather.",
+				awardedMarks: 1,
+			},
+			{ questionId: "q5", textAnswer: "Paris", awardedMarks: 1 },
+			{ questionId: "q7", selectedOptionIds: ["a", "b"], awardedMarks: 1 },
+			{ questionId: "q8", textAnswer: "O", awardedMarks: 1 },
+			{ questionId: "q9", textAnswer: "O", awardedMarks: 1 },
+		],
+		score: 18,
+		totalMarks: 20,
+		percentage: 90.0,
+		weightedScore: 9.0,
+		feedback: "Excellent work! Keep it up.",
+		startedAt: "2025-01-10T09:00:00Z",
+		submittedAt: "2025-01-10T09:40:00Z",
+		gradedAt: "2025-01-10T11:00:00Z",
+	},
+	{
+		id: "attempt-s5",
+		testId: DEMO_TEST_ID,
+		subjectId: DEMO_SUBJECT_ID,
+		classId: DEMO_CLASS_ID,
+		studentId: "s5",
+		studentName: "Chukwuemeka Eze",
+		studentClass: "JSS 2 A",
+		status: "retake-pending",
+		answers: [],
+		startedAt: "2025-01-10T09:00:00Z",
+	},
+	{
+		id: "attempt-s6",
+		testId: DEMO_TEST_ID,
+		subjectId: DEMO_SUBJECT_ID,
+		classId: DEMO_CLASS_ID,
+		studentId: "s6",
+		studentName: "Ngozi Uchenna",
+		studentClass: "JSS 2 A",
+		status: "graded",
+		answers: [
+			{ questionId: "q1", selectedOptionIds: ["a"], awardedMarks: 0 },
+			{ questionId: "q2", selectedOptionIds: ["true"], awardedMarks: 1 },
+		],
+		score: 16,
+		totalMarks: 20,
+		percentage: 80.0,
+		weightedScore: 8.0,
+		startedAt: "2025-01-10T09:00:00Z",
+		submittedAt: "2025-01-10T09:38:00Z",
+		gradedAt: "2025-01-10T11:15:00Z",
+	},
+	{
+		id: "attempt-s7",
+		testId: DEMO_TEST_ID,
+		subjectId: DEMO_SUBJECT_ID,
+		classId: DEMO_CLASS_ID,
+		studentId: "s7",
+		studentName: "Ibrahim Lawal",
+		studentClass: "JSS 2 A",
+		status: "graded",
+		answers: [
+			{ questionId: "q1", selectedOptionIds: ["b"], awardedMarks: 1 },
+		],
+		score: 20,
+		totalMarks: 20,
+		percentage: 100.0,
+		weightedScore: 10.0,
+		startedAt: "2025-01-10T09:00:00Z",
+		submittedAt: "2025-01-10T09:35:00Z",
+		gradedAt: "2025-01-10T11:30:00Z",
+	},
+];

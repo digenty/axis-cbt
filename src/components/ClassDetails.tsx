@@ -1,9 +1,9 @@
 "use client";
 
 import { useCBTStore } from "@/store";
-import React, { use } from "react";
+import { use } from "react";
 import { ClassSubjectsView } from "./ClassSubjectsView";
-import { BackButton } from "./PageHeader";
+import Layout from "./Layout";
 
 const ClassDetails = ({
 	params,
@@ -14,8 +14,7 @@ const ClassDetails = ({
 	const cls = useCBTStore((s) => s.classes.find((c) => c.id === classId));
 
 	return (
-		<div className="p-8">
-			<BackButton href="/classes" />
+		<Layout href="/subjects">
 			<div className="mb-5">
 				<h1 className="text-lg font-semibold text-gray-900">
 					{cls?.name || classId}
@@ -23,7 +22,7 @@ const ClassDetails = ({
 				<p className="mt-0.5 text-sm text-gray-500">{cls?.school}</p>
 			</div>
 			<ClassSubjectsView classId={classId} />
-		</div>
+		</Layout>
 	);
 };
 

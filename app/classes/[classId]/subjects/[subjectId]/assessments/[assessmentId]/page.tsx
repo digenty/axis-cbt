@@ -1,8 +1,9 @@
 "use client";
+
 import { use } from "react";
 import { useCBTStore } from "@/store";
-import { BackButton } from "@/components/PageHeader";
 import { TestEditor } from "@/components/TestEditor";
+import Layout from "@/components/Layout";
 
 export default function TestEditorPage({
 	params,
@@ -22,28 +23,22 @@ export default function TestEditorPage({
 
 	if (!test) {
 		return (
-			<div>
-				<BackButton
-					href={`/classes/${classId}/subjects/${subjectId}/assessments`}
-				/>
+			<Layout href={`/classes/${classId}/subjects/${subjectId}/assessments`}>
 				<p className="py-20 text-center text-sm text-gray-400">
 					Test not found
 				</p>
-			</div>
+			</Layout>
 		);
 	}
 
 	return (
-		<div className="p-8">
-			<BackButton
-				href={`/classes/${classId}/subjects/${subjectId}/assessments`}
-			/>
+		<Layout href={`/classes/${classId}/subjects/${subjectId}/assessments`}>
 			<TestEditor
 				test={test}
 				classId={classId}
 				className={cls?.name || classId}
 				subjectName={subject?.name || subjectId}
 			/>
-		</div>
+		</Layout>
 	);
 }
