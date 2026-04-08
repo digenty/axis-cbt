@@ -4,6 +4,11 @@ import Link from "next/link";
 import { BookOpen, ClipboardList, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCBTStore } from "@/store";
+import { ApiSubject } from "@/api/subjects";
+import {
+	useGetClassDetails,
+	useGetTeacherSubjects,
+} from "@/hooks/queryHooks/useSubjects";
 
 interface SubjectDetailViewProps {
 	classId: string;
@@ -44,12 +49,27 @@ export const SubjectDetailView = ({
 	classId,
 	subjectId,
 }: SubjectDetailViewProps) => {
-	const subject = useCBTStore((s) =>
-		s.subjects.find((sub) => sub.id === subjectId),
-	);
-	const cls = useCBTStore((s) => s.classes.find((c) => c.id === classId));
+	const { data: response, isFetching: isFetchingSubjcts } =
+		useGetTeacherSubjects();
+	const { data: classDetailsResponse, isFetching: isFetchingClassDetails } =
+		useGetClassDetails(Number(classId));
 
-	if (!subject || !cls) {
+	const subjects: ApiSubject[] = response?.data ?? [];
+	const getCurrentSubject = subjects?.find(
+		(obj) => obj.subjectId === Number(subjectId),
+	);
+
+	const classDetails = classDetailsResponse?.data;
+
+	if (isFetchingSubjcts || isFetchingClassDetails) {
+		return (
+			<div className="flex items-center justify-center py-20">
+				<p className="text-sm text-gray-400">Loading...</p>
+			</div>
+		);
+	}
+
+	if (!getCurrentSubject || !classDetails) {
 		return (
 			<div className="flex items-center justify-center py-20">
 				<p className="text-sm text-gray-400">Subject not found</p>

@@ -1,9 +1,13 @@
 "use client";
 
-import { use } from "react";
-import { useCBTStore } from "@/store";
+import { use, useEffect } from "react";
 import { QuestionBankView } from "./QuestionBankView";
 import Layout from "./Layout";
+import {
+	useGetClassDetails,
+	useGetTeacherSubjects,
+} from "@/hooks/queryHooks/useSubjects";
+import { ApiSubject } from "@/api/subjects";
 
 export default function QuestionBank({
 	params,
@@ -11,24 +15,44 @@ export default function QuestionBank({
 	params: Promise<{ classId: string; subjectId: string }>;
 }>) {
 	const { classId, subjectId } = use(params);
-	const subject = useCBTStore((s) =>
-		s.subjects.find((sub) => sub.id === subjectId),
+	console.log({ classId, subjectId });
+
+	const {
+		data: response,
+		// isLoading,
+		// error,
+		refetch,
+	} = useGetTeacherSubjects();
+
+	useEffect(() => {
+		refetch();
+	}, [refetch]);
+
+	const subjects: ApiSubject[] = response?.data ?? [];
+	const getCurrentSubject = subjects?.find(
+		(obj) => obj.subjectId === Number(subjectId),
 	);
-	const cls = useCBTStore((s) => s.classes.find((c) => c.id === classId));
+
+	const { data: classDetailsResponse } = useGetClassDetails(Number(classId));
+	const classDetails = classDetailsResponse?.data;
+	console.log({ classDetails, getCurrentSubject });
 
 	return (
 		<Layout href={`/classes/${classId}/subjects/${subjectId}`}>
-			<div className="flex h-[calc(100vh-3rem)] flex-col p-8">
+			<div className="flex h-[calc(100vh-3rem)] flex-col">
 				<div className="mb-4">
 					<h1 className="text-base font-semibold text-gray-900">
 						Question Bank
 					</h1>
 					<p className="mt-0.5 text-xs text-gray-400">
-						{cls?.name} - {subject?.name}
+						{classDetails?.name} - {getCurrentSubject?.subjectName}
 					</p>
 				</div>
 				<div className="flex-1 overflow-hidden">
-					<QuestionBankView subjectId={subjectId} />
+					<QuestionBankView
+						classId={Number(classId)}
+						subjectId={Number(subjectId)}
+					/>
 				</div>
 			</div>
 		</Layout>

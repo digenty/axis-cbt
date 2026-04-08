@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { BookOpen, ChevronRight, AlertCircle, RefreshCw } from "lucide-react";
 import { useGetTeacherSubjects } from "@/hooks/queryHooks/useSubjects";
-import { ApiSubject } from "@/api/subjects";
+import { ApiSubject, ClassArmReportDtos } from "@/api/subjects";
 import { cn } from "@/lib/utils";
 import Layout from "./Layout";
+import { useEffect } from "react";
 
 const Skeleton = ({ className }: { className?: string }) => (
 	<div className={cn("animate-pulse rounded-md bg-gray-100", className)} />
@@ -41,17 +42,6 @@ const SubjectsLoadingSkeleton = () => (
 	</Layout>
 );
 
-function groupByName(subjects: ApiSubject[]): Record<string, ApiSubject[]> {
-	return subjects.reduce(
-		(acc, s) => {
-			if (!acc[s.name]) acc[s.name] = [];
-			acc[s.name].push(s);
-			return acc;
-		},
-		{} as Record<string, ApiSubject[]>,
-	);
-}
-
 export const MySubjectsView = () => {
 	const {
 		data: response,
@@ -62,7 +52,9 @@ export const MySubjectsView = () => {
 		isFetching,
 	} = useGetTeacherSubjects();
 
-	console.log({ response, error });
+	useEffect(() => {
+		refetch();
+	}, [refetch]);
 
 	if (isLoading) return <SubjectsLoadingSkeleton />;
 
@@ -95,7 +87,6 @@ export const MySubjectsView = () => {
 	}
 
 	const subjects: ApiSubject[] = response?.data ?? [];
-	console.log({ subjects });
 
 	if (subjects.length === 0) {
 		return (
@@ -113,66 +104,68 @@ export const MySubjectsView = () => {
 		);
 	}
 
-	const grouped = groupByName(subjects);
-
 	return (
 		<Layout>
 			<div className="space-y-5">
 				<h2 className="text-base font-semibold text-gray-900">
 					My Subjects
 				</h2>
-				{Object.entries(grouped).map(([subjectName, subjectList]) => (
-					<SubjectGroup
-						key={subjectName}
-						name={subjectName}
-						subjects={subjectList}
-					/>
+				{subjects.map((subject) => (
+					<SubjectGroup key={subject?.subjectId} subject={subject} />
 				))}
 			</div>
 		</Layout>
 	);
 };
 
-const SubjectGroup = ({
-	name,
-	subjects,
-}: {
-	name: string;
-	subjects: ApiSubject[];
-}) => (
-	<div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
-		<div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
-			<h3 className="text-sm font-semibold text-gray-800">{name}</h3>
+const SubjectGroup = ({ subject }: { subject: ApiSubject }) => {
+	console.log({ subject });
+	return (
+		<div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
+			<div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
+				<h3 className="text-sm font-semibold text-gray-800">
+					{subject?.subjectName}
+				</h3>
+			</div>
+			<div className="divide-y divide-gray-50">
+				{subject?.classArmReportDtos?.map((classArm) => (
+					<SubjectRow
+						key={classArm.armId}
+						classArm={classArm}
+						subjectId={subject?.subjectId}
+					/>
+				))}
+			</div>
 		</div>
-		<div className="divide-y divide-gray-50">
-			{subjects.map((subject) => (
-				<SubjectRow key={subject.id} subject={subject} />
-			))}
-		</div>
-	</div>
-);
+	);
+};
 
-const SubjectRow = ({ subject }: { subject: ApiSubject }) => (
-	<div className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-gray-50/60">
-		<div className="flex items-center gap-3">
-			<div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-				<BookOpen className="h-4 w-4 text-blue-500" />
+const SubjectRow = ({
+	classArm,
+	subjectId,
+}: {
+	classArm: ClassArmReportDtos;
+	subjectId: number;
+}) => {
+	return (
+		<div className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-gray-50/60">
+			<div className="flex items-center gap-3">
+				{/* <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
+					<BookOpen className="h-4 w-4 text-blue-500" />
+				</div> */}
+				<div>
+					<p className="text-sm font-medium text-gray-800">
+						{classArm.classArmName ?? "-"}
+					</p>
+				</div>
 			</div>
-			<div>
-				<p className="text-sm font-medium text-gray-800">
-					{subject.className ?? `Class ${subject.classId}`}
-				</p>
-				{subject.teacherName && (
-					<p className="text-xs text-gray-400">{subject.teacherName}</p>
-				)}
-			</div>
+			<Link
+				href={`/classes/${classArm?.classId}/subjects/${subjectId}`}
+				className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+			>
+				View Subject
+				<ChevronRight className="h-3 w-3" />
+			</Link>
 		</div>
-		<Link
-			href={`/classes/${subject.classId}/subjects/${subject.id}`}
-			className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
-		>
-			View Subject
-			<ChevronRight className="h-3 w-3" />
-		</Link>
-	</div>
-);
+	);
+};

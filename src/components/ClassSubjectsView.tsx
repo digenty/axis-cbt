@@ -11,10 +11,9 @@ interface ClassSubjectsViewProps {
 }
 
 export const ClassSubjectsView = ({ classId }: ClassSubjectsViewProps) => {
-	const { getSubjectsByClass, classes } = useCBTStore();
+	const { getSubjectsByClass } = useCBTStore();
 	const [loading, setLoading] = useState(true);
-	const cls = classes.find((c) => c.id === classId);
-	console.log({ cls });
+
 	const subjects = getSubjectsByClass(classId);
 
 	useEffect(() => {

@@ -7,15 +7,16 @@ import { isAxiosError } from "axios";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export interface ApiSubject {
-	id: number;
-	name: string;
+export interface ClassArmReportDtos {
+	armId: number;
+	classArmName: string;
 	classId: number;
-	className?: string;
-	teacherId?: number;
-	teacherName?: string;
-	questionsInBank?: number;
-	tests?: number;
+	reportStatus: string;
+}
+export interface ApiSubject {
+	classArmReportDtos: ClassArmReportDtos[];
+	subjectId: number;
+	subjectName: string;
 }
 
 export interface TeacherSubjectsResponse {
@@ -24,11 +25,41 @@ export interface TeacherSubjectsResponse {
 	status: string;
 }
 
+export interface ApiSchoolResponse {
+	active: boolean;
+	address: string;
+	adminId: number;
+	country: string;
+	createdAt: string;
+	currency: string;
+	email: string;
+	id: number;
+	logo: string;
+	motto: string;
+	name: string;
+	phoneNumber: string;
+	studentPopulation: number;
+	timezone: string;
+	updatedAt: string;
+	uuid: string;
+	version: number;
+}
+
 // ── API calls ──────────────────────────────────────────────────────────────────
 
 export const getTeacherSubjects = async () => {
 	try {
 		const { data } = await api.get("/teacher/subject/my");
+		return data;
+	} catch (error: unknown) {
+		if (isAxiosError(error)) throw error.response?.data;
+		throw error;
+	}
+};
+
+export const getClassDetails = async (id: number) => {
+	try {
+		const { data } = await api.get(`/classes/${id}`);
 		return data;
 	} catch (error: unknown) {
 		if (isAxiosError(error)) throw error.response?.data;

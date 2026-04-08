@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useCBTStore } from "@/store";
 import { Question, QuestionType } from "@/types";
 import { FolderOpen } from "lucide-react";
 import { EmptyState } from "./ui";
@@ -12,6 +11,7 @@ import { MultipleBlanksForm } from "./MultipleBanksForm";
 import { QuestionListView } from "./QuestionListView";
 import { AddAssessmentItemModal } from "./AddAssessmentItemModal";
 import { ImportQuestionsModal } from "./ImportQuestionModal";
+import { useGetCbtQuestionBankTopics } from "@/hooks/queryHooks/useQuestionBank";
 
 type FormMode =
 	| { kind: "none" }
@@ -21,26 +21,38 @@ type FormMode =
 	| { kind: "match"; question?: Question };
 
 interface QuestionBankViewProps {
-	subjectId: string;
+	classId: number;
+	subjectId: number;
 }
 
-export const QuestionBankView = ({ subjectId }: QuestionBankViewProps) => {
-	const { getTopicsBySubject } = useCBTStore();
+export const QuestionBankView = ({
+	classId,
+	subjectId,
+}: QuestionBankViewProps) => {
 	const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
 	const [formMode, setFormMode] = useState<FormMode>({ kind: "none" });
 	const [addItemModalOpen, setAddItemModalOpen] = useState(false);
 	const [importModalOpen, setImportModalOpen] = useState(false);
 
-	const topics = getTopicsBySubject(subjectId);
+	const { data: topicsResponse, refetch: refetchTopics } =
+		useGetCbtQuestionBankTopics({ classId, subjectId });
 
 	useEffect(() => {
-		if (topics.length > 0 && !selectedTopicId) {
-			setSelectedTopicId(topics[0].id);
+		refetchTopics();
+	}, [refetchTopics]);
+
+	const topics = topicsResponse?.data;
+
+	console.log({ topics });
+
+	useEffect(() => {
+		if (topics?.length > 0 && !selectedTopicId) {
+			setSelectedTopicId(topics?.[0]?.id);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [topics.length]);
+	}, [topics?.length]);
 
-	const selectedTopic = topics.find((t) => t.id === selectedTopicId);
+	const selectedTopic = topics?.find((t) => t.id === selectedTopicId);
 
 	const closeForm = () => setFormMode({ kind: "none" });
 
@@ -113,6 +125,9 @@ export const QuestionBankView = ({ subjectId }: QuestionBankViewProps) => {
 			<div className="flex h-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
 				{/* Sidebar — always visible */}
 				<QuestionBankSidebar
+					refetchTopics={refetchTopics}
+					topics={topics}
+					classId={classId}
 					subjectId={subjectId}
 					selectedTopicId={selectedTopicId}
 					onSelectTopic={(id) => {

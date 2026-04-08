@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useRef, useEffect } from "react";
 import {
 	DndContext,
@@ -23,32 +24,43 @@ import {
 	Upload,
 	GripVertical,
 } from "lucide-react";
-// import { Modal, ConfirmModal } from "@/components/ui/modal";
 import { useCBTStore } from "@/store";
-import { Topic } from "@/types";
-import { generateId, cn } from "@/lib/utils";
+import { ApiTopic, Topic } from "@/types";
+import { cn } from "@/lib/utils";
 import { Modal } from "./Modal";
 import { ConfirmModal } from "./Modal";
+import { useAddCbtQuestionBankTopics } from "@/hooks/queryHooks/useQuestionBank";
+import { CbtQueBankTopicPayload } from "@/api/question-bank";
+import { useGetClassDetails } from "@/hooks/queryHooks/useSubjects";
+import { toast } from "./Toast";
 
 interface QuestionBankSidebarProps {
-	subjectId: string;
-	selectedTopicId: string | null;
-	onSelectTopic: (id: string) => void;
+	topics: ApiTopic[];
+	classId: number;
+	subjectId: number;
+	selectedTopicId: number | null;
+	onSelectTopic: (id: number) => void;
 	onImportQuestions: () => void;
+	refetchTopics: () => void;
 }
 
 export const QuestionBankSidebar = ({
+	refetchTopics,
+	topics,
+	classId,
 	subjectId,
 	selectedTopicId,
 	onSelectTopic,
 	onImportQuestions,
 }: QuestionBankSidebarProps) => {
-	const { getTopicsBySubject, addTopic, reorderTopics } = useCBTStore();
+	// const { reorderTopics } = useCBTStore();
 	const [addModalOpen, setAddModalOpen] = useState(false);
-	const [editTopic, setEditTopic] = useState<Topic | null>(null);
-	const [deleteTopic, setDeleteTopic] = useState<Topic | null>(null);
+	const [editTopic, setEditTopic] = useState<ApiTopic | null>(null);
+	const [deleteTopic, setDeleteTopic] = useState<ApiTopic | null>(null);
 
-	const topics = getTopicsBySubject(subjectId);
+	const { mutate: addTopic, isPending } = useAddCbtQuestionBankTopics();
+	const { data: classDetailsResponse } = useGetClassDetails(Number(classId));
+	const classDetails = classDetailsResponse?.data;
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -57,25 +69,45 @@ export const QuestionBankSidebar = ({
 	const handleDragEnd = (event: DragEndEvent) => {
 		const { active, over } = event;
 		if (!over || active.id === over.id) return;
-		const oldIdx = topics.findIndex((t) => t.id === active.id);
-		const newIdx = topics.findIndex((t) => t.id === over.id);
-		const reordered = arrayMove(topics, oldIdx, newIdx);
-		reorderTopics(
-			subjectId,
-			reordered.map((t) => t.id),
-		);
+		// const oldIdx = topics.findIndex((t) => t.id === active.id);
+		// const newIdx = topics.findIndex((t) => t.id === over.id);
+		// const reordered = arrayMove(topics, oldIdx, newIdx);
+		// reorderTopics(
+		// 	subjectId,
+		// 	reordered.map((t) => t.id),
+		// );
 	};
 
-	const handleAddTopic = (name: string) => {
-		const topic: Topic = {
-			id: generateId(),
-			name,
+	const handleAddTopic = (data: { name: string; description: string }) => {
+		const payload: CbtQueBankTopicPayload = {
+			name: data?.name,
+			classId,
 			subjectId,
-			questions: [],
-			createdAt: new Date().toISOString(),
+			branchId: classDetails?.branchId,
+			description: data?.description,
+			displayOrder: 0,
+			id: crypto.getRandomValues(new Uint32Array(1))[0],
 		};
-		addTopic(topic);
-		onSelectTopic(topic.id);
+
+		addTopic(payload, {
+			onError: (error) => {
+				toast({
+					title: error.message ?? "Something went wrong",
+					description: "Could not add topic",
+					type: "error",
+				});
+			},
+			onSuccess: (data) => {
+				refetchTopics();
+				console.log({ addTopicSuccess: data });
+				toast({
+					title: "Topic saved successfully!",
+					type: "success",
+				});
+			},
+		});
+
+		if (payload?.id) onSelectTopic(payload?.id);
 		setAddModalOpen(false);
 	};
 
@@ -101,15 +133,15 @@ export const QuestionBankSidebar = ({
 						onDragEnd={handleDragEnd}
 					>
 						<SortableContext
-							items={topics.map((t) => t.id)}
+							items={topics?.map((t) => t?.id)}
 							strategy={verticalListSortingStrategy}
 						>
-							{topics.map((topic) => (
+							{topics?.map((topic: ApiTopic) => (
 								<SortableTopicItem
-									key={topic.id}
+									key={topic?.id}
 									topic={topic}
-									isSelected={selectedTopicId === topic.id}
-									onSelect={() => onSelectTopic(topic.id)}
+									isSelected={selectedTopicId === topic?.id}
+									onSelect={() => onSelectTopic(topic?.id)}
 									onEdit={() => setEditTopic(topic)}
 									onDelete={() => setDeleteTopic(topic)}
 								/>
@@ -145,10 +177,10 @@ export const QuestionBankSidebar = ({
 				initialName={editTopic?.name}
 				onClose={() => setEditTopic(null)}
 				onSave={(name) => {
-					if (editTopic) {
-						useCBTStore.getState().updateTopic(editTopic.id, name);
-						setEditTopic(null);
-					}
+					// if (editTopic) {
+					// 	useCBTStore.getState().updateTopic(editTopic.id, name);
+					// 	setEditTopic(null);
+					// }
 				}}
 			/>
 
@@ -158,12 +190,12 @@ export const QuestionBankSidebar = ({
 				selectedTopicId={selectedTopicId}
 				onClose={() => setDeleteTopic(null)}
 				onDeleted={(id) => {
-					const remaining = getTopicsBySubject(subjectId).filter(
-						(t) => t.id !== id,
-					);
-					if (selectedTopicId === id && remaining.length > 0) {
-						onSelectTopic(remaining[0].id);
-					}
+					// const remaining = getTopicsBySubject(subjectId).filter(
+					// 	(t) => t.id !== id,
+					// );
+					// if (selectedTopicId === id && remaining.length > 0) {
+					// 	onSelectTopic(remaining[0].id);
+					// }
 					setDeleteTopic(null);
 				}}
 			/>
@@ -173,7 +205,7 @@ export const QuestionBankSidebar = ({
 
 // ─── Sortable Topic Item ──────────────────────────────────────────────────────
 interface SortableTopicItemProps {
-	topic: Topic;
+	topic: ApiTopic;
 	isSelected: boolean;
 	onSelect: () => void;
 	onEdit: () => void;
@@ -316,7 +348,13 @@ interface TopicModalProps {
 	mode: "add" | "edit";
 	initialName?: string;
 	onClose: () => void;
-	onSave: (name: string) => void;
+	onSave: ({
+		name,
+		description,
+	}: {
+		name: string;
+		description: string;
+	}) => void;
 }
 
 const TopicModal = ({
@@ -327,6 +365,7 @@ const TopicModal = ({
 	onSave,
 }: TopicModalProps) => {
 	const [name, setName] = useState(initialName);
+	const [description, setDescription] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -335,6 +374,7 @@ const TopicModal = ({
 		if (open) {
 			// eslint-disable-next-line react-hooks/set-state-in-effect
 			setName(initialName);
+			setDescription("");
 			setError("");
 			setTimeout(() => inputRef.current?.focus(), 50);
 		}
@@ -347,16 +387,17 @@ const TopicModal = ({
 		}
 		setSaving(true);
 		await new Promise((r) => setTimeout(r, 300));
-		onSave(name.trim());
+		await onSave({ name, description });
 		setSaving(false);
 		setName("");
+		setDescription("");
 	};
 
 	return (
 		<Modal
 			open={open}
 			onClose={onClose}
-			className="max-h-[90vh] overflow-y-auto"
+			className="max-h-[90vh] gap-4 overflow-y-auto"
 			title={mode === "add" ? "Add New Topic" : "Edit Topic"}
 			// size="sm"
 			footer={
@@ -392,10 +433,35 @@ const TopicModal = ({
 						setName(e.target.value);
 						setError("");
 					}}
-					onKeyDown={(e) => {
-						if (e.key === "Enter") handleSave();
-						if (e.key === "Escape") onClose();
+					// onKeyDown={(e) => {
+					// 	if (e.key === "Enter") handleSave();
+					// 	if (e.key === "Escape") onClose();
+					// }}
+					placeholder="Enter topic name"
+					className={cn(
+						"h-9 w-full rounded-lg border px-3 py-2 text-sm transition focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none",
+						error ? "border-red-400" : "border-gray-200",
+					)}
+				/>
+				{error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+			</div>
+
+			<div className="px-5 py-4">
+				<label className="mb-1.5 block text-xs font-medium text-gray-700">
+					Description
+				</label>
+				<input
+					// ref={inputRef}
+					type="text"
+					value={description}
+					onChange={(e) => {
+						setDescription(e.target.value);
+						setError("");
 					}}
+					// onKeyDown={(e) => {
+					// 	if (e.key === "Enter") handleSave();
+					// 	if (e.key === "Escape") onClose();
+					// }}
 					placeholder="Enter topic name"
 					className={cn(
 						"h-9 w-full rounded-lg border px-3 py-2 text-sm transition focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none",
@@ -411,7 +477,7 @@ const TopicModal = ({
 // ─── Delete Topic Confirm ─────────────────────────────────────────────────────
 interface DeleteTopicModalProps {
 	topic: Topic | null;
-	selectedTopicId: string | null;
+	selectedTopicId: number | null;
 	onClose: () => void;
 	onDeleted: (id: string) => void;
 }

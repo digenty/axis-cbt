@@ -136,7 +136,7 @@ export interface Question {
 export interface Topic {
 	id: string;
 	name: string;
-	subjectId: string;
+	subjectId: number;
 	questions: Question[];
 	createdAt: string;
 }
@@ -225,14 +225,6 @@ export interface Question {
 	subQuestions?: Question[];
 	createdAt: string;
 	updatedAt: string;
-}
-
-export interface Topic {
-	id: string;
-	name: string;
-	subjectId: string;
-	questions: Question[];
-	createdAt: string;
 }
 
 export interface Subject {
@@ -379,14 +371,6 @@ export interface Question {
 	updatedAt: string;
 }
 
-export interface Topic {
-	id: string;
-	name: string;
-	subjectId: string;
-	questions: Question[];
-	createdAt: string;
-}
-
 export interface Subject {
 	id: string;
 	name: string;
@@ -397,6 +381,22 @@ export interface Subject {
 	tests: number;
 	topics: Topic[];
 	createdAt: string;
+}
+
+export interface ApiTopic {
+	active: boolean;
+	branchId: number;
+	classId: number;
+	createdAt: string;
+	description: string;
+	displayOrder: number;
+	id: number;
+	name: string;
+	schoolId: number;
+	subjectId: number;
+	updatedAt: string;
+	uuid: string;
+	version: number;
 }
 
 export interface Class {
