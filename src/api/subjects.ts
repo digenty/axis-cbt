@@ -2,7 +2,7 @@
  * CBT Subjects API
  * Mirrors the pattern from the main app's subjects.ts
  */
-import apiAuth from "@/lib/axios-auth";
+import api from "@/lib/axios-auth";
 import { isAxiosError } from "axios";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -26,18 +26,15 @@ export interface TeacherSubjectsResponse {
 
 // ── API calls ──────────────────────────────────────────────────────────────────
 
-export const getTeacherSubjects =
-	async (): Promise<TeacherSubjectsResponse> => {
-		try {
-			const { data } = await apiAuth.get<TeacherSubjectsResponse>(
-				"/teacher/subject/my",
-			);
-			return data;
-		} catch (error: unknown) {
-			if (isAxiosError(error)) throw error.response?.data;
-			throw error;
-		}
-	};
+export const getTeacherSubjects = async () => {
+	try {
+		const { data } = await api.get("/teacher/subject/my");
+		return data;
+	} catch (error: unknown) {
+		if (isAxiosError(error)) throw error.response?.data;
+		throw error;
+	}
+};
 
 export const getSubjectsByClass = async (
 	className?: string,
@@ -45,7 +42,7 @@ export const getSubjectsByClass = async (
 	branchId?: number,
 ): Promise<TeacherSubjectsResponse> => {
 	try {
-		const { data } = await apiAuth.get<TeacherSubjectsResponse>(
+		const { data } = await api.get<TeacherSubjectsResponse>(
 			`/subjects/class?className=${className}&levelType=${levelType}${branchId ? `&branchId=${branchId}` : ""}`,
 		);
 		return data;

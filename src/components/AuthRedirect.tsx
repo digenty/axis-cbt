@@ -8,6 +8,8 @@ export const AuthRedirect = () => {
 	const params = useSearchParams();
 	const token = params.get("token");
 
+	console.log({params})
+
 	useEffect(() => {
 		if (token) {
 			createSession(token);

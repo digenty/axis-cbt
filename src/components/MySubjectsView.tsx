@@ -62,6 +62,8 @@ export const MySubjectsView = () => {
 		isFetching,
 	} = useGetTeacherSubjects();
 
+	console.log({ response, error });
+
 	if (isLoading) return <SubjectsLoadingSkeleton />;
 
 	if (isError) {

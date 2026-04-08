@@ -10,8 +10,9 @@ export const createSession = async (
 ) => {
 	const cookieStore = await cookies();
 
-	cookieStore.set("token", JSON.stringify(token), {
+	cookieStore.set("token", token, {
 		httpOnly: true,
+		secure: process.env.NODE_ENV === "production",
 		sameSite: "strict",
 		path: "/",
 	});
@@ -34,8 +35,7 @@ export const getSessionToken = async () => {
 		redirect("/auth");
 	}
 
-	const accessToken = JSON.parse(token);
-	return { token: accessToken };
+	return { token };
 };
 
 export const getSessionData = async () => {
@@ -46,7 +46,6 @@ export const getSessionData = async () => {
 		return { user: null };
 	}
 
-	const accessToken = JSON.parse(token);
-	const user: JWTPayload | null = decodeJWT(accessToken);
+	const user: JWTPayload | null = decodeJWT(token);
 	return { user };
 };
