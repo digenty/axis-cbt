@@ -35,7 +35,6 @@ export default function QuestionBank({
 
 	const { data: classDetailsResponse } = useGetClassDetails(Number(classId));
 	const classDetails = classDetailsResponse?.data;
-	console.log({ classDetails, getCurrentSubject });
 
 	return (
 		<Layout href={`/classes/${classId}/subjects/${subjectId}`}>

@@ -1,24 +1,26 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Question, QuestionType } from "@/types";
 import { FolderOpen } from "lucide-react";
 import { EmptyState } from "./ui";
 import { QuestionBankSidebar } from "./QuestionBankSidebar";
 import { AddQuestionForm } from "./AddQuestionForm";
 import { QuestionGroupForm } from "./QuestionGroupForm";
-import { MultipleBlanksForm } from "./MultipleBanksForm";
+import { MultipleBlanksForm } from "./MultipleBlanksForm";
 import { QuestionListView } from "./QuestionListView";
 import { AddAssessmentItemModal } from "./AddAssessmentItemModal";
+import { NormalizedQuestion, QuestionType } from "@/types/question.types";
+import { useGetCbtTopics } from "@/hooks/queryHooks/useQuestionBank";
+import { ApiTopic } from "@/types/question";
 import { ImportQuestionsModal } from "./ImportQuestionModal";
-import { useGetCbtQuestionBankTopics } from "@/hooks/queryHooks/useQuestionBank";
+
+// ─── Form mode discriminated union ───────────────────────────────────────────
 
 type FormMode =
 	| { kind: "none" }
-	| { kind: "single"; type: QuestionType; question?: Question }
-	| { kind: "group"; question?: Question }
-	| { kind: "blanks"; question?: Question }
-	| { kind: "match"; question?: Question };
+	| { kind: "single"; type: QuestionType; question?: NormalizedQuestion }
+	| { kind: "group"; question?: NormalizedQuestion }
+	| { kind: "blanks"; question?: NormalizedQuestion };
 
 interface QuestionBankViewProps {
 	classId: number;
@@ -29,30 +31,27 @@ export const QuestionBankView = ({
 	classId,
 	subjectId,
 }: QuestionBankViewProps) => {
-	const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
+	const [selectedTopicId, setSelectedTopicId] = useState<number | null>(null);
 	const [formMode, setFormMode] = useState<FormMode>({ kind: "none" });
 	const [addItemModalOpen, setAddItemModalOpen] = useState(false);
 	const [importModalOpen, setImportModalOpen] = useState(false);
 
-	const { data: topicsResponse, refetch: refetchTopics } =
-		useGetCbtQuestionBankTopics({ classId, subjectId });
+	const { data: topicsResponse, isLoading: topicsLoading } = useGetCbtTopics({
+		classId,
+		subjectId,
+	});
 
+	const topics: ApiTopic[] = topicsResponse?.data ?? [];
+
+	// Auto-select first topic once loaded
 	useEffect(() => {
-		refetchTopics();
-	}, [refetchTopics]);
-
-	const topics = topicsResponse?.data;
-
-	console.log({ topics });
-
-	useEffect(() => {
-		if (topics?.length > 0 && !selectedTopicId) {
-			setSelectedTopicId(topics?.[0]?.id);
+		if (topics.length > 0 && !selectedTopicId) {
+			setSelectedTopicId(topics[0].id);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [topics?.length]);
+	}, [topics.length]);
 
-	const selectedTopic = topics?.find((t) => t.id === selectedTopicId);
+	const selectedTopic = topics.find((t) => t.id === selectedTopicId);
 
 	const closeForm = () => setFormMode({ kind: "none" });
 
@@ -61,37 +60,48 @@ export const QuestionBankView = ({
 		setAddItemModalOpen(true);
 	};
 
-	const handleEditQuestion = (question: Question) => {
-		if (question.type === "question-group") {
+	const handleEditQuestion = (question: NormalizedQuestion) => {
+		if (question.questionType === "question-group") {
 			setFormMode({ kind: "group", question });
-		} else if (question.type === "multiple-blanks") {
+		} else if (question.questionType === "multiple-blanks") {
 			setFormMode({ kind: "blanks", question });
 		} else {
-			setFormMode({ kind: "single", type: question.type, question });
+			setFormMode({ kind: "single", type: question.questionType, question });
 		}
 	};
 
-	const showForm = formMode.kind !== "none";
-
-	const FORM_COMPONENTS = {
-		single: AddQuestionForm,
-		group: QuestionGroupForm,
-		blanks: MultipleBlanksForm,
-	} as const;
-
-	type FormKind = keyof typeof FORM_COMPONENTS; // "single" | "group" | "blanks"
-
-	const isRenderableForm = (
-		mode: FormMode,
-	): mode is Extract<FormMode, { kind: FormKind }> => {
-		return mode.kind in FORM_COMPONENTS;
-	};
-
 	const renderContent = () => {
-		if (showForm && isRenderableForm(formMode)) {
-			const Form = FORM_COMPONENTS[formMode.kind];
+		if (formMode.kind === "single") {
 			return (
-				<Form
+				<AddQuestionForm
+					classId={classId}
+					subjectId={subjectId}
+					topicId={selectedTopicId!}
+					editQuestion={formMode.question}
+					onClose={closeForm}
+					onSaved={closeForm}
+				/>
+			);
+		}
+
+		if (formMode.kind === "group") {
+			return (
+				<QuestionGroupForm
+					classId={classId}
+					subjectId={subjectId}
+					topicId={selectedTopicId!}
+					editQuestion={formMode.question}
+					onClose={closeForm}
+					onSaved={closeForm}
+				/>
+			);
+		}
+
+		if (formMode.kind === "blanks") {
+			return (
+				<MultipleBlanksForm
+					classId={classId}
+					subjectId={subjectId}
 					topicId={selectedTopicId!}
 					editQuestion={formMode.question}
 					onClose={closeForm}
@@ -103,6 +113,8 @@ export const QuestionBankView = ({
 		if (selectedTopic) {
 			return (
 				<QuestionListView
+					classId={classId}
+					subjectId={subjectId}
 					topicId={selectedTopic.id}
 					topicName={selectedTopic.name}
 					onAddQuestion={handleAddQuestion}
@@ -114,8 +126,8 @@ export const QuestionBankView = ({
 		return (
 			<EmptyState
 				icon={<FolderOpen className="h-12 w-12" />}
-				title="No topics"
-				description="Add topics to group your questions"
+				title="No topics yet"
+				description="Add topics from the sidebar to start building your question bank"
 			/>
 		);
 	};
@@ -123,13 +135,13 @@ export const QuestionBankView = ({
 	return (
 		<>
 			<div className="flex h-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-				{/* Sidebar — always visible */}
+				{/* Sidebar */}
 				<QuestionBankSidebar
-					refetchTopics={refetchTopics}
 					topics={topics}
 					classId={classId}
 					subjectId={subjectId}
 					selectedTopicId={selectedTopicId}
+					isLoading={topicsLoading}
 					onSelectTopic={(id) => {
 						setSelectedTopicId(id);
 						setFormMode({ kind: "none" });
@@ -141,7 +153,7 @@ export const QuestionBankView = ({
 				<div className="flex flex-1 overflow-hidden">{renderContent()}</div>
 			</div>
 
-			{/* Add Assessment Item Modal */}
+			{/* Add question type picker */}
 			<AddAssessmentItemModal
 				open={addItemModalOpen}
 				onClose={() => setAddItemModalOpen(false)}
@@ -149,20 +161,27 @@ export const QuestionBankView = ({
 					setAddItemModalOpen(false);
 					setFormMode({ kind: "single", type });
 				}}
-				onSelectGroup={() => setFormMode({ kind: "group" })}
-				onSelectMultipleBlanks={() => setFormMode({ kind: "blanks" })}
+				onSelectGroup={() => {
+					setAddItemModalOpen(false);
+					setFormMode({ kind: "group" });
+				}}
+				onSelectMultipleBlanks={() => {
+					setAddItemModalOpen(false);
+					setFormMode({ kind: "blanks" });
+				}}
 				onSelectMatch={() => {
+					setAddItemModalOpen(false);
 					setFormMode({ kind: "single", type: "matching" });
 				}}
 			/>
 
+			{/* Import modal */}
 			<ImportQuestionsModal
 				open={importModalOpen}
 				onClose={() => setImportModalOpen(false)}
 				onImported={(count) => {
 					setImportModalOpen(false);
-					// actually add the questions
-					console.log({ ImportQuestionsModalCount: count });
+					console.log(`Imported ${count} questions`);
 				}}
 			/>
 		</>

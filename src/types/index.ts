@@ -119,7 +119,7 @@ export interface Blank {
 
 export interface Question {
 	id: string;
-	topicId: string;
+	topicId: number;
 	type: QuestionType;
 	text: string;
 	marks: number;
@@ -129,6 +129,10 @@ export interface Question {
 	passage?: string;
 	instruction?: string;
 	subQuestions?: Question[];
+	/** For matching questions: left column items */
+	matchItems?: { id: string; text: string }[];
+	/** For matching questions: right column options */
+	matchOptions?: { id: string; text: string }[];
 	createdAt: string;
 	updatedAt: string;
 }
@@ -164,17 +168,22 @@ export interface Class {
 }
 
 export interface Assessment {
-	id: string;
-	title: string;
-	subjectId: string;
-	classId: string;
-	duration: number;
+	// title: string;
+	// duration: number;
+	// questions: string[];
+
+	id: number;
+	name: string;
+	classId: number;
+	subjectId: number;
+	testType: "CONTINUOUS_ASSESSMENT" | "EXAM";
+	term: "FIRST" | "SECOND" | "THIRD";
+	status: "DRAFT" | "PUBLISHED" | "COMPLETED";
+	durationMinutes: number;
 	totalMarks: number;
-	questions: string[];
-	status: "draft" | "published" | "completed";
-	startDate?: string;
-	endDate?: string;
-	createdAt: string;
+	startDateTime: string;
+	endDateTime: string;
+	questionCount: number;
 }
 
 export interface Result {
@@ -209,22 +218,6 @@ export interface Blank {
 	answers: string[];
 	mark: number;
 	options?: Option[];
-}
-
-export interface Question {
-	id: string;
-	topicId: string;
-	type: QuestionType;
-	text: string;
-	marks: number;
-	options?: Option[];
-	correctAnswer?: string | string[];
-	blanks?: Blank[];
-	passage?: string;
-	instruction?: string;
-	subQuestions?: Question[];
-	createdAt: string;
-	updatedAt: string;
 }
 
 export interface Subject {
@@ -266,42 +259,6 @@ export interface TestSection {
 	instruction: string;
 	/** Ordered list of question IDs in this section */
 	questionIds: string[];
-}
-
-export interface Test {
-	id: string;
-	title: string;
-	subjectId: string;
-	classId: string;
-	term: TermType;
-	testType: TestType;
-	assessmentMapping: AssessmentMapping | "";
-	/** label shown as badge e.g. "CA 1" */
-	mappingLabel: string;
-	testDate: string;
-	startTime: string;
-	amPm: "AM" | "PM";
-	duration: number;
-	studentResultAccess: boolean;
-	status: TestStatus;
-	sections: TestSection[];
-	totalMarks: number;
-	createdAt: string;
-	updatedAt: string;
-}
-
-export interface Assessment {
-	id: string;
-	title: string;
-	subjectId: string;
-	classId: string;
-	duration: number;
-	totalMarks: number;
-	questions: string[];
-	status: "draft" | "published" | "completed";
-	startDate?: string;
-	endDate?: string;
-	createdAt: string;
 }
 
 export interface Result {
@@ -349,26 +306,6 @@ export interface Blank {
 	answers: string[];
 	mark: number;
 	options?: Option[];
-}
-
-export interface Question {
-	id: string;
-	topicId: string;
-	type: QuestionType;
-	text: string;
-	marks: number;
-	options?: Option[];
-	correctAnswer?: string | string[];
-	blanks?: Blank[];
-	passage?: string;
-	instruction?: string;
-	subQuestions?: Question[];
-	/** For matching questions: left column items */
-	matchItems?: { id: string; text: string }[];
-	/** For matching questions: right column options */
-	matchOptions?: { id: string; text: string }[];
-	createdAt: string;
-	updatedAt: string;
 }
 
 export interface Subject {
@@ -430,11 +367,12 @@ export interface TestSection {
 export interface Test {
 	id: string;
 	title: string;
-	subjectId: string;
-	classId: string;
+	subjectId: number;
+	classId: number;
 	term: TermType;
 	testType: TestType;
 	assessmentMapping: AssessmentMapping | "";
+	/** label shown as badge e.g. "CA 1" */
 	mappingLabel: string;
 	testDate: string;
 	startTime: string;
@@ -493,20 +431,6 @@ export interface StudentAttempt {
 	startedAt: string;
 	submittedAt?: string;
 	gradedAt?: string;
-}
-
-export interface Assessment {
-	id: string;
-	title: string;
-	subjectId: string;
-	classId: string;
-	duration: number;
-	totalMarks: number;
-	questions: string[];
-	status: "draft" | "published" | "completed";
-	startDate?: string;
-	endDate?: string;
-	createdAt: string;
 }
 
 export interface Result {

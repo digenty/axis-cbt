@@ -7,7 +7,7 @@ import {
 	PointerSensor,
 	useSensor,
 	useSensors,
-	DragEndEvent,
+	type DragEndEvent,
 } from "@dnd-kit/core";
 import {
 	SortableContext,
@@ -23,92 +23,162 @@ import {
 	Trash2,
 	Upload,
 	GripVertical,
+	Loader2,
 } from "lucide-react";
-import { useCBTStore } from "@/store";
-import { ApiTopic, Topic } from "@/types";
+// import { type ApiTopic } from "@/api/question-bank";
 import { cn } from "@/lib/utils";
-import { Modal } from "./Modal";
-import { ConfirmModal } from "./Modal";
-import { useAddCbtQuestionBankTopics } from "@/hooks/queryHooks/useQuestionBank";
-import { CbtQueBankTopicPayload } from "@/api/question-bank";
+import { Modal, ConfirmModal } from "./Modal";
+// import {
+// 	useAddCbtTopic,
+// 	useUpdateCbtTopic,
+// 	useDeleteCbtTopic,
+// } from "@/hooks/useQuestionBank";
 import { useGetClassDetails } from "@/hooks/queryHooks/useSubjects";
 import { toast } from "./Toast";
+import { ApiTopic } from "@/types/question";
+import {
+	useAddCbtTopic,
+	useDeleteCbtTopic,
+	useUpdateCbtTopic,
+} from "@/hooks/queryHooks/useQuestionBank";
+import { reorderByGroup } from "./reorder";
 
 interface QuestionBankSidebarProps {
 	topics: ApiTopic[];
 	classId: number;
 	subjectId: number;
 	selectedTopicId: number | null;
+	isLoading?: boolean;
 	onSelectTopic: (id: number) => void;
 	onImportQuestions: () => void;
-	refetchTopics: () => void;
 }
 
 export const QuestionBankSidebar = ({
-	refetchTopics,
 	topics,
 	classId,
 	subjectId,
 	selectedTopicId,
+	isLoading,
 	onSelectTopic,
 	onImportQuestions,
 }: QuestionBankSidebarProps) => {
-	// const { reorderTopics } = useCBTStore();
 	const [addModalOpen, setAddModalOpen] = useState(false);
 	const [editTopic, setEditTopic] = useState<ApiTopic | null>(null);
 	const [deleteTopic, setDeleteTopic] = useState<ApiTopic | null>(null);
+	console.log({ topics, editTopic });
 
-	const { mutate: addTopic, isPending } = useAddCbtQuestionBankTopics();
-	const { data: classDetailsResponse } = useGetClassDetails(Number(classId));
-	const classDetails = classDetailsResponse?.data;
+	const { mutate: addTopic, isPending: isAdding } = useAddCbtTopic();
+	const { mutate: updateTopic, isPending: isUpdating } = useUpdateCbtTopic();
+	const { mutate: deleteMutation, isPending: isDeleting } =
+		useDeleteCbtTopic();
+
+	const { data: classDetailsResponse } = useGetClassDetails(classId);
+	const branchId = classDetailsResponse?.data?.branchId;
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
 	);
 
-	const handleDragEnd = (event: DragEndEvent) => {
-		const { active, over } = event;
-		if (!over || active.id === over.id) return;
-		// const oldIdx = topics.findIndex((t) => t.id === active.id);
-		// const newIdx = topics.findIndex((t) => t.id === over.id);
-		// const reordered = arrayMove(topics, oldIdx, newIdx);
-		// reorderTopics(
-		// 	subjectId,
-		// 	reordered.map((t) => t.id),
-		// );
+	// Drag-and-drop — optimistic UI only until a reorder API endpoint exists
+	const handleDragEnd = (_event: DragEndEvent) => {
+		const { active, over } = _event;
+		if (!over || active.id === over.id || !topics) return;
+
+		const oldIdx = topics?.findIndex((q) => q.id === active.id);
+		const newIdx = topics?.findIndex((q) => q.id === over.id);
+
+		if (oldIdx === -1 || newIdx === -1) return;
+
+		const reordered = arrayMove(topics, oldIdx, newIdx);
+
+		const orderedIds = reordered.map((t) => t.id);
+
+		const reorderToApi = reorderByGroup(
+			topics,
+			"subjectId",
+			subjectId,
+			orderedIds,
+		);
+
+		console.log({ reorderToApi });
 	};
 
 	const handleAddTopic = (data: { name: string; description: string }) => {
-		const payload: CbtQueBankTopicPayload = {
-			name: data?.name,
-			classId,
-			subjectId,
-			branchId: classDetails?.branchId,
-			description: data?.description,
-			displayOrder: 0,
-			id: crypto.getRandomValues(new Uint32Array(1))[0],
-		};
-
-		addTopic(payload, {
-			onError: (error) => {
-				toast({
-					title: error.message ?? "Something went wrong",
-					description: "Could not add topic",
-					type: "error",
-				});
+		addTopic(
+			{
+				name: data.name,
+				classId,
+				subjectId,
+				branchId: branchId ?? 0,
+				description: data.description,
+				displayOrder: topics.length,
 			},
-			onSuccess: (data) => {
-				refetchTopics();
-				console.log({ addTopicSuccess: data });
-				toast({
-					title: "Topic saved successfully!",
-					type: "success",
-				});
+			{
+				onSuccess: (res) => {
+					toast({ title: "Topic added successfully!", type: "success" });
+					if (res.data?.id) onSelectTopic(res.data.id);
+					setAddModalOpen(false);
+				},
+				onError: (err: unknown) => {
+					const message =
+						err && typeof err === "object" && "message" in err
+							? String((err as { message: string }).message)
+							: "Could not add topic";
+					toast({ title: message, type: "error" });
+				},
+			},
+		);
+	};
+
+	const handleUpdateTopic = (data: { name: string; description: string }) => {
+		if (!editTopic) return;
+		updateTopic(
+			{
+				id: editTopic.id,
+				payload: {
+					name: data.name,
+					description: data.description,
+					classId,
+					subjectId,
+					branchId: editTopic?.branchId,
+				},
+			},
+			{
+				onSuccess: () => {
+					toast({ title: "Topic updated!", type: "success" });
+					setEditTopic(null);
+				},
+				onError: (err: unknown) => {
+					const message =
+						err && typeof err === "object" && "message" in err
+							? String((err as { message: string }).message)
+							: "Could not update topic";
+					toast({ title: message, type: "error" });
+				},
+			},
+		);
+	};
+
+	const handleDeleteTopic = () => {
+		if (!deleteTopic) return;
+		deleteMutation(deleteTopic.id, {
+			onSuccess: () => {
+				toast({ title: "Topic deleted", type: "success" });
+				// If the deleted topic was selected, select the first remaining topic
+				if (selectedTopicId === deleteTopic.id) {
+					const remaining = topics.filter((t) => t.id !== deleteTopic.id);
+					if (remaining.length > 0) onSelectTopic(remaining[0].id);
+				}
+				setDeleteTopic(null);
+			},
+			onError: (err: unknown) => {
+				const message =
+					err && typeof err === "object" && "message" in err
+						? String((err as { message: string }).message)
+						: "Could not delete topic";
+				toast({ title: message, type: "error" });
 			},
 		});
-
-		if (payload?.id) onSelectTopic(payload?.id);
-		setAddModalOpen(false);
 	};
 
 	return (
@@ -125,38 +195,49 @@ export const QuestionBankSidebar = ({
 					</button>
 				</div>
 
-				{/* Topic list with DnD */}
+				{/* Topic list */}
 				<div className="flex-1 overflow-y-auto px-2 py-1">
-					<DndContext
-						sensors={sensors}
-						collisionDetection={closestCenter}
-						onDragEnd={handleDragEnd}
-					>
-						<SortableContext
-							items={topics?.map((t) => t?.id)}
-							strategy={verticalListSortingStrategy}
+					{isLoading ? (
+						<div className="flex items-center justify-center py-8">
+							<Loader2 className="h-4 w-4 animate-spin text-gray-300" />
+						</div>
+					) : (
+						<DndContext
+							sensors={sensors}
+							collisionDetection={closestCenter}
+							onDragEnd={handleDragEnd}
 						>
-							{topics?.map((topic: ApiTopic) => (
-								<SortableTopicItem
-									key={topic?.id}
-									topic={topic}
-									isSelected={selectedTopicId === topic?.id}
-									onSelect={() => onSelectTopic(topic?.id)}
-									onEdit={() => setEditTopic(topic)}
-									onDelete={() => setDeleteTopic(topic)}
-								/>
-							))}
-						</SortableContext>
-					</DndContext>
+							<SortableContext
+								items={topics?.map((t) => t.id)}
+								strategy={verticalListSortingStrategy}
+							>
+								{topics?.map((topic) => (
+									<SortableTopicItem
+										key={topic?.id}
+										topic={topic}
+										isSelected={selectedTopicId === topic?.id}
+										onSelect={() => onSelectTopic(topic?.id)}
+										onEdit={() => setEditTopic(topic)}
+										onDelete={() => setDeleteTopic(topic)}
+									/>
+								))}
+							</SortableContext>
+						</DndContext>
+					)}
 				</div>
 
 				{/* New Topic button */}
 				<div className="border-t border-gray-50 px-3 py-3">
 					<button
 						onClick={() => setAddModalOpen(true)}
-						className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/50 hover:text-blue-600"
+						disabled={isAdding}
+						className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/50 hover:text-blue-600 disabled:opacity-50"
 					>
-						<Plus className="h-3.5 w-3.5" />
+						{isAdding ? (
+							<Loader2 className="h-3.5 w-3.5 animate-spin" />
+						) : (
+							<Plus className="h-3.5 w-3.5" />
+						)}
 						New Topic
 					</button>
 				</div>
@@ -166,6 +247,7 @@ export const QuestionBankSidebar = ({
 			<TopicModal
 				open={addModalOpen}
 				mode="add"
+				saving={isAdding}
 				onClose={() => setAddModalOpen(false)}
 				onSave={handleAddTopic}
 			/>
@@ -174,43 +256,29 @@ export const QuestionBankSidebar = ({
 			<TopicModal
 				open={!!editTopic}
 				mode="edit"
+				saving={isUpdating}
 				initialName={editTopic?.name}
+				initialDescription={editTopic?.description}
 				onClose={() => setEditTopic(null)}
-				onSave={(name) => {
-					// if (editTopic) {
-					// 	useCBTStore.getState().updateTopic(editTopic.id, name);
-					// 	setEditTopic(null);
-					// }
-				}}
+				onSave={handleUpdateTopic}
 			/>
 
 			{/* Delete Confirm Modal */}
-			<DeleteTopicModal
-				topic={deleteTopic}
-				selectedTopicId={selectedTopicId}
+			<ConfirmModal
+				open={!!deleteTopic}
 				onClose={() => setDeleteTopic(null)}
-				onDeleted={(id) => {
-					// const remaining = getTopicsBySubject(subjectId).filter(
-					// 	(t) => t.id !== id,
-					// );
-					// if (selectedTopicId === id && remaining.length > 0) {
-					// 	onSelectTopic(remaining[0].id);
-					// }
-					setDeleteTopic(null);
-				}}
+				onConfirm={handleDeleteTopic}
+				title="Delete Topic"
+				description={`Are you sure you want to delete "${deleteTopic?.name}"? All questions in this topic will also be deleted.`}
+				confirmLabel="Delete Topic"
+				confirmVariant="danger"
+				loading={isDeleting}
 			/>
 		</>
 	);
 };
 
-// ─── Sortable Topic Item ──────────────────────────────────────────────────────
-interface SortableTopicItemProps {
-	topic: ApiTopic;
-	isSelected: boolean;
-	onSelect: () => void;
-	onEdit: () => void;
-	onDelete: () => void;
-}
+// ─── Sortable topic item ──────────────────────────────────────────────────────
 
 const SortableTopicItem = ({
 	topic,
@@ -218,13 +286,15 @@ const SortableTopicItem = ({
 	onSelect,
 	onEdit,
 	onDelete,
-}: SortableTopicItemProps) => {
+}: {
+	topic: ApiTopic;
+	isSelected: boolean;
+	onSelect: () => void;
+	onEdit: () => void;
+	onDelete: () => void;
+}) => {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
-
-	const questionCount = useCBTStore(
-		(s) => s.questions.filter((q) => q.topicId === topic.id).length,
-	);
 
 	const {
 		attributes,
@@ -242,7 +312,6 @@ const SortableTopicItem = ({
 		zIndex: isDragging ? 10 : undefined,
 	};
 
-	// Close menu on outside click
 	useEffect(() => {
 		if (!menuOpen) return;
 		const handler = (e: MouseEvent) => {
@@ -265,13 +334,11 @@ const SortableTopicItem = ({
 				)}
 				onClick={onSelect}
 			>
-				{/* Drag handle */}
 				<button
 					{...attributes}
 					{...listeners}
 					className="flex h-5 w-5 shrink-0 cursor-grab items-center justify-center text-gray-300 opacity-0 transition-colors group-hover:opacity-100 hover:text-gray-500 active:cursor-grabbing"
 					onClick={(e) => e.stopPropagation()}
-					aria-label="Drag to reorder"
 				>
 					<GripVertical className="h-3.5 w-3.5" />
 				</button>
@@ -280,18 +347,6 @@ const SortableTopicItem = ({
 					{topic.name}
 				</span>
 
-				{questionCount > 0 && (
-					<span
-						className={cn(
-							"shrink-0 text-xs",
-							isSelected ? "text-blue-400" : "text-gray-400",
-						)}
-					>
-						{questionCount}
-					</span>
-				)}
-
-				{/* Three-dot menu */}
 				<button
 					onClick={(e) => {
 						e.stopPropagation();
@@ -308,7 +363,6 @@ const SortableTopicItem = ({
 				</button>
 			</div>
 
-			{/* Dropdown menu */}
 			{menuOpen && (
 				<div
 					ref={menuRef}
@@ -342,66 +396,57 @@ const SortableTopicItem = ({
 	);
 };
 
-// ─── Topic Modal (Add / Edit) ─────────────────────────────────────────────────
+// ─── Topic modal (add / edit) ─────────────────────────────────────────────────
+
 interface TopicModalProps {
 	open: boolean;
 	mode: "add" | "edit";
+	saving?: boolean;
 	initialName?: string;
+	initialDescription?: string;
 	onClose: () => void;
-	onSave: ({
-		name,
-		description,
-	}: {
-		name: string;
-		description: string;
-	}) => void;
+	onSave: (data: { name: string; description: string }) => void;
 }
 
 const TopicModal = ({
 	open,
 	mode,
+	saving,
 	initialName = "",
+	initialDescription = "",
 	onClose,
 	onSave,
 }: TopicModalProps) => {
 	const [name, setName] = useState(initialName);
-	const [description, setDescription] = useState("");
-	const [saving, setSaving] = useState(false);
-	const [error, setError] = useState("");
+	const [description, setDescription] = useState(initialDescription);
+	const [nameError, setNameError] = useState("");
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	useEffect(() => {
 		if (open) {
-			// eslint-disable-next-line react-hooks/set-state-in-effect
 			setName(initialName);
-			setDescription("");
-			setError("");
+			setDescription(initialDescription);
+			setNameError("");
 			setTimeout(() => inputRef.current?.focus(), 50);
 		}
-	}, [open, initialName]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [initialName]);
 
-	const handleSave = async () => {
+	const handleSave = () => {
 		if (!name.trim()) {
-			setError("Topic name is required");
+			setNameError("Topic name is required");
 			return;
 		}
-		setSaving(true);
-		await new Promise((r) => setTimeout(r, 300));
-		await onSave({ name, description });
-		setSaving(false);
-		setName("");
-		setDescription("");
+		onSave({ name: name.trim(), description: description.trim() });
 	};
 
 	return (
 		<Modal
 			open={open}
 			onClose={onClose}
-			className="max-h-[90vh] gap-4 overflow-y-auto"
 			title={mode === "add" ? "Add New Topic" : "Edit Topic"}
-			// size="sm"
 			footer={
-				<div className="flex items-center justify-between px-5 pb-5">
+				<div className="flex items-center justify-between px-5 pb-5 gap-4">
 					<button
 						onClick={onClose}
 						className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
@@ -416,99 +461,59 @@ const TopicModal = ({
 						{saving && (
 							<span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
 						)}
-						{mode === "add" ? "Add Topic" : "Done"}
+						{mode === "add" ? "Add Topic" : "Save Changes"}
 					</button>
 				</div>
 			}
 		>
-			<div className="px-5 py-4">
-				<label className="mb-1.5 block text-xs font-medium text-gray-700">
-					Topic Name <span className="text-red-500">*</span>
-				</label>
-				<input
-					ref={inputRef}
-					type="text"
-					value={name}
-					onChange={(e) => {
-						setName(e.target.value);
-						setError("");
-					}}
-					// onKeyDown={(e) => {
-					// 	if (e.key === "Enter") handleSave();
-					// 	if (e.key === "Escape") onClose();
-					// }}
-					placeholder="Enter topic name"
-					className={cn(
-						"h-9 w-full rounded-lg border px-3 py-2 text-sm transition focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none",
-						error ? "border-red-400" : "border-gray-200",
+			<div className="space-y-4 px-5 py-4">
+				<div>
+					<label className="mb-1.5 block text-xs font-medium text-gray-700">
+						Topic Name <span className="text-red-500">*</span>
+					</label>
+					<input
+						ref={inputRef}
+						type="text"
+						value={name}
+						onChange={(e) => {
+							setName(e.target.value);
+							setNameError("");
+						}}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") handleSave();
+							if (e.key === "Escape") onClose();
+						}}
+						placeholder="Enter topic name"
+						className={cn(
+							"h-9 w-full rounded-lg border px-3 py-2 text-sm transition focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none",
+							nameError ? "border-red-400" : "border-gray-200",
+						)}
+					/>
+					{nameError && (
+						<p className="mt-1 text-xs text-red-500">{nameError}</p>
 					)}
-				/>
-				{error && <p className="mt-1 text-xs text-red-500">{error}</p>}
-			</div>
+				</div>
 
-			<div className="px-5 py-4">
-				<label className="mb-1.5 block text-xs font-medium text-gray-700">
-					Description
-				</label>
-				<input
-					// ref={inputRef}
-					type="text"
-					value={description}
-					onChange={(e) => {
-						setDescription(e.target.value);
-						setError("");
-					}}
-					// onKeyDown={(e) => {
-					// 	if (e.key === "Enter") handleSave();
-					// 	if (e.key === "Escape") onClose();
-					// }}
-					placeholder="Enter topic name"
-					className={cn(
-						"h-9 w-full rounded-lg border px-3 py-2 text-sm transition focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none",
-						error ? "border-red-400" : "border-gray-200",
-					)}
-				/>
-				{error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+				<div>
+					<label className="mb-1.5 block text-xs font-medium text-gray-700">
+						Description{" "}
+						<span className="text-xs font-normal text-gray-400">
+							(optional)
+						</span>
+					</label>
+					<input
+						type="text"
+						value={description}
+						onChange={(e) => setDescription(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") handleSave();
+							if (e.key === "Escape") onClose();
+						}}
+						placeholder="Brief description of this topic"
+						className="h-9 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm transition focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none"
+					/>
+				</div>
 			</div>
 		</Modal>
-	);
-};
-
-// ─── Delete Topic Confirm ─────────────────────────────────────────────────────
-interface DeleteTopicModalProps {
-	topic: Topic | null;
-	selectedTopicId: number | null;
-	onClose: () => void;
-	onDeleted: (id: string) => void;
-}
-
-const DeleteTopicModal = ({
-	topic,
-	onClose,
-	onDeleted,
-}: DeleteTopicModalProps) => {
-	const { deleteTopic } = useCBTStore();
-	const [loading, setLoading] = useState(false);
-
-	const handleConfirm = async () => {
-		if (!topic) return;
-		setLoading(true);
-		await new Promise((r) => setTimeout(r, 300));
-		deleteTopic(topic.id);
-		onDeleted(topic.id);
-		setLoading(false);
-	};
-
-	return (
-		<ConfirmModal
-			open={!!topic}
-			onClose={onClose}
-			onConfirm={handleConfirm}
-			title="Delete Topic"
-			description={`Are you sure you want to delete "${topic?.name}"? All questions in this topic will also be deleted.`}
-			confirmLabel="Delete Topic"
-			confirmVariant="danger"
-			loading={loading}
-		/>
 	);
 };

@@ -1,10 +1,9 @@
 "use client";
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Test } from "@/types";
+import { Assessment, Test } from "@/types";
 import { useCBTStore } from "@/store";
-// import { CreateTestModal } from "./create-test-modal";
-// import { DeleteTestModal } from "./delete-test-modal";
 import { cn } from "@/lib/utils";
 import {
 	Plus,
@@ -14,7 +13,6 @@ import {
 	MessageSquare,
 	Star,
 	Clock,
-	Tag,
 	Calendar,
 	FileText,
 	Upload,
@@ -22,47 +20,61 @@ import {
 } from "lucide-react";
 import { CreateTestModal } from "./CreateTestModal";
 import { DeleteTestModal } from "./DeleteTestModal";
+import { useGetClassDetails } from "@/hooks/queryHooks/useSubjects";
+import { useGetAssessments } from "@/hooks/queryHooks/useAssessment";
 
 interface TestListViewProps {
-	subjectId: string;
-	classId: string;
-	className: string;
-	subjectName: string;
+	subjectId: number;
+	classId: number;
 }
 
 const STATUS_CONFIG = {
-	published: {
-		label: "Published",
+	PUBLISHED: {
+		label: "PUBLISHED",
 		icon: Upload,
 		className: "bg-green-50 text-green-700 border-green-200",
 	},
-	draft: {
-		label: "Draft",
+	DRAFT: {
+		label: "DRAFT",
 		icon: FileText,
 		className: "bg-gray-100 text-gray-600 border-gray-200",
 	},
-	completed: {
-		label: "Completed",
+	COMPLETED: {
+		label: "COMPLETED",
 		icon: CheckCircle2,
 		className: "bg-blue-50 text-blue-700 border-blue-200",
 	},
 };
 
-export const TestListView = ({
-	subjectId,
-	classId,
-	className,
-	subjectName,
-}: TestListViewProps) => {
+export const TestListView = ({ subjectId, classId }: TestListViewProps) => {
 	const router = useRouter();
-	const { getTestsBySubject, addTest, updateTest, deleteTest } = useCBTStore();
+	const { addTest, updateTest, deleteTest } = useCBTStore();
 	const [createOpen, setCreateOpen] = useState(false);
-	const [editingTest, setEditingTest] = useState<Test | null>(null);
-	const [deletingTest, setDeletingTest] = useState<Test | null>(null);
+	const [editingTest, setEditingTest] = useState<Assessment | null>(null);
+	const [deletingTest, setDeletingTest] = useState<Assessment | null>(null);
 
-	console.log({ subjectId });
+	const { data: classDetailsResponse, refetch: refetchClassDetails } =
+		useGetClassDetails(Number(classId));
+	const classDetails = classDetailsResponse?.data;
 
-	const tests = getTestsBySubject(subjectId);
+	const { data: assessmentsResponse, refetch: refetchAssessments } =
+		useGetAssessments({
+			classId,
+			subjectId,
+			branchId: classDetails?.branchId,
+		});
+
+	useEffect(() => {
+		refetchClassDetails();
+	}, [refetchClassDetails]);
+
+	useEffect(() => {
+		if (classDetails?.branchId) refetchAssessments();
+	}, [refetchAssessments, classDetails?.branchId]);
+
+	const assessments = assessmentsResponse?.data;
+
+	console.log({ classDetails, assessments });
 
 	const handleSaveTest = (test: Test) => {
 		if (editingTest) {
@@ -80,7 +92,7 @@ export const TestListView = ({
 	const handleDelete = async () => {
 		if (!deletingTest) return;
 		await new Promise((r) => setTimeout(r, 400));
-		deleteTest(deletingTest.id);
+		// deleteTest(deletingTest.id);
 		setDeletingTest(null);
 	};
 
@@ -100,7 +112,7 @@ export const TestListView = ({
 				</div>
 
 				{/* List or empty state */}
-				{tests.length === 0 ? (
+				{assessments?.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-24 text-center">
 						{/* Cube icon */}
 						<svg
@@ -129,7 +141,7 @@ export const TestListView = ({
 					</div>
 				) : (
 					<div className="space-y-3">
-						{tests.map((test) => (
+						{assessments?.map((test: Assessment) => (
 							<TestCard
 								key={test.id}
 								test={test}
@@ -154,15 +166,14 @@ export const TestListView = ({
 				}}
 				subjectId={subjectId}
 				classId={classId}
-				className={className}
-				subjectName={subjectName}
+				className={classDetails?.name}
 				editTest={editingTest}
 				onSaved={handleSaveTest}
 			/>
 
 			<DeleteTestModal
 				open={!!deletingTest}
-				testTitle={deletingTest?.title || ""}
+				testTitle={deletingTest?.name || ""}
 				onClose={() => setDeletingTest(null)}
 				onConfirm={handleDelete}
 			/>
@@ -177,7 +188,7 @@ const TestCard = ({
 	onDelete,
 	onClick,
 }: {
-	test: Test;
+	test: Assessment;
 	onEdit: () => void;
 	onDelete: () => void;
 	onClick: () => void;
@@ -199,7 +210,7 @@ const TestCard = ({
 			<div className="min-w-0 flex-1">
 				<div className="mb-0.5 flex items-center gap-2">
 					<span className="text-sm font-semibold text-gray-900">
-						{test.title}
+						{test?.name}
 					</span>
 					<span
 						className={cn(
@@ -215,39 +226,38 @@ const TestCard = ({
 				<div className="flex flex-wrap items-center gap-3">
 					<span className="flex items-center gap-1 text-xs text-gray-500">
 						<MessageSquare className="h-3 w-3 text-gray-400" />
-						{test.sections.reduce(
-							(s, sec) => s + sec.questionIds.length,
-							0,
-						)}{" "}
-						questions
+						{test?.questionCount} questions
 					</span>
 					<span className="flex items-center gap-1 text-xs text-gray-500">
 						<Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-						{test.totalMarks} marks
+						{test?.totalMarks} marks
 					</span>
 					<span className="flex items-center gap-1 text-xs text-gray-500">
 						<Clock className="h-3 w-3 text-gray-400" />
-						{test.duration} min
+						{test.durationMinutes} min
 					</span>
-					{test.mappingLabel && (
+					{/* {test.mappingLabel && (
 						<span className="flex items-center gap-1 text-xs text-gray-500">
 							<Tag className="h-3 w-3 text-gray-400" />
 							{test.mappingLabel}
 						</span>
-					)}
-					{test.testDate && (
+					)} */}
+					{test?.startDateTime && (
 						<span className="flex items-center gap-1 text-xs text-gray-500">
 							<Calendar className="h-3 w-3 text-gray-400" />
-							{new Date(test.testDate).toLocaleDateString("en-US", {
-								month: "short",
-								day: "numeric",
-								year: "numeric",
-							})}
+							{new Date(test?.startDateTime).toLocaleDateString(
+								"en-US",
+								{
+									month: "short",
+									day: "numeric",
+									year: "numeric",
+								},
+							)}
 						</span>
 					)}
 					<span className="flex items-center gap-1 text-xs text-gray-500">
 						<FileText className="h-3 w-3 text-gray-400" />
-						{test.testType}
+						{test?.testType}
 					</span>
 				</div>
 			</div>

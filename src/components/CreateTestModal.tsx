@@ -10,8 +10,8 @@ import { Modal } from "./Modal";
 interface CreateTestModalProps {
 	open: boolean;
 	onClose: () => void;
-	subjectId: string;
-	classId: string;
+	subjectId: number;
+	classId: number;
 	className: string;
 	subjectName: string;
 	editTest?: Test | null;

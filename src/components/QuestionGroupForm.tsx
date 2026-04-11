@@ -2,9 +2,24 @@
 
 import React, { useState } from "react";
 import { Plus, Trash2, ChevronDown, ChevronUp, Check } from "lucide-react";
-import { useCBTStore } from "@/store";
-import { Question, Option } from "@/types";
-import { generateId, cn } from "@/lib/utils";
+// import {
+// 	type NormalizedQuestion,
+// 	type Option,
+// 	type SubQuestion,
+// } from "@/types/question-bank.types";
+import { cn } from "@/lib/utils";
+// import {
+// 	useCreateCbtQuestion,
+// 	useUpdateCbtQuestion,
+// } from "@/hooks/useQuestionBank";
+// import { questionGroupToPayload } from "@/lib/question-bank.mapper";
+import { toast } from "@/components/Toast";
+import { NormalizedQuestion, SubQuestion } from "@/types/question.types";
+import {
+	useCreateCbtQuestion,
+	useUpdateCbtQuestion,
+} from "@/hooks/queryHooks/useQuestionBank";
+import { questionGroupToPayload } from "@/types/question.mapper";
 
 type MaterialType =
 	| "Comprehension Passage"
@@ -21,7 +36,7 @@ const MATERIAL_TYPES: MaterialType[] = [
 	"Multiple Blanks",
 ];
 
-const PLACEHOLDER: Record<MaterialType, string> = {
+const MATERIAL_PLACEHOLDERS: Record<MaterialType, string> = {
 	"Comprehension Passage": "Type or paste your comprehension passage",
 	Diagram: "Describe your diagram",
 	Table: "Create table content",
@@ -29,18 +44,22 @@ const PLACEHOLDER: Record<MaterialType, string> = {
 	"Multiple Blanks": "Type your passage with blanks",
 };
 
-interface SubQuestion {
-	id: string;
-	text: string;
-	marks: number;
-	instruction: string;
-	options: Option[];
-	correctAnswer: string;
+interface QuestionGroupFormProps {
+	classId: number;
+	subjectId: number;
+	topicId: number;
+	editQuestion?: NormalizedQuestion | null;
+	onClose: () => void;
+	onSaved: () => void;
 }
 
-const defaultSubQ = (): SubQuestion => ({
+function generateId(): string {
+	return Math.random().toString(36).slice(2, 9);
+}
+
+const defaultSubQuestion = (): SubQuestion => ({
 	id: generateId(),
-	text: "",
+	questionText: "",
 	marks: 1,
 	instruction: "",
 	options: [
@@ -52,57 +71,57 @@ const defaultSubQ = (): SubQuestion => ({
 	correctAnswer: "",
 });
 
-interface QuestionGroupFormProps {
-	topicId: string;
-	editQuestion?: Question | null;
-	onClose: () => void;
-	onSaved: () => void;
-}
-
 export const QuestionGroupForm = ({
+	classId,
+	subjectId,
 	topicId,
 	editQuestion,
 	onClose,
 	onSaved,
 }: QuestionGroupFormProps) => {
-	const { addQuestion, updateQuestion } = useCBTStore();
-	const [groupName, setGroupName] = useState(editQuestion?.text || "");
+	const { mutateAsync: createQuestion } = useCreateCbtQuestion();
+	const { mutateAsync: updateQuestion } = useUpdateCbtQuestion();
+
+	const [groupName, setGroupName] = useState(editQuestion?.questionText ?? "");
 	const [materialType, setMaterialType] = useState<MaterialType>(
 		"Comprehension Passage",
 	);
 	const [materialDropOpen, setMaterialDropOpen] = useState(false);
-	const [passage, setPassage] = useState(editQuestion?.passage || "");
+	const [passage, setPassage] = useState(editQuestion?.passage ?? "");
 	const [instruction, setInstruction] = useState(
-		editQuestion?.instruction || "",
+		editQuestion?.instruction ?? "",
 	);
-	const [subQuestions, setSubQuestions] = useState<SubQuestion[]>(() => {
-		if (editQuestion?.subQuestions?.length) {
-			return (editQuestion.subQuestions as SubQuestion[]).map((q) => ({
-				...defaultSubQ(),
-				...q,
-				options: q.options || defaultSubQ().options,
-			}));
-		}
-		return [defaultSubQ()];
-	});
 	const [saving, setSaving] = useState(false);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 
+	const [subQuestions, setSubQuestions] = useState<SubQuestion[]>(() => {
+		if (editQuestion?.subQuestions?.length) {
+			return editQuestion.subQuestions.map((sq) => ({
+				id: String(sq.id),
+				questionText: sq.questionText,
+				marks: sq.marks,
+				instruction: sq.instruction ?? "",
+				options: sq.options ?? defaultSubQuestion().options,
+				correctAnswer: Array.isArray(sq.correctAnswer)
+					? sq.correctAnswer.join(", ")
+					: (sq.correctAnswer ?? ""),
+			}));
+		}
+		return [defaultSubQuestion()];
+	});
+
 	const totalMarks = subQuestions.reduce((s, q) => s + q.marks, 0);
 
-	const updateSubQ = (id: string, key: keyof SubQuestion, val: unknown) =>
+	const updateSubQuestion = (
+		id: string,
+		key: keyof SubQuestion,
+		val: unknown,
+	) =>
 		setSubQuestions((prev) =>
 			prev.map((q) => (q.id === id ? { ...q, [key]: val } : q)),
 		);
 
-	const addSubQ = () => setSubQuestions((prev) => [...prev, defaultSubQ()]);
-
-	const removeSubQ = (id: string) => {
-		if (subQuestions.length <= 1) return;
-		setSubQuestions((prev) => prev.filter((q) => q.id !== id));
-	};
-
-	const validate = () => {
+	const validate = (): boolean => {
 		const errs: Record<string, string> = {};
 		if (!groupName.trim()) errs.groupName = "Group name is required";
 		setErrors(errs);
@@ -112,31 +131,38 @@ export const QuestionGroupForm = ({
 	const handleSave = async () => {
 		if (!validate()) return;
 		setSaving(true);
-		await new Promise((r) => setTimeout(r, 400));
+		try {
+			const payload = questionGroupToPayload(
+				groupName,
+				passage,
+				instruction,
+				materialType,
+				subQuestions,
+				classId,
+				subjectId,
+				topicId,
+			);
 
-		const qData: Question = {
-			id: editQuestion?.id || generateId(),
-			topicId,
-			type: "question-group",
-			text: groupName,
-			marks: totalMarks,
-			instruction: instruction || undefined,
-			passage,
-			subQuestions: subQuestions as Question[],
-			createdAt: editQuestion?.createdAt || new Date().toISOString(),
-			updatedAt: new Date().toISOString(),
-		};
+			if (editQuestion?.id) {
+				await updateQuestion({ id: editQuestion.id, payload });
+			} else {
+				await createQuestion(payload);
+			}
 
-		//  editQuestion ? updateQuestion(editQuestion.id, qData) : addQuestion(qData);
-
-		if (editQuestion) {
-			updateQuestion(editQuestion.id, qData);
-		} else {
-			addQuestion(qData);
+			toast({
+				title: "Question group saved successfully!",
+				type: "success",
+			});
+			onSaved();
+		} catch (err: unknown) {
+			const message =
+				err && typeof err === "object" && "message" in err
+					? String((err as { message: string }).message)
+					: "Could not save question group";
+			toast({ title: message, type: "error" });
+		} finally {
+			setSaving(false);
 		}
-
-		setSaving(false);
-		onSaved();
 	};
 
 	return (
@@ -171,7 +197,7 @@ export const QuestionGroupForm = ({
 						{saving && (
 							<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
 						)}
-						Save Question Group
+						{editQuestion ? "Update Group" : "Save Question Group"}
 					</button>
 				</div>
 			</div>
@@ -232,17 +258,16 @@ export const QuestionGroupForm = ({
 								</div>
 							</div>
 							<p className="text-xs text-gray-500">
-								This is the shared content that all questions in this
-								group will reference.
+								Shared content that all questions in this group will
+								reference.
 							</p>
 						</div>
 					</div>
 
-					{/* Simple textarea for the passage */}
 					<textarea
 						value={passage}
 						onChange={(e) => setPassage(e.target.value)}
-						placeholder={PLACEHOLDER[materialType]}
+						placeholder={MATERIAL_PLACEHOLDERS[materialType]}
 						rows={5}
 						className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm transition placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					/>
@@ -267,10 +292,6 @@ export const QuestionGroupForm = ({
 								(optional)
 							</span>
 						</h4>
-						<p className="mb-2 text-xs text-gray-400">
-							Add a brief instruction if needed. Example: &quot;Answer
-							the following questions&quot;
-						</p>
 						<input
 							type="text"
 							value={instruction}
@@ -287,15 +308,22 @@ export const QuestionGroupForm = ({
 								sq={sq}
 								index={idx + 1}
 								canDelete={subQuestions.length > 1}
-								onUpdate={(key, val) => updateSubQ(sq.id, key, val)}
-								onRemove={() => removeSubQ(sq.id)}
+								onUpdate={(key, val) =>
+									updateSubQuestion(sq.id, key, val)
+								}
+								onRemove={() =>
+									setSubQuestions((prev) =>
+										prev.filter((q) => q.id !== sq.id),
+									)
+								}
 							/>
 						))}
 					</div>
 
-					{/* Add Question */}
 					<button
-						onClick={addSubQ}
+						onClick={() =>
+							setSubQuestions((prev) => [...prev, defaultSubQuestion()])
+						}
 						className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-2.5 text-xs text-gray-400 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-500"
 					>
 						<Plus className="h-3.5 w-3.5" />
@@ -307,7 +335,8 @@ export const QuestionGroupForm = ({
 	);
 };
 
-// ─── Sub Question Card ────────────────────────────────────────────────────────
+// ─── Sub-question card ────────────────────────────────────────────────────────
+
 const SubQuestionCard = ({
 	sq,
 	index,
@@ -343,7 +372,7 @@ const SubQuestionCard = ({
 			>
 				<span className="text-xs font-semibold text-gray-500">{index}</span>
 				<span className="flex-1 truncate text-sm text-gray-700">
-					{sq.text || (
+					{sq.questionText || (
 						<span className="text-gray-400 italic">Question {index}</span>
 					)}
 				</span>
@@ -372,8 +401,8 @@ const SubQuestionCard = ({
 				<div className="space-y-3 border-t border-gray-100 px-4 py-4">
 					<input
 						type="text"
-						value={sq.text}
-						onChange={(e) => onUpdate("text", e.target.value)}
+						value={sq.questionText}
+						onChange={(e) => onUpdate("questionText", e.target.value)}
 						placeholder="Type your question..."
 						className="h-9 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm transition placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					/>
