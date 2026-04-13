@@ -1,13 +1,16 @@
 import api from "@/lib/axios-auth";
-import {
+import { isAxiosError } from "axios";
+import type {
 	CbtQueBankTopicPayload,
 	CreateQuestionPayload,
+	ImportQuestionsResult,
 	QuestionResponse,
 	QuestionsListResponse,
 	TopicResponse,
 	TopicsResponse,
 } from "@/types/question";
-import { isAxiosError } from "axios";
+
+// ─── Topics ───────────────────────────────────────────────────────────────────
 
 export const getCbtQuestionBankTopics = async (payload: {
 	classId?: number;
@@ -64,6 +67,8 @@ export const deleteCbtQuestionBankTopic = async (
 	}
 };
 
+// ─── Questions ────────────────────────────────────────────────────────────────
+
 export const getCbtQuestions = async (payload: {
 	classId: number;
 	subjectId: number;
@@ -72,12 +77,19 @@ export const getCbtQuestions = async (payload: {
 	try {
 		const params = new URLSearchParams();
 		if (payload.topicId) params.set("topicId", String(payload.topicId));
-
-		console.log({ payload });
-
 		const { data } = await api.get(
 			`/api/cbt/question-bank/questions/classes/${payload.classId}/subjects/${payload.subjectId}?${params.toString()}`,
 		);
+		return data;
+	} catch (error: unknown) {
+		if (isAxiosError(error)) throw error.response?.data;
+		throw error;
+	}
+};
+
+export const getCbtQuestion = async (id: number): Promise<QuestionResponse> => {
+	try {
+		const { data } = await api.get(`/api/cbt/question-bank/questions/${id}`);
 		return data;
 	} catch (error: unknown) {
 		if (isAxiosError(error)) throw error.response?.data;
@@ -125,6 +137,26 @@ export const deleteCbtQuestion = async (
 		);
 		return data;
 	} catch (error: unknown) {
+		if (isAxiosError(error)) throw error.response?.data;
+		throw error;
+	}
+};
+
+export const importCbtQuestions = async (payload: {
+	classId: number;
+	subjectId: number;
+	file: File;
+}): Promise<{ data: ImportQuestionsResult; message: string }> => {
+	try {
+		const formData = new FormData();
+		formData.append("file", payload.file);
+		const { data } = await api.post(
+			`/api/cbt/question-bank/questions/import?classId=${payload.classId}&subjectId=${payload.subjectId}`,
+			formData,
+			{ headers: { "Content-Type": "multipart/form-data" } },
+		);
+		return data;
+	} catch (error) {
 		if (isAxiosError(error)) throw error.response?.data;
 		throw error;
 	}

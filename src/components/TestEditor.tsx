@@ -38,7 +38,7 @@ import {
 	Clock,
 	Tag,
 } from "lucide-react";
-import { AddAssessmentItemModal } from "./AddAssessmentItemModal";
+import { AddAssessmentItemModal } from "./AddAssessmentItemM";
 import { SelectFromQuestionBankModal } from "./QuestionBankModal";
 import { CreateTestModal } from "./CreateTestModal";
 

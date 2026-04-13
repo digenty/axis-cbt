@@ -1,31 +1,39 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { FolderOpen } from "lucide-react";
-import { EmptyState } from "./ui";
+import { EmptyState } from "@/components/ui";
 import { QuestionBankSidebar } from "./QuestionBankSidebar";
 import { AddQuestionForm } from "./AddQuestionForm";
+import { FillInBlanksForm } from "./FillInBlanksForm";
 import { QuestionGroupForm } from "./QuestionGroupForm";
-import { MultipleBlanksForm } from "./MultipleBlanksForm";
 import { QuestionListView } from "./QuestionListView";
 import { AddAssessmentItemModal } from "./AddAssessmentItemModal";
-import { NormalizedQuestion, QuestionType } from "@/types/question.types";
-import { useGetCbtTopics } from "@/hooks/queryHooks/useQuestionBank";
-import { ApiTopic } from "@/types/question";
+import { useGetTopics } from "@/hooks/queryHooks/useQuestionBank";
+import type { ApiQuestion, ApiTopic, QuestionType } from "@/types/question";
 import { ImportQuestionsModal } from "./ImportQuestionModal";
 
-// ─── Form mode discriminated union ───────────────────────────────────────────
+// ─── Form mode ────────────────────────────────────────────────────────────────
 
 type FormMode =
 	| { kind: "none" }
-	| { kind: "single"; type: QuestionType; question?: NormalizedQuestion }
-	| { kind: "group"; question?: NormalizedQuestion }
-	| { kind: "blanks"; question?: NormalizedQuestion };
+	| { kind: "single"; questionType: QuestionType; question?: ApiQuestion }
+	| { kind: "blanks"; question?: ApiQuestion }
+	| {
+			kind: "group";
+			// Carries whether this was opened as COMPREHENSION or QUESTION_GROUP
+			initialQuestionType?: "QUESTION_GROUP" | "COMPREHENSION";
+			question?: ApiQuestion;
+	  };
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface QuestionBankViewProps {
 	classId: number;
 	subjectId: number;
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export const QuestionBankView = ({
 	classId,
@@ -33,47 +41,86 @@ export const QuestionBankView = ({
 }: QuestionBankViewProps) => {
 	const [selectedTopicId, setSelectedTopicId] = useState<number | null>(null);
 	const [formMode, setFormMode] = useState<FormMode>({ kind: "none" });
-	const [addItemModalOpen, setAddItemModalOpen] = useState(false);
+	const [addModalOpen, setAddModalOpen] = useState(false);
 	const [importModalOpen, setImportModalOpen] = useState(false);
 
-	const { data: topicsResponse, isLoading: topicsLoading } = useGetCbtTopics({
+	const { data: topicsResponse, isLoading: topicsLoading } = useGetTopics({
 		classId,
 		subjectId,
 	});
-
 	const topics: ApiTopic[] = topicsResponse?.data ?? [];
 
-	// Auto-select first topic once loaded
+	// Auto-select first topic on load
 	useEffect(() => {
-		if (topics.length > 0 && !selectedTopicId) {
+		if (topics?.length > 0 && !selectedTopicId) {
 			setSelectedTopicId(topics[0].id);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [topics.length]);
+	}, [topics?.length]);
 
-	const selectedTopic = topics.find((t) => t.id === selectedTopicId);
-
+	const selectedTopic = topics?.find((t) => t.id === selectedTopicId);
 	const closeForm = () => setFormMode({ kind: "none" });
 
 	const handleAddQuestion = () => {
 		if (!selectedTopicId) return;
-		setAddItemModalOpen(true);
+		setAddModalOpen(true);
 	};
 
-	const handleEditQuestion = (question: NormalizedQuestion) => {
-		if (question.questionType === "question-group") {
-			setFormMode({ kind: "group", question });
-		} else if (question.questionType === "multiple-blanks") {
-			setFormMode({ kind: "blanks", question });
+	// Called when user picks a type from the modal
+	const handleSelectType = (type: QuestionType) => {
+		setAddModalOpen(false);
+		if (type === "QUESTION_GROUP") {
+			setFormMode({ kind: "group", initialQuestionType: "QUESTION_GROUP" });
+		} else if (type === "COMPREHENSION") {
+			setFormMode({ kind: "group", initialQuestionType: "COMPREHENSION" });
+		} else if (type === "FILL_IN_THE_BLANK") {
+			setFormMode({ kind: "blanks" });
 		} else {
-			setFormMode({ kind: "single", type: question.questionType, question });
+			setFormMode({ kind: "single", questionType: type });
 		}
 	};
+
+	// Called when user clicks Edit on a question card
+	const handleEditQuestion = (question: ApiQuestion) => {
+		const type = question?.questionType as QuestionType;
+		if (type === "QUESTION_GROUP") {
+			setFormMode({
+				kind: "group",
+				initialQuestionType: "QUESTION_GROUP",
+				question,
+			});
+		} else if (type === "COMPREHENSION") {
+			setFormMode({
+				kind: "group",
+				initialQuestionType: "COMPREHENSION",
+				question,
+			});
+		} else if (type === "FILL_IN_THE_BLANK") {
+			setFormMode({ kind: "blanks", question });
+		} else {
+			setFormMode({ kind: "single", questionType: type, question });
+		}
+	};
+
+	// ── Render content area ──────────────────────────────────────────────────
 
 	const renderContent = () => {
 		if (formMode.kind === "single") {
 			return (
 				<AddQuestionForm
+					classId={classId}
+					subjectId={subjectId}
+					topicId={selectedTopicId!}
+					editQuestion={formMode.question}
+					onClose={closeForm}
+					onSaved={closeForm}
+				/>
+			);
+		}
+
+		if (formMode.kind === "blanks") {
+			return (
+				<FillInBlanksForm
 					classId={classId}
 					subjectId={subjectId}
 					topicId={selectedTopicId!}
@@ -90,19 +137,7 @@ export const QuestionBankView = ({
 					classId={classId}
 					subjectId={subjectId}
 					topicId={selectedTopicId!}
-					editQuestion={formMode.question}
-					onClose={closeForm}
-					onSaved={closeForm}
-				/>
-			);
-		}
-
-		if (formMode.kind === "blanks") {
-			return (
-				<MultipleBlanksForm
-					classId={classId}
-					subjectId={subjectId}
-					topicId={selectedTopicId!}
+					initialQuestionType={formMode.initialQuestionType}
 					editQuestion={formMode.question}
 					onClose={closeForm}
 					onSaved={closeForm}
@@ -127,7 +162,7 @@ export const QuestionBankView = ({
 			<EmptyState
 				icon={<FolderOpen className="h-12 w-12" />}
 				title="No topics yet"
-				description="Add topics from the sidebar to start building your question bank"
+				description="Create a topic in the sidebar to start adding questions"
 			/>
 		);
 	};
@@ -135,7 +170,6 @@ export const QuestionBankView = ({
 	return (
 		<>
 			<div className="flex h-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-				{/* Sidebar */}
 				<QuestionBankSidebar
 					topics={topics}
 					classId={classId}
@@ -144,45 +178,25 @@ export const QuestionBankView = ({
 					isLoading={topicsLoading}
 					onSelectTopic={(id) => {
 						setSelectedTopicId(id);
-						setFormMode({ kind: "none" });
+						closeForm();
 					}}
 					onImportQuestions={() => setImportModalOpen(true)}
 				/>
-
-				{/* Main content */}
 				<div className="flex flex-1 overflow-hidden">{renderContent()}</div>
 			</div>
 
-			{/* Add question type picker */}
 			<AddAssessmentItemModal
-				open={addItemModalOpen}
-				onClose={() => setAddItemModalOpen(false)}
-				onSelectType={(type) => {
-					setAddItemModalOpen(false);
-					setFormMode({ kind: "single", type });
-				}}
-				onSelectGroup={() => {
-					setAddItemModalOpen(false);
-					setFormMode({ kind: "group" });
-				}}
-				onSelectMultipleBlanks={() => {
-					setAddItemModalOpen(false);
-					setFormMode({ kind: "blanks" });
-				}}
-				onSelectMatch={() => {
-					setAddItemModalOpen(false);
-					setFormMode({ kind: "single", type: "matching" });
-				}}
+				open={addModalOpen}
+				onClose={() => setAddModalOpen(false)}
+				onSelectType={handleSelectType}
 			/>
 
-			{/* Import modal */}
 			<ImportQuestionsModal
 				open={importModalOpen}
+				classId={classId}
+				subjectId={subjectId}
 				onClose={() => setImportModalOpen(false)}
-				onImported={(count) => {
-					setImportModalOpen(false);
-					console.log(`Imported ${count} questions`);
-				}}
+				onImported={() => setImportModalOpen(false)}
 			/>
 		</>
 	);

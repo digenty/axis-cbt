@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
 	DndContext,
 	closestCenter,
@@ -17,31 +17,26 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-	Plus,
-	MoreVertical,
-	Pencil,
-	Trash2,
-	Upload,
 	GripVertical,
 	Loader2,
+	MoreVertical,
+	Pencil,
+	Plus,
+	Trash2,
+	Upload,
 } from "lucide-react";
-// import { type ApiTopic } from "@/api/question-bank";
 import { cn } from "@/lib/utils";
-import { Modal, ConfirmModal } from "./Modal";
-// import {
-// 	useAddCbtTopic,
-// 	useUpdateCbtTopic,
-// 	useDeleteCbtTopic,
-// } from "@/hooks/useQuestionBank";
+import { Modal, ConfirmModal } from "@/components/Modal";
+import { toast } from "@/components/Toast";
 import { useGetClassDetails } from "@/hooks/queryHooks/useSubjects";
-import { toast } from "./Toast";
-import { ApiTopic } from "@/types/question";
 import {
 	useAddCbtTopic,
 	useDeleteCbtTopic,
 	useUpdateCbtTopic,
 } from "@/hooks/queryHooks/useQuestionBank";
-import { reorderByGroup } from "./reorder";
+import type { ApiTopic } from "@/types/question";
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface QuestionBankSidebarProps {
 	topics: ApiTopic[];
@@ -52,6 +47,8 @@ interface QuestionBankSidebarProps {
 	onSelectTopic: (id: number) => void;
 	onImportQuestions: () => void;
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export const QuestionBankSidebar = ({
 	topics,
@@ -65,7 +62,6 @@ export const QuestionBankSidebar = ({
 	const [addModalOpen, setAddModalOpen] = useState(false);
 	const [editTopic, setEditTopic] = useState<ApiTopic | null>(null);
 	const [deleteTopic, setDeleteTopic] = useState<ApiTopic | null>(null);
-	console.log({ topics, editTopic });
 
 	const { mutate: addTopic, isPending: isAdding } = useAddCbtTopic();
 	const { mutate: updateTopic, isPending: isUpdating } = useUpdateCbtTopic();
@@ -73,34 +69,16 @@ export const QuestionBankSidebar = ({
 		useDeleteCbtTopic();
 
 	const { data: classDetailsResponse } = useGetClassDetails(classId);
-	const branchId = classDetailsResponse?.data?.branchId;
+	const branchId = classDetailsResponse?.data?.branchId ?? 0;
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
 	);
 
-	// Drag-and-drop — optimistic UI only until a reorder API endpoint exists
 	const handleDragEnd = (_event: DragEndEvent) => {
 		const { active, over } = _event;
-		if (!over || active.id === over.id || !topics) return;
-
-		const oldIdx = topics?.findIndex((q) => q.id === active.id);
-		const newIdx = topics?.findIndex((q) => q.id === over.id);
-
-		if (oldIdx === -1 || newIdx === -1) return;
-
-		const reordered = arrayMove(topics, oldIdx, newIdx);
-
-		const orderedIds = reordered.map((t) => t.id);
-
-		const reorderToApi = reorderByGroup(
-			topics,
-			"subjectId",
-			subjectId,
-			orderedIds,
-		);
-
-		console.log({ reorderToApi });
+		if (!over || active.id === over.id) return;
+		// TODO: wire reorder API when endpoint is available
 	};
 
 	const handleAddTopic = (data: { name: string; description: string }) => {
@@ -109,7 +87,7 @@ export const QuestionBankSidebar = ({
 				name: data.name,
 				classId,
 				subjectId,
-				branchId: branchId ?? 0,
+				branchId,
 				description: data.description,
 				displayOrder: topics.length,
 			},
@@ -140,7 +118,7 @@ export const QuestionBankSidebar = ({
 					description: data.description,
 					classId,
 					subjectId,
-					branchId: editTopic?.branchId,
+					branchId: editTopic.branchId ?? branchId,
 				},
 			},
 			{
@@ -164,7 +142,6 @@ export const QuestionBankSidebar = ({
 		deleteMutation(deleteTopic.id, {
 			onSuccess: () => {
 				toast({ title: "Topic deleted", type: "success" });
-				// If the deleted topic was selected, select the first remaining topic
 				if (selectedTopicId === deleteTopic.id) {
 					const remaining = topics.filter((t) => t.id !== deleteTopic.id);
 					if (remaining.length > 0) onSelectTopic(remaining[0].id);
@@ -184,7 +161,7 @@ export const QuestionBankSidebar = ({
 	return (
 		<>
 			<aside className="flex w-56 shrink-0 flex-col border-r border-gray-100 bg-white">
-				{/* Import */}
+				{/* Import button */}
 				<div className="px-3 pt-4 pb-3">
 					<button
 						onClick={onImportQuestions}
@@ -213,10 +190,10 @@ export const QuestionBankSidebar = ({
 							>
 								{topics?.map((topic) => (
 									<SortableTopicItem
-										key={topic?.id}
+										key={topic.id}
 										topic={topic}
-										isSelected={selectedTopicId === topic?.id}
-										onSelect={() => onSelectTopic(topic?.id)}
+										isSelected={selectedTopicId === topic.id}
+										onSelect={() => onSelectTopic(topic.id)}
 										onEdit={() => setEditTopic(topic)}
 										onDelete={() => setDeleteTopic(topic)}
 									/>
@@ -243,7 +220,6 @@ export const QuestionBankSidebar = ({
 				</div>
 			</aside>
 
-			{/* Add Topic Modal */}
 			<TopicModal
 				open={addModalOpen}
 				mode="add"
@@ -251,8 +227,6 @@ export const QuestionBankSidebar = ({
 				onClose={() => setAddModalOpen(false)}
 				onSave={handleAddTopic}
 			/>
-
-			{/* Edit Topic Modal */}
 			<TopicModal
 				open={!!editTopic}
 				mode="edit"
@@ -262,8 +236,6 @@ export const QuestionBankSidebar = ({
 				onClose={() => setEditTopic(null)}
 				onSave={handleUpdateTopic}
 			/>
-
-			{/* Delete Confirm Modal */}
 			<ConfirmModal
 				open={!!deleteTopic}
 				onClose={() => setDeleteTopic(null)}
@@ -315,9 +287,8 @@ const SortableTopicItem = ({
 	useEffect(() => {
 		if (!menuOpen) return;
 		const handler = (e: MouseEvent) => {
-			if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+			if (menuRef.current && !menuRef.current.contains(e.target as Node))
 				setMenuOpen(false);
-			}
 		};
 		document.addEventListener("mousedown", handler);
 		return () => document.removeEventListener("mousedown", handler);
@@ -337,16 +308,15 @@ const SortableTopicItem = ({
 				<button
 					{...attributes}
 					{...listeners}
+					type="button"
 					className="flex h-5 w-5 shrink-0 cursor-grab items-center justify-center text-gray-300 opacity-0 transition-colors group-hover:opacity-100 hover:text-gray-500 active:cursor-grabbing"
 					onClick={(e) => e.stopPropagation()}
 				>
 					<GripVertical className="h-3.5 w-3.5" />
 				</button>
-
 				<span className="flex-1 truncate text-xs font-medium">
 					{topic.name}
 				</span>
-
 				<button
 					onClick={(e) => {
 						e.stopPropagation();
@@ -366,7 +336,7 @@ const SortableTopicItem = ({
 			{menuOpen && (
 				<div
 					ref={menuRef}
-					className="absolute top-0 left-0 z-50 ml-1 w-40 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+					className="absolute top-0 left-full z-50 ml-1 w-40 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
 				>
 					<button
 						onClick={(e) => {
@@ -396,17 +366,7 @@ const SortableTopicItem = ({
 	);
 };
 
-// ─── Topic modal (add / edit) ─────────────────────────────────────────────────
-
-interface TopicModalProps {
-	open: boolean;
-	mode: "add" | "edit";
-	saving?: boolean;
-	initialName?: string;
-	initialDescription?: string;
-	onClose: () => void;
-	onSave: (data: { name: string; description: string }) => void;
-}
+// ─── Topic modal ──────────────────────────────────────────────────────────────
 
 const TopicModal = ({
 	open,
@@ -416,7 +376,15 @@ const TopicModal = ({
 	initialDescription = "",
 	onClose,
 	onSave,
-}: TopicModalProps) => {
+}: {
+	open: boolean;
+	mode: "add" | "edit";
+	saving?: boolean;
+	initialName?: string;
+	initialDescription?: string;
+	onClose: () => void;
+	onSave: (data: { name: string; description: string }) => void;
+}) => {
 	const [name, setName] = useState(initialName);
 	const [description, setDescription] = useState(initialDescription);
 	const [nameError, setNameError] = useState("");
@@ -430,7 +398,7 @@ const TopicModal = ({
 			setTimeout(() => inputRef.current?.focus(), 50);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [initialName]);
+	}, [initialName, initialDescription]);
 
 	const handleSave = () => {
 		if (!name.trim()) {
@@ -493,7 +461,6 @@ const TopicModal = ({
 						<p className="mt-1 text-xs text-red-500">{nameError}</p>
 					)}
 				</div>
-
 				<div>
 					<label className="mb-1.5 block text-xs font-medium text-gray-700">
 						Description{" "}

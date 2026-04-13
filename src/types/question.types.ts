@@ -1,18 +1,20 @@
 // ─── Internal question types used in forms ────────────────────────────────────
 // These are UI-only types. They get mapped to API DTOs before saving.
 
-export type QuestionType =
-	| "multiple-choice"
-	| "multiple-answers"
-	| "true-false"
-	| "essay"
-	| "fill-in-blank"
-	| "short-answer"
-	| "numerical"
-	| "matching"
-	| "question-group"
-	| "multiple-blanks"
-	| "comprehension-passage";
+import { QuestionType } from "./question";
+
+// export type QuestionType =
+// 	| "multiple-choice"
+// 	| "multiple-answers"
+// 	| "true-false"
+// 	| "essay"
+// 	| "fill-in-blank"
+// 	| "short-answer"
+// 	| "numerical"
+// 	| "matching"
+// 	| "question-group"
+// 	| "multiple-blanks"
+// 	| "comprehension-passage";
 
 export interface Option {
 	id: string;

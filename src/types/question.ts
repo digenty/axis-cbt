@@ -1,56 +1,27 @@
-// ─── Topic ────────────────────────────────────────────────────────────────────
+// ─── API question type enum ───────────────────────────────────────────────────
+// One type used everywhere — UI, API payloads, and API responses.
+// COMPREHENSION is an alias for QUESTION_GROUP with stimulusType = "COMPREHENSION".
 
-export interface CbtQueBankTopicPayload {
-	name: string;
-	classId: number;
-	subjectId: number;
-	branchId: number;
-	description: string;
-	displayOrder: number;
-	id?: number;
-}
-
-export interface ApiTopic {
-	id: number;
-	name: string;
-	description?: string;
-	classId: number;
-	subjectId: number;
-	displayOrder?: number;
-	branchId?: number;
-}
-
-export interface TopicsResponse {
-	data: ApiTopic[];
-	message: string;
-	status: string;
-}
-
-export interface TopicResponse {
-	data: ApiTopic;
-	message: string;
-	status: string;
-}
-
-// ─── Question type enums ──────────────────────────────────────────────────────
-
-export type ApiQuestionType =
+export type QuestionType =
 	| "MULTIPLE_CHOICE"
+	| "MULTIPLE_ANSWERS"
 	| "TRUE_FALSE"
 	| "ESSAY"
-	| "FILL_IN_THE_BLANK"
 	| "SHORT_ANSWER"
-	| "MULTIPLE_ANSWERS"
 	| "NUMERIC_ANSWER"
+	| "FILL_IN_THE_BLANK"
 	| "MATCH"
-	| "QUESTION_GROUP";
+	| "QUESTION_GROUP"
+	| "COMPREHENSION";
 
-// ─── typeSpecificData variants ────────────────────────────────────────────────
+export type DifficultyLevel = "EASY" | "MEDIUM" | "HARD" | "";
+
+// ─── Shared data shapes ───────────────────────────────────────────────────────
 
 export interface OptionData {
 	optionText: string;
 	optionHtml?: string;
-	optionLabel?: string;
+	optionLabel: string; // "A", "B", "C" …
 	imageUrl?: string;
 	isCorrect: boolean;
 }
@@ -71,15 +42,7 @@ export interface MatchPairData {
 	matchImageUrl?: string;
 }
 
-export interface SubQuestionRequest {
-	questionText: string;
-	questionHtml?: string;
-	imageUrl?: string;
-	marks: number;
-	explanation?: string;
-	questionType: ApiQuestionType;
-	typeSpecificData: TypeSpecificData;
-}
+// ─── TypeSpecificData — discriminated on `questionType` ───────────────────────
 
 export type TypeSpecificData =
 	| { questionType: "MULTIPLE_CHOICE"; options: OptionData[] }
@@ -128,6 +91,7 @@ export type TypeSpecificData =
 			partialCredit?: boolean;
 	  }
 	| {
+			// QUESTION_GROUP covers all grouped-stimulus types (Passage, Diagram, Table, Chart)
 			questionType: "QUESTION_GROUP";
 			stimulusType?: string;
 			stimulusContent?: string;
@@ -136,12 +100,41 @@ export type TypeSpecificData =
 			chartData?: string;
 			tableData?: string;
 			subQuestions?: SubQuestionRequest[];
+	  }
+	| {
+			// COMPREHENSION is a named alias — sent as QUESTION_GROUP with stimulusType="COMPREHENSION"
+			questionType: "COMPREHENSION";
+			stimulusType?: string;
+			stimulusContent?: string;
+			stimulusHtml?: string;
+			stimulusImageUrl?: string;
+			subQuestions?: SubQuestionRequest[];
 	  };
 
-// ─── Question request/response ────────────────────────────────────────────────
+// Sub-questions cannot nest QUESTION_GROUP / COMPREHENSION
+export type SubQuestionTypeSpecificData = Exclude<
+	TypeSpecificData,
+	{ questionType: "QUESTION_GROUP" } | { questionType: "COMPREHENSION" }
+>;
+
+export type SubQuestionType = Exclude<
+	QuestionType,
+	"QUESTION_GROUP" | "COMPREHENSION"
+>;
+
+export interface SubQuestionRequest {
+	questionText: string;
+	questionHtml?: string;
+	imageUrl?: string;
+	marks: number;
+	explanation?: string;
+	questionType: SubQuestionType;
+	typeSpecificData: SubQuestionTypeSpecificData;
+}
+
+// ─── API Request payload (POST / PUT body) ────────────────────────────────────
 
 export interface CreateQuestionPayload {
-	id?: number;
 	classId: number;
 	subjectId: number;
 	topicId: number;
@@ -151,7 +144,7 @@ export interface CreateQuestionPayload {
 	marks: number;
 	explanation?: string;
 	difficultyLevel?: string;
-	questionType: ApiQuestionType;
+	questionType: QuestionType;
 	typeSpecificData: TypeSpecificData;
 }
 
@@ -159,7 +152,8 @@ export interface UpdateQuestionPayload extends Partial<CreateQuestionPayload> {
 	id: number;
 }
 
-/** Shape returned by the API for a single question */
+// ─── API Response shapes ──────────────────────────────────────────────────────
+
 export interface ApiQuestion {
 	id: number;
 	classId: number;
@@ -171,10 +165,42 @@ export interface ApiQuestion {
 	marks: number;
 	explanation?: string;
 	difficultyLevel?: string;
-	questionType: ApiQuestionType;
+	questionType: QuestionType;
 	typeSpecificData: TypeSpecificData;
 	createdAt?: string;
 	updatedAt?: string;
+}
+
+export interface ApiTopic {
+	id: number;
+	name: string;
+	description?: string;
+	classId: number;
+	subjectId: number;
+	branchId?: number;
+	displayOrder?: number;
+}
+
+export interface CbtQueBankTopicPayload {
+	name: string;
+	classId: number;
+	subjectId: number;
+	branchId: number;
+	description: string;
+	displayOrder: number;
+	id?: number;
+}
+
+export interface TopicsResponse {
+	data: ApiTopic[];
+	message: string;
+	status: string;
+}
+
+export interface TopicResponse {
+	data: ApiTopic;
+	message: string;
+	status: string;
 }
 
 export interface QuestionsListResponse {
@@ -188,3 +214,43 @@ export interface QuestionResponse {
 	message: string;
 	status: string;
 }
+
+export interface ImportQuestionsResult {
+	imported: number;
+	failed: number;
+	errors: string[];
+}
+
+// ─── UI-only form state types (never sent to API directly) ────────────────────
+
+export interface OptionFormItem {
+	id: string; // "a", "b", "c", "d"
+	text: string;
+	isCorrect: boolean;
+}
+
+export interface BlankFormItem {
+	id: string; // local only
+	label: string;
+	answerType: "short-answer" | "multiple-choice";
+	answers: string[];
+	mark: number;
+	options?: OptionFormItem[];
+}
+
+export interface SubQuestionFormItem {
+	id: string; // local only
+	type: SubQuestionType;
+	text: string;
+	marks: number;
+	options: OptionFormItem[];
+	correctAnswerText: string; // comma-sep for SHORT_ANSWER
+	trueFalseAnswer: boolean;
+}
+
+export type StimulusType =
+	| "Comprehension Passage"
+	| "Diagram"
+	| "Table"
+	| "Chart"
+	| "Multiple Blanks";

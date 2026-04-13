@@ -1,88 +1,120 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
-import { Plus, Trash2, Check, Image as ImageIcon } from "lucide-react";
+import React, { useCallback, useState } from "react";
+import { Image as ImageIcon, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "@/components/Toast";
 import {
-	NormalizedQuestion,
-	Option,
-	QuestionType,
-	SingleQuestionFormState,
-} from "@/types/question.types";
+	buildDefaultOptions,
+	buildSingleQuestionPayload,
+	fromApiOptions,
+} from "@/utils/question";
+import {
+	DifficultySelector,
+	FormTopBar,
+	InstructionInput,
+	MarksInput,
+	Section,
+} from "@/utils/formPrimitives";
+import {
+	CorrectAnswersInput,
+	NumericAnswerInput,
+	OptionsEditor,
+	TrueFalseEditor,
+} from "@/utils/answerEditors";
+import {
+	QuestionTypeDropdown,
+	SINGLE_QUESTION_TYPES,
+} from "@/utils/questionTypeSelector";
 import {
 	useCreateCbtQuestion,
 	useUpdateCbtQuestion,
 } from "@/hooks/queryHooks/useQuestionBank";
-import { singleQuestionToPayload } from "@/types/question.mapper";
+import { toast } from "@/components/Toast";
+import type {
+	ApiQuestion,
+	DifficultyLevel,
+	OptionFormItem,
+	QuestionType,
+} from "@/types/question";
+
+// ─── Form state ───────────────────────────────────────────────────────────────
+
+interface FormState {
+	questionType: QuestionType;
+	questionText: string;
+	instruction: string;
+	explanation: string;
+	marks: number;
+	difficultyLevel: DifficultyLevel;
+	imageUrl: string;
+	// type-specific
+	options: OptionFormItem[];
+	trueFalseAnswer: boolean;
+	correctAnswerText: string;
+	numericAnswer: number;
+	numericTolerance: number;
+	numericUnit: string;
+}
+
+const INITIAL: FormState = {
+	questionType: "MULTIPLE_CHOICE",
+	questionText: "",
+	instruction: "",
+	explanation: "",
+	marks: 1,
+	difficultyLevel: "",
+	imageUrl: "",
+	options: buildDefaultOptions(),
+	trueFalseAnswer: true,
+	correctAnswerText: "",
+	numericAnswer: 0,
+	numericTolerance: 0,
+	numericUnit: "",
+};
+
+// ─── Hydrate from existing question ──────────────────────────────────────────
+
+function hydrateForm(q: ApiQuestion): FormState {
+	const tsd = q?.typeSpecificData;
+	const state: FormState = {
+		...INITIAL,
+		questionType: q?.questionType,
+		questionText: q?.questionText,
+		explanation: q?.explanation ?? "",
+		marks: q?.marks,
+		difficultyLevel: (q?.difficultyLevel as DifficultyLevel) ?? "",
+		imageUrl: q?.imageUrl ?? "",
+	};
+
+	if (tsd?.questionType === "MULTIPLE_CHOICE")
+		state.options = fromApiOptions(tsd?.options);
+	if (tsd?.questionType === "MULTIPLE_ANSWERS")
+		state.options = fromApiOptions(tsd?.options);
+	if (tsd?.questionType === "TRUE_FALSE")
+		state.trueFalseAnswer = tsd?.correctAnswer;
+	if (tsd?.questionType === "SHORT_ANSWER")
+		state.correctAnswerText = (tsd?.correctAnswers ?? []).join(", ");
+	if (tsd?.questionType === "NUMERIC_ANSWER") {
+		state.numericAnswer = tsd?.correctAnswer ?? 0;
+		state.numericTolerance = tsd?.tolerance ?? 0;
+		state.numericUnit = tsd?.unit ?? "";
+	}
+
+	return state;
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface AddQuestionFormProps {
 	classId: number;
 	subjectId: number;
 	topicId: number;
-	editQuestion?: NormalizedQuestion | null;
+	editQuestion?: ApiQuestion | null;
 	onClose: () => void;
 	onSaved: () => void;
 }
 
-const QUESTION_TYPES: { type: QuestionType; label: string }[] = [
-	{ type: "multiple-choice", label: "Multiple Choice" },
-	{ type: "true-false", label: "True/False" },
-	{ type: "essay", label: "Essay" },
-	{ type: "fill-in-blank", label: "Fill-in-the-Blank" },
-	{ type: "short-answer", label: "Short Answer" },
-	{ type: "multiple-answers", label: "Multiple Answers" },
-	{ type: "numerical", label: "Numeric Answers" },
-];
-
-// ─── Default state builders ───────────────────────────────────────────────────
-
-const defaultOptions = (): Option[] => [
-	{ id: "a", text: "", isCorrect: false },
-	{ id: "b", text: "", isCorrect: false },
-	{ id: "c", text: "", isCorrect: false },
-	{ id: "d", text: "", isCorrect: false },
-];
-
-const trueFalseOptions = (): Option[] => [
-	{ id: "true", text: "True", isCorrect: false },
-	{ id: "false", text: "False", isCorrect: false },
-];
-
-function buildDefaultForm(
-	questionType: QuestionType = "multiple-choice",
-	existing?: NormalizedQuestion | null,
-): SingleQuestionFormState {
-	if (existing) {
-		return {
-			questionType: existing.questionType,
-			questionText: existing.questionText,
-			marks: existing.marks,
-			instruction: existing.instruction ?? "",
-			options:
-				existing.options ??
-				(existing.questionType === "true-false"
-					? trueFalseOptions()
-					: defaultOptions()),
-			correctAnswer: Array.isArray(existing.correctAnswer)
-				? existing.correctAnswer.join(", ")
-				: (existing.correctAnswer ?? ""),
-			imageUrl: existing.imageUrl ?? null,
-		};
-	}
-	return {
-		questionType,
-		questionText: "",
-		marks: 1,
-		instruction: "",
-		options:
-			questionType === "true-false" ? trueFalseOptions() : defaultOptions(),
-		correctAnswer: "",
-		imageUrl: null,
-	};
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export const AddQuestionForm = ({
 	classId,
@@ -92,437 +124,237 @@ export const AddQuestionForm = ({
 	onClose,
 	onSaved,
 }: AddQuestionFormProps) => {
-	const { mutateAsync: createQuestion } = useCreateCbtQuestion();
-	const { mutateAsync: updateQuestion } = useUpdateCbtQuestion();
-
-	const [typeDropOpen, setTypeDropOpen] = useState(false);
-	const [errors, setErrors] = useState<
-		Partial<Record<keyof SingleQuestionFormState, string>>
-	>({});
-	const [saving, setSaving] = useState(false);
-
-	const [form, setForm] = useState<SingleQuestionFormState>(() =>
-		buildDefaultForm("multiple-choice", editQuestion),
+	const [form, setForm] = useState<FormState>(() =>
+		editQuestion ? hydrateForm(editQuestion) : INITIAL,
 	);
+	const [errors, setErrors] = useState<
+		Partial<Record<keyof FormState, string>>
+	>({});
 
-	const updateField = useCallback(
-		<K extends keyof SingleQuestionFormState>(
-			key: K,
-			val: SingleQuestionFormState[K],
-		) => {
+	const { mutateAsync: createQuestion, isPending: isCreating } =
+		useCreateCbtQuestion();
+	const { mutateAsync: updateQuestion, isPending: isUpdating } =
+		useUpdateCbtQuestion();
+	const saving = isCreating || isUpdating;
+
+	const update = useCallback(
+		<K extends keyof FormState>(key: K, val: FormState[K]) => {
 			setForm((prev) => ({ ...prev, [key]: val }));
 			setErrors((prev) => ({ ...prev, [key]: undefined }));
 		},
 		[],
 	);
 
-	const changeType = (type: QuestionType) => {
+	const changeType = (questionType: QuestionType) => {
 		setForm((prev) => ({
-			...buildDefaultForm(type),
-			instruction: prev.instruction,
-			marks: prev.marks,
+			...INITIAL,
+			questionType,
+			questionText: prev?.questionText,
+			instruction: prev?.instruction,
+			explanation: prev?.explanation,
+			marks: prev?.marks,
+			difficultyLevel: prev?.difficultyLevel,
+			imageUrl: prev?.imageUrl,
 		}));
-		setTypeDropOpen(false);
 	};
 
 	const validate = (): boolean => {
-		const errs: Partial<Record<keyof SingleQuestionFormState, string>> = {};
-		if (!form.questionText.trim())
+		const errs: Partial<Record<keyof FormState, string>> = {};
+		if (!form?.questionText.trim())
 			errs.questionText = "Question text is required";
+		if (
+			(form?.questionType === "MULTIPLE_CHOICE" ||
+				form?.questionType === "MULTIPLE_ANSWERS") &&
+			!form?.options.some((o) => o.isCorrect)
+		)
+			errs.options = "Mark at least one option as correct";
 		setErrors(errs);
-		return Object.keys(errs).length === 0;
+		return Object.keys(errs)?.length === 0;
 	};
 
 	const handleSave = async () => {
 		if (!validate()) return;
-		setSaving(true);
+
+		const payload = buildSingleQuestionPayload({
+			classId,
+			subjectId,
+			topicId,
+			...form,
+		});
 
 		try {
-			const payload = singleQuestionToPayload(
-				form,
-				classId,
-				subjectId,
-				topicId,
-			);
-
-			if (editQuestion?.id) {
+			if (editQuestion) {
 				await updateQuestion({ id: editQuestion.id, payload });
+				toast({ title: "Question updated", type: "success" });
 			} else {
 				await createQuestion(payload);
+				toast({ title: "Question saved", type: "success" });
 			}
-
-			toast({ title: "Question saved successfully!", type: "success" });
 			onSaved();
 		} catch (err: unknown) {
-			const message =
+			const msg =
 				err && typeof err === "object" && "message" in err
 					? String((err as { message: string }).message)
 					: "Could not save question";
-			toast({ title: message, type: "error" });
-		} finally {
-			setSaving(false);
+			toast({ title: msg, type: "error" });
 		}
 	};
 
-	const isChoiceType =
-		form.questionType === "multiple-choice" ||
-		form.questionType === "multiple-answers";
-	const isTextAnswerType = [
-		"short-answer",
-		"fill-in-blank",
-		"numerical",
-	].includes(form.questionType);
-
 	return (
 		<div className="flex h-full w-full flex-col overflow-hidden">
-			{/* Top bar */}
-			<div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-white px-6 py-3">
-				<button
-					onClick={onClose}
-					className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
-				>
-					Cancel
-				</button>
-				<button
-					onClick={handleSave}
-					disabled={saving}
-					className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
-				>
-					{saving && (
-						<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-					)}
-					{editQuestion ? "Update Question" : "Save Question"}
-				</button>
-			</div>
+			<FormTopBar
+				onCancel={onClose}
+				onSave={handleSave}
+				saving={saving}
+				isEdit={!!editQuestion}
+			/>
 
-			{/* Form body */}
 			<div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
-				{/* Instruction */}
-				<FormSection title="Instruction" optional>
-					<p className="mb-2 text-xs text-gray-400">
-						Add a brief instruction if needed. Example: &quot;Fill in the
-						gaps&quot; or &quot;Complete the sentence&quot;
-					</p>
-					<input
-						type="text"
-						value={form.instruction}
-						onChange={(e) => updateField("instruction", e.target.value)}
-						placeholder="Example: fill in the gaps with the correct words"
-						className="h-9 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm transition placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none"
-					/>
-				</FormSection>
+				<InstructionInput
+					value={form?.instruction}
+					onChange={(v) => update("instruction", v)}
+				/>
 
-				{/* Question text + type selector */}
-				<FormSection title="">
-					{/* Type selector row */}
+				{/* Question text + type picker */}
+				<Section title="">
 					<div className="mb-3 flex items-center gap-3">
-						<div className="relative">
-							<button
-								onClick={() => setTypeDropOpen((v) => !v)}
-								className="flex h-8 items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-gray-50"
-							>
-								{QUESTION_TYPES.find(
-									(t) => t.type === form.questionType,
-								)?.label ?? form.questionType}
-								<svg
-									className="h-3.5 w-3.5 text-gray-400"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M19 9l-7 7-7-7"
-									/>
-								</svg>
-							</button>
-							{typeDropOpen && (
-								<div className="absolute top-full left-0 z-30 mt-1 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-									{QUESTION_TYPES.map(({ type, label }) => (
-										<button
-											key={type}
-											onClick={() => changeType(type)}
-											className={cn(
-												"w-full px-3 py-2 text-left text-sm transition-colors hover:bg-gray-50",
-												form.questionType === type
-													? "font-semibold text-blue-700"
-													: "text-gray-700",
-											)}
-										>
-											{label}
-										</button>
-									))}
-								</div>
-							)}
-						</div>
-
-						{/* Image upload stub */}
-						<button className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600">
+						<QuestionTypeDropdown
+							value={form?.questionType}
+							onChange={changeType}
+							types={SINGLE_QUESTION_TYPES}
+						/>
+						<button
+							type="button"
+							title="Add image"
+							className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
+						>
 							<ImageIcon className="h-4 w-4" />
 						</button>
 					</div>
 
-					{/* Question text input */}
 					<div className="relative">
-						<input
-							type="text"
-							value={form.questionText}
-							onChange={(e) =>
-								updateField("questionText", e.target.value)
-							}
+						<textarea
+							rows={2}
+							value={form?.questionText}
+							onChange={(e) => update("questionText", e.target.value)}
 							placeholder="Type your question"
 							className={cn(
-								"h-11 w-full rounded-xl border px-4 py-3 text-sm transition placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none",
-								errors.questionType
+								"w-full resize-none rounded-xl border px-4 py-3 text-sm transition placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none",
+								errors.questionText
 									? "border-red-400"
 									: "border-gray-200",
 							)}
 						/>
-						{errors.questionType && (
+						{errors?.questionText && (
 							<p className="mt-1 text-xs text-red-500">
-								{errors.questionType}
+								{errors?.questionText}
 							</p>
 						)}
 					</div>
 
-					{/* Image preview area */}
-					{form.imageUrl === "placeholder" && (
+					{form?.imageUrl && (
 						<div className="relative mt-3 h-40 w-64 overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
-							<div
-								className="absolute inset-0"
-								style={{
-									backgroundImage:
-										"repeating-conic-gradient(#e5e7eb 0% 25%, #f9fafb 0% 50%)",
-									backgroundSize: "20px 20px",
-								}}
+							<img
+								src={form?.imageUrl}
+								alt=""
+								className="h-full w-full object-cover"
 							/>
-							<div className="absolute bottom-2 left-2 flex gap-2">
-								<button
-									onClick={() => updateField("imageUrl", null)}
-									className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs text-gray-700 shadow-sm transition-colors hover:bg-white"
-								>
-									<Trash2 className="h-3 w-3" />
-								</button>
-								<button className="rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs text-gray-700 shadow-sm transition-colors hover:bg-white">
-									Replace
-								</button>
-							</div>
+							<button
+								type="button"
+								onClick={() => update("imageUrl", "")}
+								className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs text-gray-700 shadow-sm hover:bg-white"
+							>
+								<Trash2 className="h-3 w-3" />
+								Remove
+							</button>
 						</div>
 					)}
-					{!form.imageUrl && (
-						<button
-							onClick={() => updateField("imageUrl", "placeholder")}
-							className="mt-2 flex items-center gap-1.5 rounded-lg border border-dashed border-gray-200 px-3 py-1.5 text-xs text-gray-500 transition-all hover:border-blue-300 hover:text-blue-500"
-						>
-							<ImageIcon className="h-3.5 w-3.5" />
-							Add image
-						</button>
-					)}
-				</FormSection>
+				</Section>
 
 				{/* Type-specific answer fields */}
-				{isChoiceType && (
-					<OptionsEditor
-						options={form.options}
-						onChange={(options) => updateField("options", options)}
-						multiSelect={form.questionType === "multiple-answers"}
-					/>
-				)}
-
-				{form.questionType === "true-false" && (
-					<TrueFalseEditor
-						options={form.options}
-						onChange={(options) => updateField("options", options)}
-					/>
-				)}
-
-				{isTextAnswerType && (
-					<FormSection title="Expected Answer" optional>
-						<input
-							type="text"
-							value={form.correctAnswer}
-							onChange={(e) =>
-								updateField("correctAnswer", e.target.value)
-							}
-							placeholder="Add multiple by separating with a comma"
-							className="h-9 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
+				{(form?.questionType === "MULTIPLE_CHOICE" ||
+					form?.questionType === "MULTIPLE_ANSWERS") && (
+					<Section
+						title="Answer Options"
+						hint="Click the circle/checkbox to mark the correct answer(s)"
+					>
+						{errors?.options && (
+							<p className="mb-2 text-xs text-red-500">
+								{errors?.options}
+							</p>
+						)}
+						<OptionsEditor
+							options={form?.options}
+							onChange={(opts) => update("options", opts)}
+							multiSelect={form?.questionType === "MULTIPLE_ANSWERS"}
 						/>
-					</FormSection>
+					</Section>
 				)}
 
-				{form.questionType === "essay" && (
-					<FormSection title="">
-						<p className="py-2 text-sm text-gray-400 italic">
+				{form?.questionType === "TRUE_FALSE" && (
+					<Section title="Correct Answer">
+						<TrueFalseEditor
+							correctAnswer={form?.trueFalseAnswer}
+							onChange={(v) => update("trueFalseAnswer", v)}
+						/>
+					</Section>
+				)}
+
+				{form?.questionType === "SHORT_ANSWER" && (
+					<Section title="Expected Answer" optional>
+						<CorrectAnswersInput
+							value={form?.correctAnswerText}
+							onChange={(v) => update("correctAnswerText", v)}
+						/>
+					</Section>
+				)}
+
+				{form?.questionType === "NUMERIC_ANSWER" && (
+					<Section title="Numeric Answer">
+						<NumericAnswerInput
+							correctAnswer={form?.numericAnswer}
+							tolerance={form?.numericTolerance}
+							unit={form?.numericUnit}
+							onChangeAnswer={(v) => update("numericAnswer", v)}
+							onChangeTolerance={(v) => update("numericTolerance", v)}
+							onChangeUnit={(v) => update("numericUnit", v)}
+						/>
+					</Section>
+				)}
+
+				{form?.questionType === "ESSAY" && (
+					<Section title="">
+						<p className="py-2 text-sm italic text-gray-400">
 							Students will provide a long-form written response. No
-							expected answer needed.
+							expected answer is needed here.
 						</p>
-					</FormSection>
+					</Section>
 				)}
 
-				{/* Marks */}
-				<div className="flex items-center gap-3 pb-2">
-					<span className="text-sm font-medium text-gray-700">Marks:</span>
-					<input
-						type="number"
-						min={1}
-						value={form.marks}
-						onChange={(e) =>
-							updateField("marks", Math.max(1, Number(e.target.value)))
-						}
-						className="h-8 w-16 rounded-lg border border-gray-200 text-center text-sm transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
+				<Section
+					title="Explanation"
+					optional
+					hint="Shown to students after they answer"
+				>
+					<textarea
+						rows={2}
+						value={form?.explanation}
+						onChange={(e) => update("explanation", e.target.value)}
+						placeholder="Explain why the correct answer is correct…"
+						className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm transition placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+					/>
+				</Section>
+
+				<div className="flex flex-wrap items-center gap-5 pb-2">
+					<MarksInput
+						value={form?.marks}
+						onChange={(v) => update("marks", v)}
+					/>
+					<DifficultySelector
+						value={form?.difficultyLevel}
+						onChange={(v) => update("difficultyLevel", v)}
 					/>
 				</div>
-			</div>
-		</div>
-	);
-};
-
-// ─── Form section wrapper ─────────────────────────────────────────────────────
-
-export const FormSection = ({
-	title,
-	optional,
-	children,
-}: {
-	title: string;
-	optional?: boolean;
-	children: React.ReactNode;
-}) => (
-	<div className="rounded-xl border border-gray-200 bg-white p-4">
-		{title && (
-			<h3 className="mb-2 text-sm font-semibold text-gray-900">
-				{title}{" "}
-				{optional && (
-					<span className="text-xs font-normal text-gray-400">
-						(optional)
-					</span>
-				)}
-			</h3>
-		)}
-		{children}
-	</div>
-);
-
-// ─── Options editor ───────────────────────────────────────────────────────────
-
-const OptionsEditor = ({
-	options,
-	onChange,
-	multiSelect,
-}: {
-	options: Option[];
-	onChange: (opts: Option[]) => void;
-	multiSelect: boolean;
-}) => {
-	const toggleCorrect = (id: string) => {
-		const next = multiSelect
-			? options.map((o) =>
-					o.id === id ? { ...o, isCorrect: !o.isCorrect } : o,
-				)
-			: options.map((o) => ({ ...o, isCorrect: o.id === id }));
-		onChange(next);
-	};
-
-	const updateText = (id: string, text: string) =>
-		onChange(options.map((o) => (o.id === id ? { ...o, text } : o)));
-
-	const removeOption = (id: string) => {
-		if (options.length <= 2) return;
-		onChange(options.filter((o) => o.id !== id));
-	};
-
-	const addOption = () => {
-		const next = String.fromCharCode(97 + options.length);
-		onChange([...options, { id: next, text: "", isCorrect: false }]);
-	};
-
-	return (
-		<div className="rounded-xl border border-gray-200 bg-white p-4">
-			<div className="space-y-2">
-				{options.map((opt) => (
-					<div key={opt.id} className="flex items-center gap-3">
-						<button
-							type="button"
-							onClick={() => toggleCorrect(opt.id)}
-							className={cn(
-								"flex h-5 w-5 shrink-0 items-center justify-center border-2 transition-all",
-								multiSelect ? "rounded" : "rounded-full",
-								opt.isCorrect
-									? "border-blue-500 bg-blue-500 text-white"
-									: "border-gray-300 hover:border-blue-400",
-							)}
-						>
-							{opt.isCorrect && <Check className="h-3 w-3" />}
-						</button>
-						<span className="w-5 text-sm font-medium text-gray-500 uppercase">
-							{opt.id}.
-						</span>
-						<input
-							type="text"
-							value={opt.text}
-							onChange={(e) => updateText(opt.id, e.target.value)}
-							placeholder={`Option ${opt.id.toUpperCase()}`}
-							className="h-9 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm transition placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none"
-						/>
-						{options.length > 2 && (
-							<button
-								onClick={() => removeOption(opt.id)}
-								className="flex h-7 w-7 shrink-0 items-center justify-center text-gray-300 transition-colors hover:text-red-500"
-							>
-								<Trash2 className="h-3.5 w-3.5" />
-							</button>
-						)}
-					</div>
-				))}
-
-				{options.length < 8 && (
-					<button
-						type="button"
-						onClick={addOption}
-						className="mt-1 flex items-center gap-1.5 rounded-lg border border-dashed border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-all hover:border-blue-300 hover:text-blue-600"
-					>
-						<Plus className="h-3.5 w-3.5" />
-						Add Option
-					</button>
-				)}
-			</div>
-		</div>
-	);
-};
-
-// ─── True/False editor ────────────────────────────────────────────────────────
-
-const TrueFalseEditor = ({
-	options,
-	onChange,
-}: {
-	options: Option[];
-	onChange: (opts: Option[]) => void;
-}) => {
-	const setCorrect = (id: "true" | "false") =>
-		onChange(options.map((o) => ({ ...o, isCorrect: o.id === id })));
-	const current = options.find((o) => o.isCorrect)?.id;
-
-	return (
-		<div className="rounded-xl border border-gray-200 bg-white p-4">
-			<div className="flex gap-3">
-				{(["true", "false"] as const).map((val) => (
-					<button
-						key={val}
-						type="button"
-						onClick={() => setCorrect(val)}
-						className={cn(
-							"flex-1 rounded-xl border py-2.5 text-sm font-medium capitalize transition-all",
-							current === val
-								? "border-blue-500 bg-blue-50 text-blue-700"
-								: "border-gray-200 text-gray-600 hover:border-gray-300",
-						)}
-					>
-						{val.charAt(0).toUpperCase() + val.slice(1)}
-					</button>
-				))}
 			</div>
 		</div>
 	);
