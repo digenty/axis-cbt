@@ -7,12 +7,10 @@ import { cn } from "@/lib/utils";
 import {
 	buildDefaultOptions,
 	buildGroupData,
-	buildSubQTypeSpecificData,
-	fromApiOptions,
+	// buildSubQTypeSpecificData,
 	generateId,
 } from "@/utils/question";
 import { Section } from "@/utils/formPrimitives";
-import { OptionsEditor, TrueFalseEditor } from "@/utils/answerEditors";
 import {
 	QuestionTypeDropdown,
 	SINGLE_QUESTION_TYPES,
@@ -24,17 +22,17 @@ import {
 import { toast } from "@/components/Toast";
 import type {
 	ApiQuestion,
-	QuestionType,
+	CreateQuestionPayload,
+	// OptionFormItem,
+	// QuestionType,
 	SubQuestionFormItem,
 	SubQuestionType,
 } from "@/types/question";
+import { appendOption } from "@/utils/question";
+import { Plus as PlusIcon, Trash2 as TrashIcon } from "lucide-react";
 
-// ─── Stimulus types ───────────────────────────────────────────────────────────
+// ─── Stimulus options ─────────────────────────────────────────────────────────
 
-/**
- * COMPREHENSION → sent as questionType: "COMPREHENSION", stimulusType: "TEXT"
- * QUESTION_GROUP → sent as questionType: "QUESTION_GROUP", stimulusType varies
- */
 type GroupQuestionType = "QUESTION_GROUP" | "COMPREHENSION";
 
 const STIMULUS_OPTIONS: {
@@ -77,8 +75,6 @@ const defaultSubQ = (): SubQuestionFormItem => ({
 	text: "",
 	marks: 1,
 	options: buildDefaultOptions(),
-	correctAnswerText: "",
-	trueFalseAnswer: true,
 });
 
 // ─── Hydrate sub-questions from API ──────────────────────────────────────────
@@ -92,19 +88,22 @@ function hydrateSubQ(
 	>[number],
 ): SubQuestionFormItem {
 	const base = defaultSubQ();
-	base.text = raw.questionText;
-	base.marks = raw.marks;
-	base.type = raw.questionType as SubQuestionType;
+	base.text = raw?.questionText;
+	base.marks = raw?.marks;
+	base.type = raw?.questionType as SubQuestionType;
 
-	const d = raw.typeSpecificData;
+	// Restore option text if MCQ/MA (no correct-answer selection)
+	const d = raw?.typeSpecificData;
 	if (
-		d.questionType === "MULTIPLE_CHOICE" ||
-		d.questionType === "MULTIPLE_ANSWERS"
-	)
-		base.options = fromApiOptions(d.options ?? []);
-	if (d.questionType === "TRUE_FALSE") base.trueFalseAnswer = d.correctAnswer;
-	if (d.questionType === "SHORT_ANSWER")
-		base.correctAnswerText = (d.correctAnswers ?? []).join(", ");
+		d?.questionType === "MULTIPLE_CHOICE" ||
+		d?.questionType === "MULTIPLE_ANSWERS"
+	) {
+		base.options = d?.options?.map((o, i) => ({
+			id: o.optionLabel?.toLowerCase() ?? String.fromCharCode(97 + i),
+			text: o.optionText,
+			isCorrect: false, // not shown in this form
+		}));
+	}
 
 	return base;
 }
@@ -115,11 +114,6 @@ interface QuestionGroupFormProps {
 	classId: number;
 	subjectId: number;
 	topicId: number;
-	/**
-	 * When the user picks "Comprehension" from the modal, pass questionType="COMPREHENSION"
-	 * so the form pre-selects the Comprehension Passage stimulus option.
-	 * When omitted defaults to the first stimulus option (Comprehension Passage).
-	 */
 	initialQuestionType?: GroupQuestionType;
 	editQuestion?: ApiQuestion | null;
 	onClose: () => void;
@@ -137,15 +131,14 @@ export const QuestionGroupForm = ({
 	onClose,
 	onSaved,
 }: QuestionGroupFormProps) => {
-	// Determine initial stimulus option from editQuestion or initialQuestionType
 	const getInitialStimulus = () => {
 		if (editQuestion) {
-			const tsd = editQuestion.typeSpecificData;
+			const tsd = editQuestion?.typeSpecificData;
 			if (
 				tsd?.questionType === "QUESTION_GROUP" ||
 				tsd?.questionType === "COMPREHENSION"
 			) {
-				const match = STIMULUS_OPTIONS.find(
+				const match = STIMULUS_OPTIONS?.find(
 					(s) =>
 						s.questionType === tsd?.questionType &&
 						s.stimulusType === (tsd as any).stimulusType,
@@ -163,7 +156,7 @@ export const QuestionGroupForm = ({
 	const existingTsd =
 		editQuestion?.typeSpecificData?.questionType === "QUESTION_GROUP" ||
 		editQuestion?.typeSpecificData?.questionType === "COMPREHENSION"
-			? editQuestion.typeSpecificData
+			? editQuestion?.typeSpecificData
 			: null;
 
 	const [groupName, setGroupName] = useState(editQuestion?.questionText ?? "");
@@ -185,48 +178,44 @@ export const QuestionGroupForm = ({
 		useUpdateCbtQuestion();
 	const saving = isCreating || isUpdating;
 
-	const totalMarks = subQuestions.reduce((s, sq) => s + sq.marks, 0);
+	const totalMarks = subQuestions?.reduce((s, sq) => s + sq.marks, 0);
 
 	const addSubQ = () => setSubQuestions((prev) => [...prev, defaultSubQ()]);
-
 	const removeSubQ = (id: string) => {
 		if (subQuestions?.length <= 1) return;
 		setSubQuestions((prev) => prev.filter((sq) => sq.id !== id));
 	};
-
 	const updateSubQ = (
 		id: string,
 		updater: (sq: SubQuestionFormItem) => SubQuestionFormItem,
 	) =>
 		setSubQuestions((prev) =>
-			prev.map((sq) => (sq.id === id ? updater(sq) : sq)),
+			prev?.map((sq) => (sq.id === id ? updater(sq) : sq)),
 		);
 
 	const validate = (): boolean => {
 		const errs: Record<string, string> = {};
 		if (!groupName?.trim()) errs.groupName = "Group name is required";
 		setErrors(errs);
-		return Object.keys(errs).length === 0;
+		return Object.keys(errs)?.length === 0;
 	};
 
 	const handleSave = async () => {
 		if (!validate()) return;
 
-		const typeSpecificData = buildGroupData({
-			questionType: selectedStimulus?.questionType,
-			stimulusType: selectedStimulus?.stimulusType,
-			stimulusContent,
-			subQuestions,
-		});
-
-		const payload = {
+		const payload: CreateQuestionPayload = {
 			classId,
 			subjectId,
 			topicId,
 			questionText: groupName,
 			marks: totalMarks || 1,
 			questionType: selectedStimulus?.questionType,
-			typeSpecificData,
+			typeSpecificData: buildGroupData({
+				questionType: selectedStimulus?.questionType,
+				stimulusType: selectedStimulus?.stimulusType,
+				stimulusContent,
+				subQuestions,
+			}),
 		};
 
 		try {
@@ -241,7 +230,7 @@ export const QuestionGroupForm = ({
 		} catch (err: unknown) {
 			const msg =
 				err && typeof err === "object" && "message" in err
-					? String((err as { message: string }).message)
+					? String((err as { message: string })?.message)
 					: "Could not save";
 			toast({ title: msg, type: "error" });
 		}
@@ -249,7 +238,7 @@ export const QuestionGroupForm = ({
 
 	return (
 		<div className="flex h-full w-full flex-col overflow-hidden">
-			{/* Top bar with inline group name */}
+			{/* Top bar */}
 			<div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-gray-50/50 px-6 py-3">
 				<input
 					type="text"
@@ -265,7 +254,7 @@ export const QuestionGroupForm = ({
 					}
 					className={cn(
 						"flex-1 border-0 bg-transparent text-sm font-medium placeholder:text-gray-400 focus:ring-0 focus:outline-none",
-						errors.groupName && "placeholder:text-red-400",
+						errors?.groupName && "placeholder:text-red-400",
 					)}
 				/>
 				<div className="ml-4 flex shrink-0 items-center gap-2">
@@ -297,7 +286,6 @@ export const QuestionGroupForm = ({
 						<h3 className="text-sm font-semibold text-gray-900">
 							Question Material
 						</h3>
-						{/* Stimulus type dropdown */}
 						<div className="relative">
 							<button
 								type="button"
@@ -314,7 +302,7 @@ export const QuestionGroupForm = ({
 										onClick={() => setStimulusDropOpen(false)}
 									/>
 									<div className="absolute top-full right-0 z-30 mt-1 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-										{STIMULUS_OPTIONS.map((opt) => (
+										{STIMULUS_OPTIONS?.map((opt) => (
 											<button
 												key={`${opt.questionType}-${opt.stimulusType}`}
 												type="button"
@@ -336,9 +324,8 @@ export const QuestionGroupForm = ({
 						</div>
 					</div>
 					<p className="mb-3 text-xs text-gray-500">
-						{selectedStimulus?.questionType === "COMPREHENSION"
-							? "The passage will be shown above all sub-questions."
-							: "This shared material will be displayed above all sub-questions."}
+						This shared material will be displayed above all
+						sub-questions.
 					</p>
 					<textarea
 						value={stimulusContent}
@@ -375,12 +362,12 @@ export const QuestionGroupForm = ({
 					<div className="space-y-3">
 						{subQuestions?.map((sq, idx) => (
 							<SubQuestionCard
-								key={sq?.id}
+								key={sq.id}
 								sq={sq}
 								index={idx + 1}
 								canDelete={subQuestions?.length > 1}
 								onUpdateType={(type) =>
-									updateSubQ(sq?.id, (prev) => ({
+									updateSubQ(sq.id, (prev) => ({
 										...defaultSubQ(),
 										id: prev.id,
 										text: prev.text,
@@ -389,7 +376,7 @@ export const QuestionGroupForm = ({
 									}))
 								}
 								onUpdateField={(key, val) =>
-									updateSubQ(sq?.id, (prev) => ({
+									updateSubQ(sq.id, (prev) => ({
 										...prev,
 										[key]: val,
 									}))
@@ -474,7 +461,7 @@ const SubQuestionCard = ({
 			{expanded && (
 				<div
 					className="space-y-3 border-t border-gray-100 px-4 py-4"
-					onClick={(e) => e.stopPropagation()}
+					onClick={(e) => e?.stopPropagation()}
 				>
 					<QuestionTypeDropdown
 						value={sq?.type}
@@ -490,37 +477,66 @@ const SubQuestionCard = ({
 						className="h-9 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm transition placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					/>
 
+					{/* Option labels only — no correct-answer selection */}
 					{(sq?.type === "MULTIPLE_CHOICE" ||
 						sq?.type === "MULTIPLE_ANSWERS") && (
-						<OptionsEditor
-							options={sq?.options}
-							onChange={(opts) => onUpdateField("options", opts)}
-							multiSelect={sq?.type === "MULTIPLE_ANSWERS"}
-						/>
+						<div className="space-y-2">
+							{sq?.options?.map((opt) => (
+								<div key={opt.id} className="flex items-center gap-2">
+									<span className="w-5 shrink-0 text-xs font-medium uppercase text-gray-500">
+										{opt.id}.
+									</span>
+									<input
+										type="text"
+										value={opt.text}
+										onChange={(e) =>
+											onUpdateField(
+												"options",
+												sq?.options?.map((o) =>
+													o.id === opt.id
+														? { ...o, text: e.target.value }
+														: o,
+												),
+											)
+										}
+										placeholder={`Option ${opt?.id?.toUpperCase()}`}
+										className="h-8 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm transition placeholder:text-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+									/>
+								</div>
+							))}
+							{sq?.options?.length < 8 && (
+								<button
+									type="button"
+									onClick={() =>
+										onUpdateField(
+											"options",
+											appendOption(sq?.options),
+										)
+									}
+									className="flex items-center gap-1.5 text-xs text-blue-600 transition-colors hover:text-blue-700"
+								>
+									<PlusIcon className="h-3.5 w-3.5" />
+									Add Option
+								</button>
+							)}
+						</div>
 					)}
 
 					{sq?.type === "TRUE_FALSE" && (
-						<TrueFalseEditor
-							correctAnswer={sq?.trueFalseAnswer}
-							onChange={(v) => onUpdateField("trueFalseAnswer", v)}
-						/>
+						<p className="text-xs italic text-gray-400">
+							True / False — correct answer set during marking.
+						</p>
 					)}
 
 					{sq?.type === "SHORT_ANSWER" && (
-						<input
-							type="text"
-							value={sq?.correctAnswerText}
-							onChange={(e) =>
-								onUpdateField("correctAnswerText", e.target.value)
-							}
-							placeholder="Expected answer"
-							className="h-9 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
-						/>
+						<p className="text-xs italic text-gray-400">
+							Short answer — accepted answers set during marking.
+						</p>
 					)}
 
 					{sq?.type === "ESSAY" && (
 						<p className="text-xs italic text-gray-400">
-							Open-ended — no expected answer needed
+							Open-ended — no expected answer needed.
 						</p>
 					)}
 

@@ -33,7 +33,11 @@ import {
 	useDeleteCbtQuestion,
 	useGetQuestions,
 } from "@/hooks/queryHooks/useQuestionBank";
-import type { ApiQuestion, QuestionType } from "@/types/question";
+import type {
+	ApiQuestion,
+	QuestionType,
+	ResponseTypeSpecificData,
+} from "@/types/question";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -70,7 +74,7 @@ export const QuestionListView = ({
 
 	const filtered = search
 		? questions.filter((q) =>
-				q.questionText.toLowerCase().includes(search.toLowerCase()),
+				q?.questionText?.toLowerCase().includes(search.toLowerCase()),
 			)
 		: questions;
 
@@ -244,7 +248,7 @@ const SortableQuestionCard = ({
 			onError: (e: unknown) => {
 				const msg =
 					e && typeof e === "object" && "message" in e
-						? String((e as { message: string }).message)
+						? String((e as { message: string })?.message)
 						: "Error deleting";
 				toast({ title: msg, type: "error" });
 			},
@@ -274,7 +278,7 @@ const SortableQuestionCard = ({
 						<GripVertical className="h-4 w-4" />
 					</button>
 
-					{/* Text + meta — click to expand */}
+					{/* Text + meta */}
 					<div
 						className="min-w-0 flex-1 cursor-pointer"
 						onClick={onToggle}
@@ -304,21 +308,21 @@ const SortableQuestionCard = ({
 								qType === "COMPREHENSION") &&
 								(() => {
 									const tsd = question?.typeSpecificData as Extract<
-										ApiQuestion["typeSpecificData"],
+										ResponseTypeSpecificData,
 										| { questionType: "QUESTION_GROUP" }
 										| { questionType: "COMPREHENSION" }
 									>;
 									return tsd?.subQuestions?.length ? (
 										<span className="text-xs text-gray-400">
-											• {tsd?.subQuestions?.length} sub-question
-											{tsd?.subQuestions?.length !== 1 ? "s" : ""}
+											• {tsd?.subQuestions.length} sub-question
+											{tsd?.subQuestions.length !== 1 ? "s" : ""}
 										</span>
 									) : null;
 								})()}
 						</div>
 					</div>
 
-					{/* Hover actions */}
+					{/* Actions */}
 					<div
 						className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
 						onClick={(e) => e.stopPropagation()}
@@ -352,9 +356,10 @@ const SortableQuestionCard = ({
 					</button>
 				</div>
 
+				{/* Expanded preview */}
 				{isExpanded && (
 					<div className="border-t border-gray-100">
-						<AnswerPreview question={question} onEdit={onEdit} />
+						<QuestionDetail question={question} onEdit={onEdit} />
 					</div>
 				)}
 			</div>
@@ -373,55 +378,30 @@ const SortableQuestionCard = ({
 	);
 };
 
-// ─── Answer Preview ───────────────────────────────────────────────────────────
+// ─── Question Detail (expanded) ───────────────────────────────────────────────
 
-const AnswerPreview = ({
+const QuestionDetail = ({
 	question,
 	onEdit,
 }: {
 	question: ApiQuestion;
 	onEdit: () => void;
 }) => {
-	const tsd = question.typeSpecificData;
+	const tsd = question?.typeSpecificData;
+	const options = question?.options;
+	console.log({ tsd, question, options });
 
 	return (
-		<div className="space-y-3 bg-gray-50/50 px-4 py-4">
-			{/* MCQ / Multiple Answers */}
-			{(tsd?.questionType === "MULTIPLE_CHOICE" ||
-				tsd?.questionType === "MULTIPLE_ANSWERS") && (
+		<div className="space-y-3 bg-gray-50/60 px-4 py-4">
+			{/* ── MCQ / Multiple Answers: show option list ── */}
+			{(question?.questionType === "MULTIPLE_CHOICE" ||
+				question?.questionType === "MULTIPLE_ANSWERS") && (
 				<div className="space-y-1.5">
-					{tsd?.options?.map((opt) => (
+					{question?.options?.map((opt) => (
 						<div
 							key={opt?.optionLabel}
-							className={cn(
-								"flex items-center gap-2.5 rounded-lg border px-3 py-2 text-xs",
-								opt?.isCorrect
-									? "border-green-200 bg-green-50 text-green-800"
-									: "border-gray-200 bg-white text-gray-700",
-							)}
+							className="flex items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700"
 						>
-							<div
-								className={cn(
-									"flex h-4 w-4 shrink-0 items-center justify-center border-2",
-									tsd?.questionType === "MULTIPLE_ANSWERS"
-										? "rounded"
-										: "rounded-full",
-									opt?.isCorrect
-										? "border-green-500 bg-green-500"
-										: "border-gray-300",
-								)}
-							>
-								{opt?.isCorrect && (
-									<div
-										className={cn(
-											"bg-white",
-											tsd?.questionType === "MULTIPLE_ANSWERS"
-												? "h-2 w-2 rounded-sm"
-												: "h-1.5 w-1.5 rounded-full",
-										)}
-									/>
-								)}
-							</div>
 							<span className="w-5 shrink-0 font-mono uppercase text-gray-400">
 								{opt?.optionLabel}.
 							</span>
@@ -430,83 +410,49 @@ const AnswerPreview = ({
 									<em className="text-gray-300">No text</em>
 								)}
 							</span>
-							{opt?.isCorrect && (
-								<span className="ml-auto shrink-0 font-medium text-green-600">
-									✓ Correct
-								</span>
-							)}
 						</div>
 					))}
 				</div>
 			)}
 
-			{/* True / False */}
-			{tsd?.questionType === "TRUE_FALSE" && (
+			{/* ── True / False ── */}
+			{question?.questionType === "TRUE_FALSE" && (
 				<div className="flex gap-2">
-					{(["True", "False"] as const).map((label) => {
-						const isCorrect =
-							label === "True"
-								? tsd?.correctAnswer === true
-								: tsd?.correctAnswer === false;
-						return (
-							<span
-								key={label}
-								className={cn(
-									"rounded-full border px-5 py-1.5 text-xs font-medium",
-									isCorrect
-										? "border-green-300 bg-green-50 text-green-700"
-										: "border-gray-200 bg-white text-gray-500",
-								)}
-							>
-								{label}
-								{isCorrect && " ✓"}
-							</span>
-						);
-					})}
+					{["True", "False"].map((label) => (
+						<span
+							key={label}
+							className="rounded-full border border-gray-200 bg-white px-5 py-1.5 text-xs font-medium text-gray-600"
+						>
+							{label}
+						</span>
+					))}
 				</div>
 			)}
 
-			{/* Short Answer */}
-			{tsd?.questionType === "SHORT_ANSWER" && (
-				<AnswerChips
-					label="Expected Answers"
-					values={tsd?.correctAnswers ?? []}
-				/>
+			{/* ── Short Answer ── */}
+			{question?.questionType === "SHORT_ANSWER" && (
+				<p className="text-xs italic text-gray-400">
+					Students will type a short text response.
+				</p>
 			)}
 
-			{/* Fill-in-the-blank */}
-			{tsd?.questionType === "FILL_IN_THE_BLANK" && (
-				<div className="space-y-2">
-					{tsd?.blanks && tsd?.blanks.length > 0 ? (
-						tsd?.blanks?.map((blank, i) => (
-							<div key={i} className="flex items-start gap-3">
+			{/* ── Fill-in-the-blank: show blank labels ── */}
+			{question?.questionType === "FILL_IN_THE_BLANK" && (
+				<div className="space-y-1.5">
+					{question?.blanks && question?.blanks.length > 0 ? (
+						question?.blanks.map((blank, i) => (
+							<div key={i} className="flex items-center gap-3">
 								<span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600">
 									{i + 1}
 								</span>
-								<div className="flex-1">
-									<p className="text-xs font-medium text-gray-600">
-										{blank?.blankLabel || `Blank ${i + 1}`}
-										{blank?.marks
-											? ` — ${blank?.marks} mark${blank?.marks !== 1 ? "s" : ""}`
-											: ""}
-									</p>
-									{blank?.correctAnswers?.length ? (
-										<div className="mt-1 flex flex-wrap gap-1">
-											{blank?.correctAnswers.map((a, j) => (
-												<span
-													key={j}
-													className="rounded-md border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700"
-												>
-													{a}
-												</span>
-											))}
-										</div>
-									) : (
-										<p className="mt-0.5 text-xs italic text-gray-400">
-											No answer set
-										</p>
-									)}
-								</div>
+								<span className="text-xs text-gray-700">
+									{blank.blankLabel || `Blank ${i + 1}`}
+								</span>
+								{blank.marks && (
+									<span className="text-xs text-gray-400">
+										— {blank.marks} mark{blank.marks !== 1 ? "s" : ""}
+									</span>
+								)}
 							</div>
 						))
 					) : (
@@ -517,49 +463,35 @@ const AnswerPreview = ({
 				</div>
 			)}
 
-			{/* Numeric */}
-			{tsd?.questionType === "NUMERIC_ANSWER" && (
-				<div className="flex flex-wrap gap-3">
-					<PreviewField
-						label="Answer"
-						value={
-							tsd?.correctAnswer !== undefined
-								? String(tsd?.correctAnswer)
-								: "—"
-						}
-					/>
-					{tsd?.tolerance !== undefined && tsd?.tolerance > 0 && (
-						<PreviewField
-							label="Tolerance (±)"
-							value={String(tsd?.tolerance)}
-						/>
-					)}
-					{tsd?.unit && <PreviewField label="Unit" value={tsd?.unit} />}
-				</div>
-			)}
-
-			{/* Essay */}
-			{tsd?.questionType === "ESSAY" && (
+			{/* ── Numeric ── */}
+			{question?.questionType === "NUMERIC_ANSWER" && (
 				<p className="text-xs italic text-gray-400">
-					Open-ended essay — no expected answer defined
+					Students will enter a numeric answer.
 				</p>
 			)}
 
-			{/* Match */}
-			{tsd?.questionType === "MATCH" && (
+			{/* ── Essay ── */}
+			{question?.questionType === "ESSAY" && (
+				<p className="text-xs italic text-gray-400">
+					Open-ended essay — students write a long-form response.
+				</p>
+			)}
+
+			{/* ── Match: show pairs ── */}
+			{question?.questionType === "MATCH" && (
 				<div className="space-y-1.5">
-					{tsd?.pairs?.length > 0 ? (
-						tsd?.pairs?.map((pair, i) => (
+					{question?.pairs && question?.pairs?.length > 0 ? (
+						question?.pairs?.map((pair, i) => (
 							<div
 								key={i}
 								className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
 							>
 								<span className="flex-1 text-gray-700">
-									{pair?.itemText || "—"}
+									{pair.itemText || "—"}
 								</span>
-								<span className="shrink-0 text-gray-400">→</span>
+								<span className="shrink-0 text-gray-400">↔</span>
 								<span className="flex-1 text-right text-gray-700">
-									{pair?.matchText || "—"}
+									{pair.matchText || "—"}
 								</span>
 							</div>
 						))
@@ -571,58 +503,50 @@ const AnswerPreview = ({
 				</div>
 			)}
 
-			{/* Question Group / Comprehension */}
-			{(tsd?.questionType === "QUESTION_GROUP" ||
-				tsd?.questionType === "COMPREHENSION") && (
+			{/* ── Question Group / Comprehension ── */}
+			{(question?.questionType === "QUESTION_GROUP" ||
+				question?.questionType === "COMPREHENSION") && (
 				<div className="space-y-2">
-					{(tsd as any)?.stimulusContent && (
+					{(question as any).stimulusContent && (
 						<div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
 							<p className="mb-1 text-xs font-medium text-gray-500">
-								{tsd?.questionType === "COMPREHENSION"
+								{question?.questionType === "COMPREHENSION"
 									? "Comprehension Passage"
-									: ((tsd as any)?.stimulusType ?? "Stimulus")}
+									: ((question as any)?.stimulusType ?? "Stimulus")}
 							</p>
 							<p className="line-clamp-4 text-xs text-gray-700">
-								{(tsd as any)?.stimulusContent}
+								{(question as any)?.stimulusContent}
 							</p>
 						</div>
 					)}
-					{(tsd as any)?.subQuestions?.length > 0 && (
+					{(question as any)?.subQuestions?.length > 0 && (
 						<div className="space-y-1">
 							<p className="text-xs font-medium text-gray-500">
-								{(tsd as any)?.subQuestions?.length} Sub-question
-								{(tsd as any)?.subQuestions?.length !== 1 ? "s" : ""}
+								{(question as any)?.subQuestions?.length} Sub-question
+								{(question as any)?.subQuestions?.length !== 1
+									? "s"
+									: ""}
 							</p>
-							{(tsd as any)?.subQuestions?.map((sq: any, i: number) => (
-								<div
-									key={i}
-									className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
-								>
-									<span className="shrink-0 font-semibold text-gray-400">
-										{i + 1}.
-									</span>
-									<span className="flex-1 text-gray-700">
-										{sq?.questionText}
-									</span>
-									<span className="shrink-0 text-gray-400">
-										{sq?.marks} mk
-									</span>
-								</div>
-							))}
+							{(question as any)?.subQuestions?.map(
+								(sq: any, i: number) => (
+									<div
+										key={i}
+										className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
+									>
+										<span className="shrink-0 font-semibold text-gray-400">
+											{i + 1}.
+										</span>
+										<span className="flex-1 text-gray-700">
+											{sq?.questionText}
+										</span>
+										<span className="shrink-0 text-gray-400">
+											{sq?.marks} mk
+										</span>
+									</div>
+								),
+							)}
 						</div>
 					)}
-				</div>
-			)}
-
-			{/* Explanation */}
-			{question?.explanation && (
-				<div className="border-t border-gray-100 pt-3">
-					<p className="text-xs text-gray-500">
-						<span className="font-semibold text-gray-600">
-							Explanation:{" "}
-						</span>
-						{question?.explanation}
-					</p>
 				</div>
 			)}
 
@@ -634,44 +558,9 @@ const AnswerPreview = ({
 					className="flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50"
 				>
 					<Pencil className="h-3 w-3" />
-					Edit Full Question
+					Edit Question
 				</button>
 			</div>
 		</div>
 	);
 };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const AnswerChips = ({
-	label,
-	values,
-}: {
-	label: string;
-	values: string[];
-}) => (
-	<div>
-		<p className="mb-1.5 text-xs font-medium text-gray-500">{label}</p>
-		{values?.length > 0 ? (
-			<div className="flex flex-wrap gap-1.5">
-				{values?.map((v, i) => (
-					<span
-						key={i}
-						className="rounded-md border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700"
-					>
-						{v}
-					</span>
-				))}
-			</div>
-		) : (
-			<p className="text-xs italic text-gray-400">No answers defined</p>
-		)}
-	</div>
-);
-
-const PreviewField = ({ label, value }: { label: string; value: string }) => (
-	<div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-		<p className="text-xs text-gray-400">{label}</p>
-		<p className="mt-0.5 text-sm font-semibold text-gray-800">{value}</p>
-	</div>
-);

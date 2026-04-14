@@ -5,7 +5,13 @@ import { Image as ImageIcon, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
 	buildDefaultOptions,
-	buildSingleQuestionPayload,
+	buildEssayData,
+	buildFillInBlankData,
+	buildMAData,
+	buildMCQData,
+	buildNumericData,
+	buildShortAnswerData,
+	buildTrueFalseData,
 	fromApiOptions,
 } from "@/utils/question";
 import {
@@ -15,12 +21,6 @@ import {
 	MarksInput,
 	Section,
 } from "@/utils/formPrimitives";
-import {
-	CorrectAnswersInput,
-	NumericAnswerInput,
-	OptionsEditor,
-	TrueFalseEditor,
-} from "@/utils/answerEditors";
 import {
 	QuestionTypeDropdown,
 	SINGLE_QUESTION_TYPES,
@@ -32,75 +32,115 @@ import {
 import { toast } from "@/components/Toast";
 import type {
 	ApiQuestion,
+	CreateQuestionPayload,
 	DifficultyLevel,
 	OptionFormItem,
+	PayloadTypeSpecificData,
 	QuestionType,
 } from "@/types/question";
 
+// ─── Option Labels Editor ─────────────────────────────────────────────────────
+// Teachers enter the option text only — no correct-answer marking here.
+
+import { Plus, Trash2 as TrashIcon } from "lucide-react";
+import { appendOption } from "@/utils/question";
+
 // ─── Form state ───────────────────────────────────────────────────────────────
+// No answer fields — teachers add questions first, marking happens separately.
 
 interface FormState {
 	questionType: QuestionType;
 	questionText: string;
 	instruction: string;
-	explanation: string;
 	marks: number;
 	difficultyLevel: DifficultyLevel;
 	imageUrl: string;
-	// type-specific
+	// Option texts only — no isCorrect selection here
 	options: OptionFormItem[];
-	trueFalseAnswer: boolean;
-	correctAnswerText: string;
-	numericAnswer: number;
-	numericTolerance: number;
-	numericUnit: string;
 }
 
 const INITIAL: FormState = {
 	questionType: "MULTIPLE_CHOICE",
 	questionText: "",
 	instruction: "",
-	explanation: "",
 	marks: 1,
 	difficultyLevel: "",
 	imageUrl: "",
 	options: buildDefaultOptions(),
-	trueFalseAnswer: true,
-	correctAnswerText: "",
-	numericAnswer: 0,
-	numericTolerance: 0,
-	numericUnit: "",
 };
 
-// ─── Hydrate from existing question ──────────────────────────────────────────
+// ─── Hydrate from an existing API question ────────────────────────────────────
 
 function hydrateForm(q: ApiQuestion): FormState {
 	const tsd = q?.typeSpecificData;
-	const state: FormState = {
+	const base: FormState = {
 		...INITIAL,
 		questionType: q?.questionType,
 		questionText: q?.questionText,
-		explanation: q?.explanation ?? "",
 		marks: q?.marks,
 		difficultyLevel: (q?.difficultyLevel as DifficultyLevel) ?? "",
 		imageUrl: q?.imageUrl ?? "",
+		instruction: q?.explanation ?? "",
 	};
 
-	if (tsd?.questionType === "MULTIPLE_CHOICE")
-		state.options = fromApiOptions(tsd?.options);
-	if (tsd?.questionType === "MULTIPLE_ANSWERS")
-		state.options = fromApiOptions(tsd?.options);
-	if (tsd?.questionType === "TRUE_FALSE")
-		state.trueFalseAnswer = tsd?.correctAnswer;
-	if (tsd?.questionType === "SHORT_ANSWER")
-		state.correctAnswerText = (tsd?.correctAnswers ?? []).join(", ");
-	if (tsd?.questionType === "NUMERIC_ANSWER") {
-		state.numericAnswer = tsd?.correctAnswer ?? 0;
-		state.numericTolerance = tsd?.tolerance ?? 0;
-		state.numericUnit = tsd?.unit ?? "";
+	// Restore option texts for MCQ / MA so the teacher can see what they wrote
+	if (
+		tsd?.questionType === "MULTIPLE_CHOICE" ||
+		tsd?.questionType === "MULTIPLE_ANSWERS"
+	) {
+		base.options = fromApiOptions(tsd?.options);
 	}
 
-	return state;
+	return base;
+}
+
+// ─── Build payload ────────────────────────────────────────────────────────────
+
+function buildPayload(
+	form: FormState,
+	classId: number,
+	subjectId: number,
+	topicId: number,
+): CreateQuestionPayload {
+	let typeSpecificData: PayloadTypeSpecificData;
+
+	switch (form?.questionType) {
+		case "MULTIPLE_CHOICE":
+			// Options are included but isCorrect defaults to false — teacher marks later
+			typeSpecificData = buildMCQData(form?.options);
+			break;
+		case "MULTIPLE_ANSWERS":
+			typeSpecificData = buildMAData(form?.options);
+			break;
+		case "TRUE_FALSE":
+			typeSpecificData = buildTrueFalseData(true); // default; teacher marks later
+			break;
+		case "SHORT_ANSWER":
+			typeSpecificData = buildShortAnswerData("");
+			break;
+		case "FILL_IN_THE_BLANK":
+			typeSpecificData = buildFillInBlankData([], form?.instruction);
+			break;
+		case "NUMERIC_ANSWER":
+			typeSpecificData = buildNumericData(0);
+			break;
+		case "ESSAY":
+		default:
+			typeSpecificData = buildEssayData();
+	}
+
+	return {
+		classId,
+		subjectId,
+		topicId,
+		questionText: form?.questionText,
+		imageUrl: form?.imageUrl || undefined,
+		marks: form?.marks,
+		explanation: form?.instruction || undefined,
+		difficultyLevel: form?.difficultyLevel || undefined,
+		questionType: form?.questionType,
+		typeSpecificData,
+	};
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -151,7 +191,6 @@ export const AddQuestionForm = ({
 			questionType,
 			questionText: prev?.questionText,
 			instruction: prev?.instruction,
-			explanation: prev?.explanation,
 			marks: prev?.marks,
 			difficultyLevel: prev?.difficultyLevel,
 			imageUrl: prev?.imageUrl,
@@ -162,29 +201,17 @@ export const AddQuestionForm = ({
 		const errs: Partial<Record<keyof FormState, string>> = {};
 		if (!form?.questionText.trim())
 			errs.questionText = "Question text is required";
-		if (
-			(form?.questionType === "MULTIPLE_CHOICE" ||
-				form?.questionType === "MULTIPLE_ANSWERS") &&
-			!form?.options.some((o) => o.isCorrect)
-		)
-			errs.options = "Mark at least one option as correct";
 		setErrors(errs);
 		return Object.keys(errs)?.length === 0;
 	};
 
 	const handleSave = async () => {
 		if (!validate()) return;
-
-		const payload = buildSingleQuestionPayload({
-			classId,
-			subjectId,
-			topicId,
-			...form,
-		});
+		const payload = buildPayload(form, classId, subjectId, topicId);
 
 		try {
 			if (editQuestion) {
-				await updateQuestion({ id: editQuestion.id, payload });
+				await updateQuestion({ id: editQuestion?.id, payload });
 				toast({ title: "Question updated", type: "success" });
 			} else {
 				await createQuestion(payload);
@@ -194,7 +221,7 @@ export const AddQuestionForm = ({
 		} catch (err: unknown) {
 			const msg =
 				err && typeof err === "object" && "message" in err
-					? String((err as { message: string }).message)
+					? String((err as { message: string })?.message)
 					: "Could not save question";
 			toast({ title: msg, type: "error" });
 		}
@@ -245,9 +272,9 @@ export const AddQuestionForm = ({
 									: "border-gray-200",
 							)}
 						/>
-						{errors?.questionText && (
+						{errors.questionText && (
 							<p className="mt-1 text-xs text-red-500">
-								{errors?.questionText}
+								{errors.questionText}
 							</p>
 						)}
 					</div>
@@ -271,79 +298,57 @@ export const AddQuestionForm = ({
 					)}
 				</Section>
 
-				{/* Type-specific answer fields */}
+				{/* Option labels for MCQ / MA — no correct-answer selection */}
 				{(form?.questionType === "MULTIPLE_CHOICE" ||
 					form?.questionType === "MULTIPLE_ANSWERS") && (
-					<Section
-						title="Answer Options"
-						hint="Click the circle/checkbox to mark the correct answer(s)"
-					>
-						{errors?.options && (
-							<p className="mb-2 text-xs text-red-500">
-								{errors?.options}
-							</p>
-						)}
-						<OptionsEditor
-							options={form?.options}
-							onChange={(opts) => update("options", opts)}
-							multiSelect={form?.questionType === "MULTIPLE_ANSWERS"}
-						/>
-					</Section>
+					<OptionLabelsEditor
+						options={form?.options}
+						onChange={(opts) => update("options", opts)}
+					/>
 				)}
 
+				{/* Type hints for other types */}
 				{form?.questionType === "TRUE_FALSE" && (
-					<Section title="Correct Answer">
-						<TrueFalseEditor
-							correctAnswer={form?.trueFalseAnswer}
-							onChange={(v) => update("trueFalseAnswer", v)}
-						/>
+					<Section title="">
+						<p className="py-1 text-sm text-gray-400">
+							Students will select True or False. You can mark the
+							correct answer when marking the assessment.
+						</p>
 					</Section>
 				)}
 
 				{form?.questionType === "SHORT_ANSWER" && (
-					<Section title="Expected Answer" optional>
-						<CorrectAnswersInput
-							value={form?.correctAnswerText}
-							onChange={(v) => update("correctAnswerText", v)}
-						/>
+					<Section title="">
+						<p className="py-1 text-sm text-gray-400">
+							Students will type a short text response.
+						</p>
 					</Section>
 				)}
 
 				{form?.questionType === "NUMERIC_ANSWER" && (
-					<Section title="Numeric Answer">
-						<NumericAnswerInput
-							correctAnswer={form?.numericAnswer}
-							tolerance={form?.numericTolerance}
-							unit={form?.numericUnit}
-							onChangeAnswer={(v) => update("numericAnswer", v)}
-							onChangeTolerance={(v) => update("numericTolerance", v)}
-							onChangeUnit={(v) => update("numericUnit", v)}
-						/>
+					<Section title="">
+						<p className="py-1 text-sm text-gray-400">
+							Students will enter a numeric answer.
+						</p>
 					</Section>
 				)}
 
 				{form?.questionType === "ESSAY" && (
 					<Section title="">
-						<p className="py-2 text-sm italic text-gray-400">
-							Students will provide a long-form written response. No
-							expected answer is needed here.
+						<p className="py-1 text-sm text-gray-400">
+							Students will write a long-form response.
 						</p>
 					</Section>
 				)}
 
-				<Section
-					title="Explanation"
-					optional
-					hint="Shown to students after they answer"
-				>
-					<textarea
-						rows={2}
-						value={form?.explanation}
-						onChange={(e) => update("explanation", e.target.value)}
-						placeholder="Explain why the correct answer is correct…"
-						className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm transition placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-					/>
-				</Section>
+				{form?.questionType === "FILL_IN_THE_BLANK" && (
+					<Section title="">
+						<p className="py-1 text-sm text-gray-400">
+							Use the Fill-in-the-Blank form to add blanks and configure
+							each gap. This is a simplified view.
+						</p>
+					</Section>
+				)}
 
 				<div className="flex flex-wrap items-center gap-5 pb-2">
 					<MarksInput
@@ -357,5 +362,64 @@ export const AddQuestionForm = ({
 				</div>
 			</div>
 		</div>
+	);
+};
+
+const OptionLabelsEditor = ({
+	options,
+	onChange,
+}: {
+	options: OptionFormItem[];
+	onChange: (opts: OptionFormItem[]) => void;
+}) => {
+	const updateText = (id: string, text: string) =>
+		onChange(options?.map((o) => (o.id === id ? { ...o, text } : o)));
+
+	const removeOption = (id: string) => {
+		if (options?.length <= 2) return;
+		onChange(options?.filter((o) => o.id !== id));
+	};
+
+	return (
+		<Section
+			title="Options"
+			hint="Enter the option texts — you can mark the correct answer when reviewing results"
+		>
+			<div className="space-y-2">
+				{options?.map((opt) => (
+					<div key={opt.id} className="flex items-center gap-3">
+						<span className="w-5 shrink-0 text-sm font-medium uppercase text-gray-500">
+							{opt.id}.
+						</span>
+						<input
+							type="text"
+							value={opt.text}
+							onChange={(e) => updateText(opt.id, e.target.value)}
+							placeholder={`Option ${opt.id.toUpperCase()}`}
+							className="h-9 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm transition placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none"
+						/>
+						{options?.length > 2 && (
+							<button
+								type="button"
+								onClick={() => removeOption(opt.id)}
+								className="flex h-7 w-7 shrink-0 items-center justify-center text-gray-300 transition-colors hover:text-red-500"
+							>
+								<TrashIcon className="h-3.5 w-3.5" />
+							</button>
+						)}
+					</div>
+				))}
+				{options?.length < 8 && (
+					<button
+						type="button"
+						onClick={() => onChange(appendOption(options))}
+						className="mt-1 flex items-center gap-1.5 rounded-lg border border-dashed border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-all hover:border-blue-300 hover:text-blue-600"
+					>
+						<Plus className="h-3.5 w-3.5" />
+						Add Option
+					</button>
+				)}
+			</div>
+		</Section>
 	);
 };

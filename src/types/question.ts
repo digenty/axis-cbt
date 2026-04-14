@@ -1,6 +1,4 @@
-// ─── API question type enum ───────────────────────────────────────────────────
-// One type used everywhere — UI, API payloads, and API responses.
-// COMPREHENSION is an alias for QUESTION_GROUP with stimulusType = "COMPREHENSION".
+// ─── Question type enum ───────────────────────────────────────────────────────
 
 export type QuestionType =
 	| "MULTIPLE_CHOICE"
@@ -16,12 +14,12 @@ export type QuestionType =
 
 export type DifficultyLevel = "EASY" | "MEDIUM" | "HARD" | "";
 
-// ─── Shared data shapes ───────────────────────────────────────────────────────
+// ─── Shared sub-shapes ────────────────────────────────────────────────────────
 
 export interface OptionData {
 	optionText: string;
 	optionHtml?: string;
-	optionLabel: string; // "A", "B", "C" …
+	optionLabel: string;
 	imageUrl?: string;
 	isCorrect: boolean;
 }
@@ -42,9 +40,10 @@ export interface MatchPairData {
 	matchImageUrl?: string;
 }
 
-// ─── TypeSpecificData — discriminated on `questionType` ───────────────────────
+// ─── ResponseTypeSpecificData ─────────────────────────────────────────────────
+// Discriminated on `questionType` — this is what the GET API returns.
 
-export type TypeSpecificData =
+export type ResponseTypeSpecificData =
 	| { questionType: "MULTIPLE_CHOICE"; options: OptionData[] }
 	| {
 			questionType: "MULTIPLE_ANSWERS";
@@ -91,7 +90,6 @@ export type TypeSpecificData =
 			partialCredit?: boolean;
 	  }
 	| {
-			// QUESTION_GROUP covers all grouped-stimulus types (Passage, Diagram, Table, Chart)
 			questionType: "QUESTION_GROUP";
 			stimulusType?: string;
 			stimulusContent?: string;
@@ -99,22 +97,102 @@ export type TypeSpecificData =
 			stimulusImageUrl?: string;
 			chartData?: string;
 			tableData?: string;
-			subQuestions?: SubQuestionRequest[];
+			subQuestions?: ResponseSubQuestion[];
 	  }
 	| {
-			// COMPREHENSION is a named alias — sent as QUESTION_GROUP with stimulusType="COMPREHENSION"
 			questionType: "COMPREHENSION";
 			stimulusType?: string;
 			stimulusContent?: string;
 			stimulusHtml?: string;
 			stimulusImageUrl?: string;
-			subQuestions?: SubQuestionRequest[];
+			subQuestions?: ResponseSubQuestion[];
 	  };
 
-// Sub-questions cannot nest QUESTION_GROUP / COMPREHENSION
-export type SubQuestionTypeSpecificData = Exclude<
-	TypeSpecificData,
-	{ questionType: "QUESTION_GROUP" } | { questionType: "COMPREHENSION" }
+export interface ResponseSubQuestion {
+	questionText: string;
+	questionHtml?: string;
+	imageUrl?: string;
+	marks: number;
+	explanation?: string;
+	questionType: Exclude<QuestionType, "QUESTION_GROUP" | "COMPREHENSION">;
+	typeSpecificData: Exclude<
+		ResponseTypeSpecificData,
+		{ questionType: "QUESTION_GROUP" } | { questionType: "COMPREHENSION" }
+	>;
+}
+
+// ─── PayloadTypeSpecificData ──────────────────────────────────────────────────
+// Discriminated on `type` — this is what POST/PUT bodies must send.
+// The Java backend's @JsonTypeInfo uses `type` as the property name.
+
+export type PayloadTypeSpecificData =
+	| { type: "MULTIPLE_CHOICE"; options: OptionData[] }
+	| {
+			type: "MULTIPLE_ANSWERS";
+			options: OptionData[];
+			minSelections?: number;
+			maxSelections?: number;
+			partialCredit?: boolean;
+	  }
+	| { type: "TRUE_FALSE"; correctAnswer: boolean }
+	| {
+			type: "ESSAY";
+			minWords?: number;
+			maxWords?: number;
+			modelAnswer?: string;
+			rubric?: string;
+	  }
+	| {
+			type: "SHORT_ANSWER";
+			correctAnswers?: string[];
+			caseSensitive?: boolean;
+			exactMatch?: boolean;
+			maxLength?: number;
+	  }
+	| {
+			type: "NUMERIC_ANSWER";
+			correctAnswer?: number;
+			tolerance?: number;
+			minValue?: number;
+			maxValue?: number;
+			unit?: string;
+			decimalPlaces?: number;
+	  }
+	| {
+			type: "FILL_IN_THE_BLANK";
+			blanks?: BlankData[];
+			caseSensitive?: boolean;
+			instruction?: string;
+	  }
+	| {
+			type: "MATCH";
+			pairs: MatchPairData[];
+			marksForEach?: number;
+			shuffleItems?: boolean;
+			partialCredit?: boolean;
+	  }
+	| {
+			type: "QUESTION_GROUP";
+			stimulusType?: string;
+			stimulusContent?: string;
+			stimulusHtml?: string;
+			stimulusImageUrl?: string;
+			chartData?: string;
+			tableData?: string;
+			subQuestions?: PayloadSubQuestion[];
+	  }
+	| {
+			type: "COMPREHENSION";
+			stimulusType?: string;
+			stimulusContent?: string;
+			stimulusHtml?: string;
+			stimulusImageUrl?: string;
+			subQuestions?: PayloadSubQuestion[];
+	  };
+
+export type PayloadSubQuestionTypeSpecificData = Exclude<
+	PayloadTypeSpecificData,
+	{ type: "QUESTION_GROUP" } | { type: "COMPREHENSION" }
 >;
 
 export type SubQuestionType = Exclude<
@@ -122,14 +200,14 @@ export type SubQuestionType = Exclude<
 	"QUESTION_GROUP" | "COMPREHENSION"
 >;
 
-export interface SubQuestionRequest {
+export interface PayloadSubQuestion {
 	questionText: string;
 	questionHtml?: string;
 	imageUrl?: string;
 	marks: number;
 	explanation?: string;
 	questionType: SubQuestionType;
-	typeSpecificData: SubQuestionTypeSpecificData;
+	typeSpecificData: PayloadSubQuestionTypeSpecificData;
 }
 
 // ─── API Request payload (POST / PUT body) ────────────────────────────────────
@@ -145,15 +223,20 @@ export interface CreateQuestionPayload {
 	explanation?: string;
 	difficultyLevel?: string;
 	questionType: QuestionType;
-	typeSpecificData: TypeSpecificData;
-}
-
-export interface UpdateQuestionPayload extends Partial<CreateQuestionPayload> {
-	id: number;
+	typeSpecificData: PayloadTypeSpecificData;
 }
 
 // ─── API Response shapes ──────────────────────────────────────────────────────
 
+// export interface ApiOptions {
+// 	id: number;
+// 	optionText: string;
+// 	optionHtml: string;
+// 	optionLabel: string;
+// 	optionOrder: number;
+// 	imageUrl: string;
+// 	isCorrect: boolean;
+// }
 export interface ApiQuestion {
 	id: number;
 	classId: number;
@@ -166,7 +249,10 @@ export interface ApiQuestion {
 	explanation?: string;
 	difficultyLevel?: string;
 	questionType: QuestionType;
-	typeSpecificData: TypeSpecificData;
+	typeSpecificData: ResponseTypeSpecificData;
+	options?: OptionData[];
+	blanks?: BlankData[];
+	pairs?: MatchPairData[];
 	createdAt?: string;
 	updatedAt?: string;
 }
@@ -221,7 +307,7 @@ export interface ImportQuestionsResult {
 	errors: string[];
 }
 
-// ─── UI-only form state types (never sent to API directly) ────────────────────
+// ─── UI-only form state types ─────────────────────────────────────────────────
 
 export interface OptionFormItem {
 	id: string; // "a", "b", "c", "d"
@@ -230,7 +316,7 @@ export interface OptionFormItem {
 }
 
 export interface BlankFormItem {
-	id: string; // local only
+	id: string;
 	label: string;
 	answerType: "short-answer" | "multiple-choice";
 	answers: string[];
@@ -239,13 +325,11 @@ export interface BlankFormItem {
 }
 
 export interface SubQuestionFormItem {
-	id: string; // local only
+	id: string;
 	type: SubQuestionType;
 	text: string;
 	marks: number;
 	options: OptionFormItem[];
-	correctAnswerText: string; // comma-sep for SHORT_ANSWER
-	trueFalseAnswer: boolean;
 }
 
 export type StimulusType =

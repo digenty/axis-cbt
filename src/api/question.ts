@@ -18,7 +18,7 @@ export const getCbtQuestionBankTopics = async (payload: {
 }): Promise<TopicsResponse> => {
 	try {
 		const { data } = await api.get(
-			`/api/cbt/question-bank/topics?classId=${payload.classId}&subjectId=${payload.subjectId}`,
+			`/api/cbt/question-bank/topics?classId=${payload?.classId}&subjectId=${payload?.subjectId}`,
 		);
 		return data;
 	} catch (error: unknown) {
@@ -76,10 +76,12 @@ export const getCbtQuestions = async (payload: {
 }): Promise<QuestionsListResponse> => {
 	try {
 		const params = new URLSearchParams();
-		if (payload.topicId) params.set("topicId", String(payload.topicId));
+		if (payload?.topicId) params.set("topicId", String(payload?.topicId));
+
 		const { data } = await api.get(
-			`/api/cbt/question-bank/questions/classes/${payload.classId}/subjects/${payload.subjectId}?${params.toString()}`,
+			`/api/cbt/question-bank/questions/classes/${payload?.classId}/subjects/${payload?.subjectId}?${params.toString()}`,
 		);
+
 		return data;
 	} catch (error: unknown) {
 		if (isAxiosError(error)) throw error.response?.data;
@@ -114,13 +116,15 @@ export const createCbtQuestion = async (
 
 export const updateCbtQuestion = async (
 	id: number,
-	payload: Partial<CreateQuestionPayload>,
+	// Accepts the full payload — do NOT spread `id` into the body, the backend
+	// reads it from the path param and the body `id` field confuses the deserialiser.
+	payload: CreateQuestionPayload,
 ): Promise<QuestionResponse> => {
 	try {
-		const { data } = await api.put(`/api/cbt/question-bank/questions/${id}`, {
-			...payload,
-			id,
-		});
+		const { data } = await api.put(
+			`/api/cbt/question-bank/questions/${id}`,
+			payload, // ← clean body, no extra `id` field
+		);
 		return data;
 	} catch (error: unknown) {
 		if (isAxiosError(error)) throw error.response?.data;
@@ -149,9 +153,9 @@ export const importCbtQuestions = async (payload: {
 }): Promise<{ data: ImportQuestionsResult; message: string }> => {
 	try {
 		const formData = new FormData();
-		formData.append("file", payload.file);
+		formData.append("file", payload?.file);
 		const { data } = await api.post(
-			`/api/cbt/question-bank/questions/import?classId=${payload.classId}&subjectId=${payload.subjectId}`,
+			`/api/cbt/question-bank/questions/import?classId=${payload?.classId}&subjectId=${payload?.subjectId}`,
 			formData,
 			{ headers: { "Content-Type": "multipart/form-data" } },
 		);

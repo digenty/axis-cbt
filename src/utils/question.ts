@@ -1,13 +1,14 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type {
 	BlankFormItem,
-	CreateQuestionPayload,
 	OptionData,
 	OptionFormItem,
+	PayloadSubQuestionTypeSpecificData,
+	PayloadTypeSpecificData,
 	QuestionType,
+	ResponseTypeSpecificData,
 	SubQuestionFormItem,
-	SubQuestionType,
-	SubQuestionTypeSpecificData,
-	TypeSpecificData,
+	// SubQuestionType,
 } from "@/types/question";
 
 // ─── Type labels ──────────────────────────────────────────────────────────────
@@ -76,45 +77,45 @@ export const fromApiOptions = (items: OptionData[]): OptionFormItem[] =>
 		isCorrect: o.isCorrect,
 	}));
 
-// ─── Local ID generator ───────────────────────────────────────────────────────
-
 export const generateId = (): string => Math.random().toString(36).slice(2, 10);
 
-// ─── TypeSpecificData builders ────────────────────────────────────────────────
-// All builders use `questionType` as the discriminant to match the API.
+// ─── PayloadTypeSpecificData builders ────────────────────────────────────────
+// All builders use `type` as the discriminant key — required by the Java backend.
+// GET responses use `questionType`; POST/PUT bodies must use `type`.
 
-export function buildMCQData(options: OptionFormItem[]): TypeSpecificData {
-	return { questionType: "MULTIPLE_CHOICE", options: toApiOptions(options) };
+export function buildMCQData(
+	options: OptionFormItem[],
+): PayloadTypeSpecificData {
+	return { type: "MULTIPLE_CHOICE", options: toApiOptions(options) };
 }
 
 export function buildMAData(
 	options: OptionFormItem[],
 	partialCredit = false,
-): TypeSpecificData {
+): PayloadTypeSpecificData {
 	return {
-		questionType: "MULTIPLE_ANSWERS",
+		type: "MULTIPLE_ANSWERS",
 		options: toApiOptions(options),
 		partialCredit,
 	};
 }
 
-export function buildTrueFalseData(correctAnswer: boolean): TypeSpecificData {
-	return { questionType: "TRUE_FALSE", correctAnswer };
+export function buildTrueFalseData(
+	correctAnswer: boolean,
+): PayloadTypeSpecificData {
+	return { type: "TRUE_FALSE", correctAnswer };
 }
 
-export function buildEssayData(modelAnswer?: string): TypeSpecificData {
-	return {
-		questionType: "ESSAY",
-		modelAnswer: modelAnswer || undefined,
-	};
+export function buildEssayData(modelAnswer?: string): PayloadTypeSpecificData {
+	return { type: "ESSAY", modelAnswer: modelAnswer || undefined };
 }
 
 export function buildShortAnswerData(
 	answersRaw: string,
 	caseSensitive = false,
-): TypeSpecificData {
+): PayloadTypeSpecificData {
 	return {
-		questionType: "SHORT_ANSWER",
+		type: "SHORT_ANSWER",
 		correctAnswers: answersRaw
 			.split(",")
 			.map((s) => s.trim())
@@ -128,9 +129,9 @@ export function buildNumericData(
 	correctAnswer: number,
 	tolerance?: number,
 	unit?: string,
-): TypeSpecificData {
+): PayloadTypeSpecificData {
 	return {
-		questionType: "NUMERIC_ANSWER",
+		type: "NUMERIC_ANSWER",
 		correctAnswer,
 		tolerance: tolerance || undefined,
 		unit: unit || undefined,
@@ -140,9 +141,9 @@ export function buildNumericData(
 export function buildFillInBlankData(
 	blanks: BlankFormItem[],
 	instruction?: string,
-): TypeSpecificData {
+): PayloadTypeSpecificData {
 	return {
-		questionType: "FILL_IN_THE_BLANK",
+		type: "FILL_IN_THE_BLANK",
 		instruction: instruction || undefined,
 		blanks: blanks.map((b) => ({
 			blankLabel: b.label,
@@ -164,9 +165,9 @@ export function buildFillInBlankData(
 export function buildMatchData(
 	pairs: { itemText: string; matchText: string }[],
 	marksForEach = 1,
-): TypeSpecificData {
+): PayloadTypeSpecificData {
 	return {
-		questionType: "MATCH",
+		type: "MATCH",
 		pairs,
 		marksForEach,
 		shuffleItems: true,
@@ -176,135 +177,72 @@ export function buildMatchData(
 
 export function buildSubQTypeSpecificData(
 	sub: SubQuestionFormItem,
-): SubQuestionTypeSpecificData {
+): PayloadSubQuestionTypeSpecificData {
 	switch (sub.type) {
 		case "MULTIPLE_CHOICE":
-			return {
-				questionType: "MULTIPLE_CHOICE",
-				options: toApiOptions(sub.options),
-			};
+			return { type: "MULTIPLE_CHOICE", options: toApiOptions(sub.options) };
 		case "MULTIPLE_ANSWERS":
 			return {
-				questionType: "MULTIPLE_ANSWERS",
+				type: "MULTIPLE_ANSWERS",
 				options: toApiOptions(sub.options),
 				partialCredit: false,
 			};
 		case "TRUE_FALSE":
-			return {
-				questionType: "TRUE_FALSE",
-				correctAnswer: sub.trueFalseAnswer,
-			};
+			// For sub-questions we default true; teacher sets correct answer in the form
+			return { type: "TRUE_FALSE", correctAnswer: true };
 		case "SHORT_ANSWER":
-			return {
-				questionType: "SHORT_ANSWER",
-				correctAnswers: sub.correctAnswerText
-					.split(",")
-					.map((s) => s.trim())
-					.filter(Boolean),
-				caseSensitive: false,
-			};
+			return { type: "SHORT_ANSWER", correctAnswers: [] };
 		case "NUMERIC_ANSWER":
-			return {
-				questionType: "NUMERIC_ANSWER",
-				correctAnswer: Number(sub.correctAnswerText) || 0,
-			};
+			return { type: "NUMERIC_ANSWER", correctAnswer: 0 };
 		case "FILL_IN_THE_BLANK":
-			return {
-				questionType: "FILL_IN_THE_BLANK",
-				blanks: [],
-			};
+			return { type: "FILL_IN_THE_BLANK", blanks: [] };
 		case "MATCH":
-			return { questionType: "MATCH", pairs: [] };
+			return { type: "MATCH", pairs: [] };
 		case "ESSAY":
 		default:
-			return { questionType: "ESSAY" };
+			return { type: "ESSAY" };
 	}
 }
 
-/**
- * Build the typeSpecificData for QUESTION_GROUP and COMPREHENSION.
- * COMPREHENSION is sent to the API exactly like QUESTION_GROUP —
- * the distinction is in stimulusType so the backend can differentiate.
- */
 export function buildGroupData(params: {
 	questionType: "QUESTION_GROUP" | "COMPREHENSION";
 	stimulusType: string;
 	stimulusContent: string;
 	subQuestions: SubQuestionFormItem[];
-}): TypeSpecificData {
-	return {
-		questionType: params.questionType,
-		stimulusType: params.stimulusType,
-		stimulusContent: params.stimulusContent,
-		subQuestions: params.subQuestions.map((sq) => ({
-			questionText: sq.text,
-			marks: sq.marks,
-			questionType: sq.type,
-			typeSpecificData: buildSubQTypeSpecificData(sq),
-		})),
-	} as TypeSpecificData;
-}
+}): PayloadTypeSpecificData {
+	const subQs = params?.subQuestions?.map((sq) => ({
+		questionText: sq.text,
+		marks: sq.marks,
+		questionType: sq.type,
+		typeSpecificData: buildSubQTypeSpecificData(sq),
+	}));
 
-/**
- * Build a complete CreateQuestionPayload for single-type questions.
- * For QUESTION_GROUP / COMPREHENSION / FILL_IN_THE_BLANK / MATCH
- * use their dedicated form components which call the API directly.
- */
-export function buildSingleQuestionPayload(params: {
-	classId: number;
-	subjectId: number;
-	topicId: number;
-	questionType: QuestionType;
-	questionText: string;
-	marks: number;
-	explanation?: string;
-	difficultyLevel?: string;
-	imageUrl?: string;
-	// type-specific
-	options: OptionFormItem[];
-	trueFalseAnswer: boolean;
-	correctAnswerText: string;
-	numericAnswer: number;
-	numericTolerance: number;
-	numericUnit: string;
-}): CreateQuestionPayload {
-	let typeSpecificData: TypeSpecificData;
-
-	switch (params.questionType) {
-		case "MULTIPLE_CHOICE":
-			typeSpecificData = buildMCQData(params.options);
-			break;
-		case "MULTIPLE_ANSWERS":
-			typeSpecificData = buildMAData(params.options);
-			break;
-		case "TRUE_FALSE":
-			typeSpecificData = buildTrueFalseData(params.trueFalseAnswer);
-			break;
-		case "SHORT_ANSWER":
-			typeSpecificData = buildShortAnswerData(params.correctAnswerText);
-			break;
-		case "NUMERIC_ANSWER":
-			typeSpecificData = buildNumericData(
-				params.numericAnswer,
-				params.numericTolerance,
-				params.numericUnit,
-			);
-			break;
-		case "ESSAY":
-		default:
-			typeSpecificData = buildEssayData();
+	if (params?.questionType === "COMPREHENSION") {
+		return {
+			type: "COMPREHENSION",
+			stimulusType: params?.stimulusType,
+			stimulusContent: params?.stimulusContent,
+			subQuestions: subQs,
+		};
 	}
 
 	return {
-		classId: params.classId,
-		subjectId: params.subjectId,
-		topicId: params.topicId,
-		questionText: params.questionText,
-		marks: params.marks,
-		explanation: params.explanation || undefined,
-		difficultyLevel: params.difficultyLevel || undefined,
-		imageUrl: params.imageUrl || undefined,
-		questionType: params.questionType,
-		typeSpecificData,
+		type: "QUESTION_GROUP",
+		stimulusType: params?.stimulusType,
+		stimulusContent: params?.stimulusContent,
+		subQuestions: subQs,
 	};
+}
+
+/**
+ * Convert a GET response typeSpecificData (uses `questionType`)
+ * back to a POST/PUT payload typeSpecificData (uses `type`).
+ * Used when editing an existing question.
+ */
+export function responseToPayloadTypeSpecificData(
+	tsd: ResponseTypeSpecificData,
+): PayloadTypeSpecificData {
+	// All fields are the same — only the discriminant key differs.
+	const { questionType, ...rest } = tsd as any;
+	return { type: questionType, ...rest } as PayloadTypeSpecificData;
 }
