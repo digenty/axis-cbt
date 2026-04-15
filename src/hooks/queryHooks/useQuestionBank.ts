@@ -144,19 +144,17 @@ export const useUpdateCbtQuestion = () => {
 			payload,
 		}: {
 			id: number;
-			payload: Partial<CreateQuestionPayload>;
+			payload: CreateQuestionPayload; // full payload required — API needs all fields
 		}) => updateCbtQuestion(id, payload),
 		onSuccess: (_, vars) => {
-			if (vars.payload.classId && vars.payload.subjectId) {
-				qc.invalidateQueries({
-					queryKey: [
-						"question-bank",
-						"questions",
-						vars.payload.classId,
-						vars.payload.subjectId,
-					],
-				});
-			}
+			qc.invalidateQueries({
+				queryKey: [
+					"question-bank",
+					"questions",
+					vars.payload.classId,
+					vars.payload.subjectId,
+				],
+			});
 			qc.invalidateQueries({
 				queryKey: questionBankKeys.questionDetail(vars.id),
 			});

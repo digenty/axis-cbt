@@ -13,8 +13,8 @@ import type {
 // ─── Topics ───────────────────────────────────────────────────────────────────
 
 export const getCbtQuestionBankTopics = async (payload: {
-	classId?: number;
-	subjectId?: number;
+	classId: number;
+	subjectId: number;
 }): Promise<TopicsResponse> => {
 	try {
 		const { data } = await api.get(

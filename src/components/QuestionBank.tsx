@@ -16,7 +16,6 @@ export default function QuestionBank({
 	params: Promise<{ classId: string; subjectId: string }>;
 }>) {
 	const { classId, subjectId } = use(params);
-	console.log({ classId, subjectId });
 
 	const {
 		data: response,
