@@ -117,55 +117,55 @@
 // 	options?: Option[];
 // }
 
-// export interface Question {
-// 	id: string;
-// 	topicId: number;
-// 	type: QuestionType;
-// 	text: string;
-// 	marks: number;
-// 	options?: Option[];
-// 	correctAnswer?: string | string[];
-// 	blanks?: Blank[];
-// 	passage?: string;
-// 	instruction?: string;
-// 	subQuestions?: Question[];
-// 	/** For matching questions: left column items */
-// 	matchItems?: { id: string; text: string }[];
-// 	/** For matching questions: right column options */
-// 	matchOptions?: { id: string; text: string }[];
-// 	createdAt: string;
-// 	updatedAt: string;
-// }
+export interface Question {
+	id: string;
+	topicId: number;
+	type: QuestionType;
+	text: string;
+	marks: number;
+	options?: Option[];
+	correctAnswer?: string | string[];
+	blanks?: Blank[];
+	passage?: string;
+	instruction?: string;
+	subQuestions?: Question[];
+	/** For matching questions: left column items */
+	matchItems?: { id: string; text: string }[];
+	/** For matching questions: right column options */
+	matchOptions?: { id: string; text: string }[];
+	createdAt: string;
+	updatedAt: string;
+}
 
-// export interface Topic {
-// 	id: string;
-// 	name: string;
-// 	subjectId: number;
-// 	questions: Question[];
-// 	createdAt: string;
-// }
+export interface Topic {
+	id: string;
+	name: string;
+	subjectId: number;
+	questions: Question[];
+	createdAt: string;
+}
 
-// export interface Subject {
-// 	id: string;
-// 	name: string;
-// 	classId: string;
-// 	teacherId?: string;
-// 	teacherName?: string;
-// 	questionsInBank: number;
-// 	tests: number;
-// 	topics: Topic[];
-// 	createdAt: string;
-// }
+export interface Subject {
+	id: string;
+	name: string;
+	classId: string;
+	teacherId?: string;
+	teacherName?: string;
+	questionsInBank: number;
+	tests: number;
+	topics: Topic[];
+	createdAt: string;
+}
 
-// export interface Class {
-// 	id: string;
-// 	name: string;
-// 	school: string;
-// 	level: string;
-// 	subjects: Subject[];
-// 	totalSubjects: number;
-// 	createdAt: string;
-// }
+export interface Class {
+	id: string;
+	name: string;
+	school: string;
+	level: string;
+	subjects: Subject[];
+	totalSubjects: number;
+	createdAt: string;
+}
 
 // export interface Assessment {
 // 	// title: string;
@@ -205,20 +205,20 @@
 // 	questions: Partial<Question>[];
 // }
 
-// export interface Option {
-// 	id: string;
-// 	text: string;
-// 	isCorrect?: boolean;
-// }
+export interface Option {
+	id: string;
+	text: string;
+	isCorrect?: boolean;
+}
 
-// export interface Blank {
-// 	id: string;
-// 	label: string;
-// 	answerType: "short-answer" | "multiple-choice";
-// 	answers: string[];
-// 	mark: number;
-// 	options?: Option[];
-// }
+export interface Blank {
+	id: string;
+	label: string;
+	answerType: "short-answer" | "multiple-choice";
+	answers: string[];
+	mark: number;
+	options?: Option[];
+}
 
 // export interface Subject {
 // 	id: string;
@@ -280,18 +280,18 @@
 // 	questions: Partial<Question>[];
 // }
 
-// // export type QuestionType =
-// // 	| "multiple-choice"
-// // 	| "true-false"
-// // 	| "essay"
-// // 	| "fill-in-blank"
-// // 	| "matching"
-// // 	| "short-answer"
-// // 	| "numerical"
-// // 	| "question-group"
-// // 	| "multiple-answers"
-// // 	| "comprehension-passage"
-// // 	| "multiple-blanks";
+export type QuestionType =
+	| "multiple-choice"
+	| "true-false"
+	| "essay"
+	| "fill-in-blank"
+	| "matching"
+	| "short-answer"
+	| "numerical"
+	| "question-group"
+	| "multiple-answers"
+	| "comprehension-passage"
+	| "multiple-blanks";
 
 // export interface Option {
 // 	id: string;

@@ -1,5 +1,3 @@
-import { DragEndEvent } from "@dnd-kit/core";
-
 type WithId = { id: number };
 
 export const reorderByGroup = <T extends WithId>(

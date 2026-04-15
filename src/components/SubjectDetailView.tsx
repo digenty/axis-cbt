@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { BookOpen, ClipboardList, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCBTStore } from "@/store";
 import { ApiSubject } from "@/api/subjects";
 import {
 	useGetClassDetails,
