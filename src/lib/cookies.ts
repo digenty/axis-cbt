@@ -5,47 +5,47 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 export const createSession = async (
-	token: string,
-	userType: "SCHOOL_STAFF" | "PARENT",
+  token: string,
+  userType: "SCHOOL_STAFF" | "PARENT",
 ) => {
-	const cookieStore = await cookies();
+  const cookieStore = await cookies();
 
-	cookieStore.set("token", token, {
-		httpOnly: true,
-		secure: process.env.NODE_ENV === "production",
-		sameSite: "strict",
-		path: "/",
-	});
+  cookieStore.set("token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+  });
 
-	redirect(`/${userType === "SCHOOL_STAFF" ? "staff" : "parents"}`);
+  redirect(`/${userType === "SCHOOL_STAFF" ? "staff" : "parents"}`);
 };
 
 export const deleteSession = async () => {
-	const cookieStore = await cookies();
-	cookieStore.delete("token");
+  const cookieStore = await cookies();
+  cookieStore.delete("token");
 
-	redirect("/auth/staff");
+  redirect("/auth/staff");
 };
 
 export const getSessionToken = async () => {
-	const cookieStore = await cookies();
-	const token = cookieStore.get("token")?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get("token")?.value;
 
-	if (!token) {
-		redirect("/auth");
-	}
+  if (!token) {
+    redirect("/auth");
+  }
 
-	return { token };
+  return { token };
 };
 
 export const getSessionData = async () => {
-	const cookieStore = await cookies();
-	const token = cookieStore.get("token")?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get("token")?.value;
 
-	if (!token) {
-		return { user: null };
-	}
+  if (!token) {
+    return { user: null };
+  }
 
-	const user: JWTPayload | null = decodeJWT(token);
-	return { user };
+  const user: JWTPayload | null = decodeJWT(token);
+  return { user };
 };

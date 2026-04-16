@@ -6,18 +6,18 @@ import { queryClient as client } from "@/lib/queryClient";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 type Props = {
-	children: ReactNode;
+  children: ReactNode;
 };
 
 export const TanstackProvider = ({ children }: Props) => {
-	const [queryClient] = useState(() => client);
+  const [queryClient] = useState(() => client);
 
-	return (
-		<QueryClientProvider client={queryClient}>
-			{children}
-			{process.env.NODE_ENV === "development" && (
-				<ReactQueryDevtools initialIsOpen={false} />
-			)}
-		</QueryClientProvider>
-	);
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      {process.env.NODE_ENV === "development" && (
+        <ReactQueryDevtools initialIsOpen={false} />
+      )}
+    </QueryClientProvider>
+  );
 };

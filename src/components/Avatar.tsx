@@ -2,15 +2,15 @@ import { cn } from "@/lib/utils";
 import { Avatar as AvatarComponent, AvatarImage } from "./ui/avatar";
 
 export const Avatar = ({
-	url,
-	className,
+  url,
+  className,
 }: {
-	url?: string;
-	className?: string;
+  url?: string;
+  className?: string;
 }) => {
-	return (
-		<AvatarComponent className={cn(className)}>
-			<AvatarImage src={url || ""} />
-		</AvatarComponent>
-	);
+  return (
+    <AvatarComponent className={cn(className)}>
+      <AvatarImage src={url || ""} />
+    </AvatarComponent>
+  );
 };
