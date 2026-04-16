@@ -8,11 +8,13 @@ import {
 	PointerSensor,
 	useSensor,
 	useSensors,
+	DragEndEvent,
 } from "@dnd-kit/core";
 import {
 	SortableContext,
 	verticalListSortingStrategy,
 	useSortable,
+	arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -38,6 +40,7 @@ import type {
 	QuestionType,
 	ResponseTypeSpecificData,
 } from "@/types/question";
+import { reorderByGroup } from "./reorder";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -82,6 +85,26 @@ export const QuestionListView = ({
 		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
 	);
 
+	const handleDragEnd = (_event: DragEndEvent) => {
+		const { active, over } = _event;
+
+		if (!over || active.id === over.id || !filtered) return;
+
+		const oldIdx = filtered.findIndex((q) => q.id === active.id);
+		const newIdx = filtered.findIndex((q) => q.id === over.id);
+
+		if (oldIdx === -1 || newIdx === -1) return;
+
+		const reordered = arrayMove(filtered, oldIdx, newIdx);
+		const orderedIds = reordered.map((q) => q.id); // ✅ FIX
+
+		console.log({ orderedIds });
+
+		// setQuestions((prev) =>
+		// 	reorderByGroup(prev, "topicId", topicId, orderedIds),
+		// );
+	};
+
 	return (
 		<div className="flex flex-1 flex-col overflow-hidden">
 			{/* Header */}
@@ -123,9 +146,7 @@ export const QuestionListView = ({
 						<DndContext
 							sensors={sensors}
 							collisionDetection={closestCenter}
-							onDragEnd={() => {
-								/* TODO: reorder endpoint */
-							}}
+							onDragEnd={handleDragEnd}
 						>
 							<SortableContext
 								items={filtered?.map((q) => q.id)}

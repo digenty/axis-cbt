@@ -13,6 +13,7 @@ import {
 	SortableContext,
 	verticalListSortingStrategy,
 	useSortable,
+	arrayMove,
 	// arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -35,6 +36,7 @@ import {
 	useUpdateCbtTopic,
 } from "@/hooks/queryHooks/useQuestionBank";
 import type { ApiTopic } from "@/types/question";
+import { reorderByGroup } from "./reorder";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -77,8 +79,21 @@ export const QuestionBankSidebar = ({
 
 	const handleDragEnd = (_event: DragEndEvent) => {
 		const { active, over } = _event;
-		if (!over || active.id === over.id) return;
-		// TODO: wire reorder API when endpoint is available
+		if (!over || active.id === over.id || !topics) return;
+
+		const oldIdx = topics.findIndex((q) => q.id === active.id);
+		const newIdx = topics.findIndex((q) => q.id === over.id);
+
+		if (oldIdx === -1 || newIdx === -1) return;
+
+		const reordered = arrayMove(topics, oldIdx, newIdx);
+		const orderedIds = reordered.map((t) => t.id);
+
+		console.log({ orderedIds });
+
+		// setTopics((prev) =>
+		// 	reorderByGroup(prev, "subjectId", subjectId, orderedIds),
+		// );
 	};
 
 	const handleAddTopic = (data: { name: string; description: string }) => {

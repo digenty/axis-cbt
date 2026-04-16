@@ -9,7 +9,7 @@ interface DeleteTestModalProps {
 	open: boolean;
 	testTitle: string;
 	onClose: () => void;
-	onConfirm: () => Promise<void>;
+	onConfirm: () => void;
 }
 
 export const DeleteTestModal = ({
