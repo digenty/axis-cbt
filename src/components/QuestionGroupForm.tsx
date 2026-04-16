@@ -29,7 +29,6 @@ import type {
 	SubQuestionType,
 } from "@/types/question";
 import { appendOption } from "@/utils/question";
-import { Plus as PlusIcon, Trash2 as TrashIcon } from "lucide-react";
 
 // ─── Stimulus options ─────────────────────────────────────────────────────────
 
@@ -515,7 +514,7 @@ const SubQuestionCard = ({
 									}
 									className="flex items-center gap-1.5 text-xs text-blue-600 transition-colors hover:text-blue-700"
 								>
-									<PlusIcon className="h-3.5 w-3.5" />
+									<Plus className="h-3.5 w-3.5" />
 									Add Option
 								</button>
 							)}

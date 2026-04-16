@@ -1,6 +1,6 @@
 "use client";
-import { useState, useCallback } from "react";
-// import { useRouter } from "next/navigation";
+
+import { useState, useEffect } from "react";
 import {
 	DndContext,
 	closestCenter,
@@ -16,18 +16,21 @@ import {
 	arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Test, TestSection, Question, QuestionType } from "@/types";
-import { useCBTStore } from "@/store";
 import {
-	generateId,
-	getQuestionTypeLabel,
-	getQuestionTypeBadgeColor,
-	cn,
-} from "@/lib/utils";
+	useGetAssessment,
+	useGetAssessmentSections,
+	useAddSection,
+	useDeleteSection,
+	useAddQuestionsToSection,
+	useRemoveQuestionFromSection,
+	usePublishAssessment,
+} from "@/hooks/queryHooks/useAssessment";
+import type { ApiAssessment, ApiSection, ApiAssessmentQuestion } from "@/types/question";
+import type { QuestionType } from "@/types";
+import { cn, getQuestionTypeLabel, getQuestionTypeBadgeColor } from "@/lib/utils";
 import {
 	Pencil,
 	Upload,
-	Save,
 	Plus,
 	GripVertical,
 	ChevronDown,
@@ -37,191 +40,221 @@ import {
 	Star,
 	Clock,
 	Tag,
+	Trash2,
+	AlertCircle,
 } from "lucide-react";
-import { AddAssessmentItemModal } from "./AddAssessmentItemM";
 import { SelectFromQuestionBankModal } from "./QuestionBankModal";
-import { CreateTestModal } from "./CreateTestModal";
+import { toast } from "sonner";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Map API SCREAMING_SNAKE_CASE question types → display kebab-case */
+const API_TO_DISPLAY_TYPE: Record<string, QuestionType> = {
+	MULTIPLE_CHOICE: "multiple-choice",
+	MULTIPLE_ANSWERS: "multiple-answers",
+	TRUE_FALSE: "true-false",
+	ESSAY: "essay",
+	SHORT_ANSWER: "short-answer",
+	NUMERIC_ANSWER: "numerical",
+	FILL_IN_THE_BLANK: "fill-in-blank",
+	MATCH: "matching",
+	QUESTION_GROUP: "question-group",
+	COMPREHENSION: "comprehension-passage",
+};
+
+function toDisplayType(apiType: string): QuestionType {
+	return API_TO_DISPLAY_TYPE[apiType] ?? "multiple-choice";
+}
+
+const TERM_LABELS: Record<string, string> = {
+	FIRST: "First Term",
+	SECOND: "Second Term",
+	THIRD: "Third Term",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+	DRAFT: "Draft",
+	PUBLISHED: "Published",
+	COMPLETED: "Completed",
+};
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface TestEditorProps {
-	test: Test;
-	classId: string;
+	assessmentId: number;
+	classId: number;
+	subjectId: number;
 	className: string;
 	subjectName: string;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export const TestEditor = ({
-	test: initialTest,
+	assessmentId,
 	classId,
+	subjectId,
 	className,
 	subjectName,
 }: TestEditorProps) => {
-	//   const router = useRouter();
-	const {
-		updateTest,
-		questions: allQuestions,
-		addQuestion,
-		getTopicsBySubject,
-	} = useCBTStore();
-	const [test, setTest] = useState<Test>(initialTest);
-	const [editDetailsOpen, setEditDetailsOpen] = useState(false);
-	const [addItemModalOpen, setAddItemModalOpen] = useState<{
-		sectionId: string;
-	} | null>(null);
+	const { data: assessmentRes, isLoading: loadingAssessment } =
+		useGetAssessment(assessmentId);
+	const { data: sectionsRes, isLoading: loadingSections } =
+		useGetAssessmentSections(assessmentId);
+
+	const [localSections, setLocalSections] = useState<ApiSection[]>([]);
+	const [assessment, setAssessment] = useState<ApiAssessment | null>(null);
+
 	const [selectFromBankOpen, setSelectFromBankOpen] = useState<{
-		sectionId: string;
+		sectionId: number;
 	} | null>(null);
-	const [saving, setSaving] = useState(false);
 	const [publishing, setPublishing] = useState(false);
 
-	// Sync local state + persist
-	const updateLocal = useCallback(
-		(updater: (t: Test) => Test) => {
-			setTest((prev) => {
-				const next = updater(prev);
-				updateTest(next.id, next);
-				return next;
-			});
-		},
-		[updateTest],
+	const { mutateAsync: addSectionApi } = useAddSection(assessmentId);
+	const { mutateAsync: deleteSectionApi } = useDeleteSection(assessmentId);
+	const { mutateAsync: addQuestionsApi } = useAddQuestionsToSection(assessmentId);
+	const { mutateAsync: removeQuestionApi } = useRemoveQuestionFromSection(assessmentId);
+	const { mutateAsync: publishApi } = usePublishAssessment(assessmentId);
+
+	// Sync local state from queries
+	useEffect(() => {
+		if (assessmentRes?.data) setAssessment(assessmentRes.data);
+	}, [assessmentRes]);
+
+	useEffect(() => {
+		if (sectionsRes?.data) setLocalSections(sectionsRes.data);
+	}, [sectionsRes]);
+
+	// ── Derived ───────────────────────────────────────────────────────────────
+
+	const totalQuestions = localSections.reduce(
+		(sum, s) => sum + s.questions.length,
+		0,
+	);
+	const totalMarks = localSections.reduce(
+		(sum, s) => sum + s.questions.reduce((qs, q) => qs + q.marks, 0),
+		0,
 	);
 
-	// ── Derived ────────────────────────────────────────────────────────────────
-	const allSectionQuestionIds = test.sections.flatMap((s) => s.questionIds);
-	const totalQuestions = allSectionQuestionIds.length;
-	const totalMarks = allSectionQuestionIds.reduce((sum, qid) => {
-		const q = allQuestions.find((q) => q.id === qid);
-		return sum + (q?.marks || 0);
-	}, 0);
+	// Already-added question IDs (for the bank modal)
+	const alreadySelectedIds = localSections.flatMap((s) =>
+		s.questions.map((q) => q.questionId),
+	);
 
-	// ── Section actions ────────────────────────────────────────────────────────
-	const addSection = () => {
-		updateLocal((t) => ({
-			...t,
-			sections: [
-				...t.sections,
-				{
-					id: generateId(),
-					title: `Section ${String.fromCharCode(65 + t.sections.length)}`,
-					instruction: "",
-					questionIds: [],
-				},
-			],
-		}));
+	// ── Section operations ────────────────────────────────────────────────────
+
+	const handleAddSection = async () => {
+		const order = localSections.length + 1;
+		const name = `Section ${String.fromCharCode(64 + order)}`;
+		try {
+			const res = await addSectionApi({
+				name,
+				instructions: "",
+				sectionOrder: order,
+			});
+			setLocalSections((prev) => [...prev, res.data]);
+		} catch {
+			toast.error("Failed to add section");
+		}
 	};
 
-	const updateSection = (sectionId: string, data: Partial<TestSection>) => {
-		updateLocal((t) => ({
-			...t,
-			sections: t.sections.map((s) =>
-				s.id === sectionId ? { ...s, ...data } : s,
-			),
-		}));
+	const handleDeleteSection = async (sectionId: number) => {
+		try {
+			await deleteSectionApi(sectionId);
+			setLocalSections((prev) => prev.filter((s) => s.id !== sectionId));
+		} catch {
+			toast.error("Failed to delete section");
+		}
 	};
 
-	const reorderSectionQuestions = (
-		sectionId: string,
-		orderedIds: string[],
-	) => {
-		updateLocal((t) => ({
-			...t,
-			sections: t.sections.map((s) =>
-				s.id === sectionId ? { ...s, questionIds: orderedIds } : s,
-			),
-		}));
+	// ── Question operations ───────────────────────────────────────────────────
+
+	const handleAddFromBank = async (sectionId: number, questionIds: number[]) => {
+		if (questionIds.length === 0) return;
+		try {
+			await addQuestionsApi({ sectionId, questionIds });
+			// sectionsRes will be invalidated by the hook; useEffect syncs localSections
+		} catch {
+			toast.error("Failed to add questions");
+		}
 	};
 
-	const addQuestionsToSection = (sectionId: string, qs: Question[]) => {
-		// For questions from bank, they already exist; for new inline questions we add them
-		updateLocal((t) => ({
-			...t,
-			sections: t.sections.map((s) =>
-				s.id === sectionId
-					? {
-							...s,
-							questionIds: [
-								...s.questionIds,
-								...qs
-									.map((q) => q.id)
-									.filter((id) => !s.questionIds.includes(id)),
-							],
-						}
-					: s,
-			),
-			totalMarks: totalMarks + qs.reduce((s, q) => s + q.marks, 0),
-		}));
+	const handleRemoveQuestion = async (assessmentQuestionId: number) => {
+		// Optimistic remove
+		setLocalSections((prev) =>
+			prev.map((s) => ({
+				...s,
+				questions: s.questions.filter(
+					(q) => q.assessmentQuestionId !== assessmentQuestionId,
+				),
+			})),
+		);
+		try {
+			await removeQuestionApi(assessmentQuestionId);
+		} catch {
+			toast.error("Failed to remove question");
+			// Re-sync from server
+			if (sectionsRes?.data) setLocalSections(sectionsRes.data);
+		}
 	};
 
-	const removeQuestionFromSection = (
-		sectionId: string,
-		questionId: string,
-	) => {
-		updateLocal((t) => ({
-			...t,
-			sections: t.sections.map((s) =>
-				s.id === sectionId
-					? {
-							...s,
-							questionIds: s.questionIds.filter(
-								(id) => id !== questionId,
-							),
-						}
-					: s,
-			),
-		}));
+	const handleReorder = (sectionId: number, orderedIds: number[]) => {
+		setLocalSections((prev) =>
+			prev.map((s) => {
+				if (s.id !== sectionId) return s;
+				const reordered = orderedIds
+					.map((id) => s.questions.find((q) => q.assessmentQuestionId === id))
+					.filter(Boolean) as ApiAssessmentQuestion[];
+				return { ...s, questions: reordered };
+			}),
+		);
 	};
 
-	// ── Add inline question (new, not from bank) ───────────────────────────────
-	const handleAddNewQuestion = (sectionId: string, type: QuestionType) => {
-		const topics = getTopicsBySubject(test.subjectId);
-		const topicId = topics[0]?.id || generateId();
-		// We'll create a stub question and add to store + section
-		// In a real app you'd open the question form in-context; here we create a stub
-		const stub: Question = {
-			id: generateId(),
-			topicId,
-			type,
-			text: "New question",
-			marks: 1,
-			options: [
-				"multiple-choice",
-				"multiple-answers",
-				"true-false",
-			].includes(type)
-				? [
-						{ id: "a", text: "", isCorrect: false },
-						{ id: "b", text: "", isCorrect: false },
-						{ id: "c", text: "", isCorrect: false },
-						{ id: "d", text: "", isCorrect: false },
-					]
-				: undefined,
-			createdAt: new Date().toISOString(),
-			updatedAt: new Date().toISOString(),
-		};
-		addQuestion(stub);
-		addQuestionsToSection(sectionId, [stub]);
-		setAddItemModalOpen(null);
-	};
-
-	const handleSaveDraft = async () => {
-		setSaving(true);
-		await new Promise((r) => setTimeout(r, 500));
-		updateLocal((t) => ({ ...t, status: "draft" }));
-		setSaving(false);
-	};
+	// ── Publish ───────────────────────────────────────────────────────────────
 
 	const handlePublish = async () => {
 		setPublishing(true);
-		await new Promise((r) => setTimeout(r, 600));
-		updateLocal((t) => ({ ...t, status: "published" }));
-		setPublishing(false);
+		try {
+			await publishApi();
+			setAssessment((prev) =>
+				prev ? { ...prev, status: "PUBLISHED" } : prev,
+			);
+			toast.success("Test published successfully");
+		} catch {
+			toast.error("Failed to publish test");
+		} finally {
+			setPublishing(false);
+		}
 	};
 
-	// Compute cumulative Q numbering across sections
+	// ── Loading ───────────────────────────────────────────────────────────────
+
+	if (loadingAssessment || loadingSections) {
+		return (
+			<div className="mx-auto max-w-4xl animate-pulse space-y-4">
+				<div className="h-8 w-64 rounded-lg bg-gray-200" />
+				<div className="h-4 w-96 rounded-lg bg-gray-100" />
+				<div className="h-48 rounded-xl bg-gray-100" />
+				<div className="h-48 rounded-xl bg-gray-100" />
+			</div>
+		);
+	}
+
+	if (!assessment) {
+		return (
+			<div className="flex flex-col items-center justify-center py-20">
+				<AlertCircle className="mb-3 h-10 w-10 text-gray-300" />
+				<p className="text-sm text-gray-500">Assessment not found</p>
+			</div>
+		);
+	}
+
+	// ── Cumulative Q numbering ────────────────────────────────────────────────
+
 	let qCounter = 0;
-	const sectionStartIndices = test.sections.map((s) => {
+	const sectionStartIndices = localSections.map((s) => {
 		const start = qCounter;
-		// eslint-disable-next-line react-hooks/immutability
-		qCounter += s.questionIds.length;
+		qCounter += s.questions.length;
 		return start;
 	});
 
@@ -230,41 +263,46 @@ export const TestEditor = ({
 			<div className="mx-auto max-w-4xl">
 				{/* Header */}
 				<div className="mb-4 flex items-start justify-between">
-					<h1 className="text-xl font-bold text-gray-900">{test.title}</h1>
+					<div>
+						<h1 className="text-xl font-bold text-gray-900">
+							{assessment.name}
+						</h1>
+						<p className="mt-0.5 text-xs text-gray-400">
+							{className} • {subjectName} •{" "}
+							{TERM_LABELS[assessment.term] ?? assessment.term}
+						</p>
+					</div>
 					<div className="flex items-center gap-2">
 						<button
-							onClick={() => setEditDetailsOpen(true)}
+							onClick={() =>
+								toast.info(
+									"Edit details — connect to update API",
+								)
+							}
 							className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
 						>
 							<Pencil className="h-3.5 w-3.5" />
 							Edit Details
 						</button>
-						{test.status !== "published" && (
+						{assessment.status !== "PUBLISHED" && (
 							<button
-								onClick={handleSaveDraft}
-								disabled={saving}
-								className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
+								onClick={handlePublish}
+								disabled={publishing}
+								className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
 							>
-								{saving ? (
-									<span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-400 border-t-gray-800" />
+								{publishing ? (
+									<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
 								) : (
-									<Save className="h-3.5 w-3.5" />
+									<Upload className="h-3.5 w-3.5" />
 								)}
-								Save as Draft
+								Publish Test
 							</button>
 						)}
-						<button
-							onClick={handlePublish}
-							disabled={publishing}
-							className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
-						>
-							{publishing ? (
-								<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-							) : (
-								<Upload className="h-3.5 w-3.5" />
-							)}
-							Publish Test
-						</button>
+						{assessment.status === "PUBLISHED" && (
+							<span className="rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700">
+								{STATUS_LABELS[assessment.status]}
+							</span>
+						)}
 					</div>
 				</div>
 
@@ -273,7 +311,7 @@ export const TestEditor = ({
 					<MetaBadge
 						color="blue"
 						icon={<BookOpen className="h-3 w-3" />}
-						label={`${classId.toUpperCase()} • ${subjectName}`}
+						label={`${className} • ${subjectName}`}
 					/>
 					<MetaBadge
 						color="gray"
@@ -288,45 +326,39 @@ export const TestEditor = ({
 					<MetaBadge
 						color="purple"
 						icon={<Clock className="h-3 w-3" />}
-						label={`${test.duration} minutes`}
+						label={`${assessment.durationMinutes} minutes`}
 					/>
-					{test.mappingLabel && (
+					{assessment.assessmentMapping && (
 						<MetaBadge
 							color="green"
 							icon={<Tag className="h-3 w-3" />}
-							label={test.mappingLabel}
+							label={assessment.assessmentMapping}
 						/>
 					)}
 				</div>
 
 				{/* Sections */}
 				<div className="space-y-4">
-					{test.sections.map((section, sIdx) => (
-						<SectionCard
-							key={section.id}
-							section={section}
-							startIndex={sectionStartIndices[sIdx]}
-							allQuestions={allQuestions}
-							onUpdateSection={(data) => updateSection(section.id, data)}
-							onReorder={(ids) =>
-								reorderSectionQuestions(section.id, ids)
-							}
-							onRemoveQuestion={(qid) =>
-								removeQuestionFromSection(section.id, qid)
-							}
-							onAddQuestion={() =>
-								setAddItemModalOpen({ sectionId: section.id })
-							}
-							onAddFromBank={() =>
-								setSelectFromBankOpen({ sectionId: section.id })
-							}
-						/>
-					))}
+					{localSections
+						.sort((a, b) => a.sectionOrder - b.sectionOrder)
+						.map((section, sIdx) => (
+							<SectionCard
+								key={section.id}
+								section={section}
+								startIndex={sectionStartIndices[sIdx]}
+								onReorder={(ids) => handleReorder(section.id, ids)}
+								onRemoveQuestion={handleRemoveQuestion}
+								onAddFromBank={() =>
+									setSelectFromBankOpen({ sectionId: section.id })
+								}
+								onDeleteSection={() => handleDeleteSection(section.id)}
+							/>
+						))}
 				</div>
 
-				{/* Add New Section */}
+				{/* Add section */}
 				<button
-					onClick={addSection}
+					onClick={handleAddSection}
 					className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-3.5 text-sm text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600"
 				>
 					<Plus className="h-4 w-4" />
@@ -334,61 +366,26 @@ export const TestEditor = ({
 				</button>
 			</div>
 
-			{/* Modals */}
-			<AddAssessmentItemModal
-				open={!!addItemModalOpen}
-				onClose={() => setAddItemModalOpen(null)}
-				onSelectType={(type) => {
-					handleAddNewQuestion(addItemModalOpen!.sectionId, type);
-				}}
-				onSelectGroup={() => {
-					handleAddNewQuestion(
-						addItemModalOpen!.sectionId,
-						"question-group",
-					);
-				}}
-				onSelectMultipleBlanks={() => {
-					handleAddNewQuestion(
-						addItemModalOpen!.sectionId,
-						"multiple-blanks",
-					);
-				}}
-				onSelectMatch={() => {
-					handleAddNewQuestion(addItemModalOpen!.sectionId, "matching");
-				}}
-			/>
-
+			{/* Select from question bank modal */}
 			{selectFromBankOpen && (
 				<SelectFromQuestionBankModal
 					open={true}
-					subjectId={test.subjectId}
-					alreadySelectedIds={allSectionQuestionIds}
+					classId={classId}
+					subjectId={subjectId}
+					alreadySelectedIds={alreadySelectedIds}
 					onClose={() => setSelectFromBankOpen(null)}
-					onAdd={(qs) => {
-						addQuestionsToSection(selectFromBankOpen.sectionId, qs);
+					onAdd={(questionIds) => {
+						handleAddFromBank(selectFromBankOpen.sectionId, questionIds);
 						setSelectFromBankOpen(null);
 					}}
 				/>
 			)}
-
-			<CreateTestModal
-				open={editDetailsOpen}
-				onClose={() => setEditDetailsOpen(false)}
-				subjectId={test.subjectId}
-				classId={classId}
-				className={className}
-				subjectName={subjectName}
-				editTest={test}
-				onSaved={(updated) => {
-					updateLocal(() => updated);
-					setEditDetailsOpen(false);
-				}}
-			/>
 		</>
 	);
 };
 
 // ─── Meta badge ───────────────────────────────────────────────────────────────
+
 const MetaBadge = ({
 	color,
 	icon,
@@ -419,26 +416,23 @@ const MetaBadge = ({
 };
 
 // ─── Section Card ─────────────────────────────────────────────────────────────
+
 interface SectionCardProps {
-	section: TestSection;
+	section: ApiSection;
 	startIndex: number;
-	allQuestions: Question[];
-	onUpdateSection: (data: Partial<TestSection>) => void;
-	onReorder: (ids: string[]) => void;
-	onRemoveQuestion: (qid: string) => void;
-	onAddQuestion: () => void;
+	onReorder: (ids: number[]) => void;
+	onRemoveQuestion: (assessmentQuestionId: number) => void;
 	onAddFromBank: () => void;
+	onDeleteSection: () => void;
 }
 
 const SectionCard = ({
 	section,
 	startIndex,
-	allQuestions,
-	onUpdateSection,
 	onReorder,
 	onRemoveQuestion,
-	onAddQuestion,
 	onAddFromBank,
+	onDeleteSection,
 }: SectionCardProps) => {
 	const [collapsed, setCollapsed] = useState(false);
 
@@ -449,59 +443,49 @@ const SectionCard = ({
 	const handleDragEnd = (event: DragEndEvent) => {
 		const { active, over } = event;
 		if (!over || active.id === over.id) return;
-		const oldIdx = section.questionIds.indexOf(active.id as string);
-		const newIdx = section.questionIds.indexOf(over.id as string);
-		onReorder(arrayMove(section.questionIds, oldIdx, newIdx));
+		const ids = section.questions.map((q) => q.assessmentQuestionId);
+		const oldIdx = ids.indexOf(active.id as number);
+		const newIdx = ids.indexOf(over.id as number);
+		onReorder(arrayMove(ids, oldIdx, newIdx));
 	};
 
-	const sectionQs = section.questionIds
-		.map((id) => allQuestions.find((q) => q.id === id))
-		.filter(Boolean) as Question[];
+	const sortableIds = section.questions.map((q) => q.assessmentQuestionId);
 
 	return (
 		<div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
 			{/* Section header */}
 			<div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
 				<div className="min-w-0 flex-1">
-					<input
-						type="text"
-						value={section.title}
-						onChange={(e) => onUpdateSection({ title: e.target.value })}
-						className="w-full border-0 bg-transparent text-base font-semibold text-gray-900 focus:ring-0 focus:outline-none"
-					/>
-					<input
-						type="text"
-						value={section.instruction}
-						onChange={(e) =>
-							onUpdateSection({ instruction: e.target.value })
-						}
-						placeholder="Instructions (optional)"
-						className="mt-0.5 w-full border-0 bg-transparent text-xs text-gray-400 placeholder:text-gray-300 focus:ring-0 focus:outline-none"
-					/>
-				</div>
-				<button
-					onClick={() => setCollapsed((v) => !v)}
-					className="ml-4 text-gray-400 transition-colors hover:text-gray-600"
-				>
-					{collapsed ? (
-						<ChevronDown className="h-5 w-5" />
-					) : (
-						<ChevronUp className="h-5 w-5" />
+					<p className="text-base font-semibold text-gray-900">{section.name}</p>
+					{section.instructions && (
+						<p className="mt-0.5 text-xs text-gray-400">{section.instructions}</p>
 					)}
-				</button>
+				</div>
+				<div className="ml-4 flex items-center gap-2">
+					<button
+						onClick={onDeleteSection}
+						className="text-gray-300 transition-colors hover:text-red-400"
+						title="Delete section"
+					>
+						<Trash2 className="h-4 w-4" />
+					</button>
+					<button
+						onClick={() => setCollapsed((v) => !v)}
+						className="text-gray-400 transition-colors hover:text-gray-600"
+					>
+						{collapsed ? (
+							<ChevronDown className="h-5 w-5" />
+						) : (
+							<ChevronUp className="h-5 w-5" />
+						)}
+					</button>
+				</div>
 			</div>
 
 			{!collapsed && (
 				<div className="px-5 py-4">
-					{/* Action buttons */}
-					<div className="mb-4 flex items-center gap-2">
-						<button
-							onClick={onAddQuestion}
-							className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-						>
-							<Plus className="h-3.5 w-3.5" />
-							Add Question
-						</button>
+					{/* Add from bank button */}
+					<div className="mb-4">
 						<button
 							onClick={onAddFromBank}
 							className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
@@ -512,20 +496,18 @@ const SectionCard = ({
 					</div>
 
 					{/* Questions */}
-					{sectionQs.length === 0 ? (
+					{section.questions.length === 0 ? (
 						<div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-10 text-center">
-							<p className="mb-1 text-sm text-gray-500">
-								No questions yet
-							</p>
+							<p className="mb-1 text-sm text-gray-500">No questions yet</p>
 							<p className="mb-3 text-xs text-gray-400">
-								Add question to get started
+								Add questions from the question bank
 							</p>
 							<button
-								onClick={onAddQuestion}
+								onClick={onAddFromBank}
 								className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-1.5 text-sm transition-colors hover:bg-gray-50"
 							>
 								<Plus className="h-3.5 w-3.5" />
-								Add Question
+								Add from Bank
 							</button>
 						</div>
 					) : (
@@ -535,16 +517,18 @@ const SectionCard = ({
 							onDragEnd={handleDragEnd}
 						>
 							<SortableContext
-								items={section.questionIds}
+								items={sortableIds}
 								strategy={verticalListSortingStrategy}
 							>
 								<div className="space-y-2">
-									{sectionQs.map((q, idx) => (
-										<SortableTestQuestion
-											key={q.id}
+									{section.questions.map((q, idx) => (
+										<SortableAssessmentQuestion
+											key={q.assessmentQuestionId}
 											question={q}
 											number={startIndex + idx + 1}
-											onRemove={() => onRemoveQuestion(q.id)}
+											onRemove={() =>
+												onRemoveQuestion(q.assessmentQuestionId)
+											}
 										/>
 									))}
 								</div>
@@ -552,24 +536,14 @@ const SectionCard = ({
 						</DndContext>
 					)}
 
-					{/* Bottom add buttons */}
-					{sectionQs.length > 0 && (
-						<div className="mt-3 grid grid-cols-2 gap-2">
-							<button
-								onClick={onAddQuestion}
-								className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-2.5 text-xs text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600"
-							>
-								<Plus className="h-3.5 w-3.5" />
-								Add Question
-							</button>
-							<button
-								onClick={onAddFromBank}
-								className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-2.5 text-xs text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600"
-							>
-								<BookOpen className="h-3.5 w-3.5" />
-								Add from Question Bank
-							</button>
-						</div>
+					{section.questions.length > 0 && (
+						<button
+							onClick={onAddFromBank}
+							className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-2.5 text-xs text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600"
+						>
+							<BookOpen className="h-3.5 w-3.5" />
+							Add from Question Bank
+						</button>
 					)}
 				</div>
 			)}
@@ -577,17 +551,17 @@ const SectionCard = ({
 	);
 };
 
-// ─── Sortable question row in test ────────────────────────────────────────────
-const SortableTestQuestion = ({
+// ─── Sortable question row ────────────────────────────────────────────────────
+
+const SortableAssessmentQuestion = ({
 	question,
 	number,
 	onRemove,
 }: {
-	question: Question;
+	question: ApiAssessmentQuestion;
 	number: number;
 	onRemove: () => void;
 }) => {
-	const [expanded, setExpanded] = useState(false);
 	const {
 		attributes,
 		listeners,
@@ -595,7 +569,7 @@ const SortableTestQuestion = ({
 		transform,
 		transition,
 		isDragging,
-	} = useSortable({ id: question.id });
+	} = useSortable({ id: question.assessmentQuestionId });
 
 	const style = {
 		transform: CSS.Transform.toString(transform),
@@ -603,13 +577,7 @@ const SortableTestQuestion = ({
 		opacity: isDragging ? 0.4 : 1,
 	};
 
-	// Range label for groups
-	const qLabel =
-		question.type === "question-group" && question.subQuestions?.length
-			? `Q${number} - Q${number + question.subQuestions.length - 1}`
-			: question.type === "multiple-blanks" && question.blanks?.length
-				? `Q${number} - Q${number + question.blanks.length - 1}`
-				: `Q${number}`;
+	const displayType = toDisplayType(question.questionType as string);
 
 	return (
 		<div
@@ -628,80 +596,34 @@ const SortableTestQuestion = ({
 				>
 					<GripVertical className="h-4 w-4" />
 				</button>
-				<span className="w-12 shrink-0 text-xs font-semibold text-gray-400">
-					{qLabel}
+				<span className="w-8 shrink-0 text-xs font-semibold text-gray-400">
+					Q{number}
 				</span>
-				<div
-					className="min-w-0 flex-1 cursor-pointer"
-					onClick={() => setExpanded((v) => !v)}
-				>
+				<div className="min-w-0 flex-1">
 					<p className="truncate text-sm font-medium text-gray-800">
-						{question.text}
+						{question.questionText}
 					</p>
 					<div className="mt-0.5 flex items-center gap-2">
 						<span
 							className={cn(
 								"rounded-md border px-2 py-0.5 text-xs",
-								getQuestionTypeBadgeColor(question.type),
+								getQuestionTypeBadgeColor(displayType),
 							)}
 						>
-							{getQuestionTypeLabel(question.type)}
+							{getQuestionTypeLabel(displayType)}
 						</span>
 						<span className="text-xs text-gray-400">
 							• {question.marks} mark{question.marks !== 1 ? "s" : ""}
 						</span>
-						{question.type === "question-group" &&
-							question.subQuestions && (
-								<span className="text-xs text-gray-400">
-									• {question.subQuestions.length} questions
-								</span>
-							)}
-						{question.type === "multiple-blanks" && question.blanks && (
-							<span className="text-xs text-gray-400">
-								• {question.blanks.length} Blank Spaces
-							</span>
-						)}
 					</div>
 				</div>
 				<button
-					onClick={() => setExpanded((v) => !v)}
-					className="text-gray-400 transition-colors hover:text-gray-600"
+					onClick={onRemove}
+					className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-300 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-400"
 				>
-					{expanded ? (
-						<ChevronUp className="h-4 w-4" />
-					) : (
-						<ChevronDown className="h-4 w-4" />
-					)}
+					<Trash2 className="h-3.5 w-3.5" />
 				</button>
 			</div>
-
-			{expanded && question.options && (
-				<div className="space-y-1.5 border-t border-gray-100 bg-gray-50/50 px-10 py-3">
-					{question.options.map((opt) => (
-						<div
-							key={opt.id}
-							className={cn(
-								"flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs",
-								opt.isCorrect
-									? "border-green-200 bg-green-50 text-green-800"
-									: "border-gray-200 bg-white text-gray-700",
-							)}
-						>
-							<span className="w-4 font-mono text-gray-400 uppercase">
-								{opt.id}.
-							</span>
-							{opt.text || (
-								<em className="text-gray-300">Empty option</em>
-							)}
-							{opt.isCorrect && (
-								<span className="ml-auto font-medium text-green-600">
-									✓
-								</span>
-							)}
-						</div>
-					))}
-				</div>
-			)}
 		</div>
 	);
 };

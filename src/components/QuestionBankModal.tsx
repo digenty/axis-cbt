@@ -1,86 +1,83 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useCBTStore } from "@/store";
-import { Question } from "@/types";
 import { cn } from "@/lib/utils";
 import { Search, Eye } from "lucide-react";
 import { Modal } from "./Modal";
+import { useGetTopics, useGetQuestions } from "@/hooks/queryHooks/useQuestionBank";
+import type { ApiQuestion } from "@/types/question";
+
+// ─── Type label map ───────────────────────────────────────────────────────────
+
+const TYPE_LABELS: Record<string, string> = {
+	MULTIPLE_CHOICE: "MCQ",
+	TRUE_FALSE: "TRUE / FALSE",
+	SHORT_ANSWER: "SHORT ANSWER",
+	FILL_IN_THE_BLANK: "FILL-IN-BLANK",
+	QUESTION_GROUP: "GROUP",
+	MATCH: "MATCH",
+	MULTIPLE_ANSWERS: "MULTIPLE ANSWERS",
+	NUMERIC_ANSWER: "NUMERIC ANSWER",
+	ESSAY: "ESSAY",
+	COMPREHENSION: "PASSAGE",
+};
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface SelectFromQuestionBankModalProps {
 	open: boolean;
-	subjectId: string;
-	alreadySelectedIds: string[];
+	classId: number;
+	subjectId: number;
+	/** Already-added question IDs (numbers) — these show as disabled */
+	alreadySelectedIds: number[];
 	onClose: () => void;
-	onAdd: (questions: Question[]) => void;
+	onAdd: (questionIds: number[]) => void;
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export const SelectFromQuestionBankModal = ({
 	open,
+	classId,
 	subjectId,
 	alreadySelectedIds,
 	onClose,
 	onAdd,
 }: SelectFromQuestionBankModalProps) => {
-	const { getTopicsBySubject, getQuestionsByTopic } = useCBTStore();
 	const [search, setSearch] = useState("");
-	const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
-	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+	const [selectedTopicId, setSelectedTopicId] = useState<number | null>(null);
+	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-	const topics = getTopicsBySubject(subjectId);
+	const { data: topicsRes } = useGetTopics({ classId, subjectId });
+	const topics = topicsRes?.data ?? [];
 
-	// All questions for this subject across all topics
-	const allQuestions = useMemo(() => {
-		return topics.flatMap((t) => getQuestionsByTopic(t.id));
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [topics]);
+	const activeTopicId = selectedTopicId ?? (topics[0]?.id ?? null);
 
-	const activeTopicId = selectedTopicId ?? (topics[0]?.id || null);
+	const { data: questionsRes, isLoading: loadingQuestions } = useGetQuestions({
+		classId,
+		subjectId,
+		topicId: activeTopicId ?? undefined,
+	});
 
 	const visibleQuestions = useMemo(() => {
-		const base = activeTopicId
-			? getQuestionsByTopic(activeTopicId)
-			: allQuestions;
-		if (!search) return base;
-		return base.filter((q) =>
-			q.text.toLowerCase().includes(search.toLowerCase()),
+		const allQuestions: ApiQuestion[] = questionsRes?.data ?? [];
+		if (!search) return allQuestions;
+		return allQuestions.filter((q) =>
+			q.questionText.toLowerCase().includes(search.toLowerCase()),
 		);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [activeTopicId, search, allQuestions]);
+	}, [questionsRes, search]);
 
-	const toggleSelect = (id: string) => {
+	const toggleSelect = (id: number) => {
 		setSelectedIds((prev) => {
 			const next = new Set(prev);
-			//  next.has(id) ? next.delete(id) : next.add(id);
-			if (next.has(id)) {
-				next.delete(id);
-			} else {
-				next.add(id);
-			}
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
 			return next;
 		});
 	};
 
-	//   const toggleAll = () => {
-	//     const available = visibleQuestions.filter(q => !alreadySelectedIds.includes(q.id));
-	//     if (available.every(q => selectedIds.has(q.id))) {
-	//       setSelectedIds(prev => {
-	//         const next = new Set(prev);
-	//         available.forEach(q => next.delete(q.id));
-	//         return next;
-	//       });
-	//     } else {
-	//       setSelectedIds(prev => {
-	//         const next = new Set(prev);
-	//         available.forEach(q => next.add(q.id));
-	//         return next;
-	//       });
-	//     }
-	//   };
-
 	const handleAdd = () => {
-		const qs = allQuestions.filter((q) => selectedIds.has(q.id));
-		onAdd(qs);
+		onAdd(Array.from(selectedIds));
 		setSelectedIds(new Set());
 		setSearch("");
 		onClose();
@@ -92,24 +89,6 @@ export const SelectFromQuestionBankModal = ({
 		onClose();
 	};
 
-	// Short label for question type badge
-	const typeLabel = (q: Question) => {
-		const map: Record<string, string> = {
-			"multiple-choice": "MCQ",
-			"true-false": "TRUE / FALSE",
-			"short-answer": "SHORT ANSWER",
-			"multiple-blanks": "MULTIPLE BLANKS",
-			"question-group": "GROUP",
-			matching: "MATCH",
-			"multiple-answers": "Multiple Answers",
-			numerical: "NUMERIC ANSWER",
-			essay: "ESSAY",
-			"fill-in-blank": "FILL-IN-BLANK",
-			"comprehension-passage": "PASSAGE",
-		};
-		return map[q.type] || q.type.toUpperCase();
-	};
-
 	return (
 		<Modal
 			open={open}
@@ -117,7 +96,6 @@ export const SelectFromQuestionBankModal = ({
 			title="Select from Question Bank"
 			className="max-h-[90vh] overflow-y-auto"
 			subtitle={`${selectedIds.size} question${selectedIds.size !== 1 ? "s" : ""} selected`}
-			// size="2xl"
 			footer={
 				<div className="flex items-center justify-between px-5 pb-5">
 					<button
@@ -162,27 +140,37 @@ export const SelectFromQuestionBankModal = ({
 				</div>
 
 				{/* Topic tabs */}
-				<div className="scrollbar-hide flex gap-2 overflow-x-auto border-b border-gray-100 px-5 py-3">
-					{topics.map((t) => (
-						<button
-							key={t.id}
-							onClick={() => setSelectedTopicId(t.id)}
-							className={cn(
-								"rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-								selectedTopicId === t.id ||
-									(!selectedTopicId && t.id === topics[0]?.id)
-									? "bg-blue-600 text-white"
-									: "text-gray-600 hover:bg-gray-100",
-							)}
-						>
-							{t.name}
-						</button>
-					))}
-				</div>
+				{topics.length > 0 && (
+					<div className="scrollbar-hide flex gap-2 overflow-x-auto border-b border-gray-100 px-5 py-3">
+						{topics.map((t) => (
+							<button
+								key={t.id}
+								onClick={() => setSelectedTopicId(t.id)}
+								className={cn(
+									"rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
+									activeTopicId === t.id
+										? "bg-blue-600 text-white"
+										: "text-gray-600 hover:bg-gray-100",
+								)}
+							>
+								{t.name}
+							</button>
+						))}
+					</div>
+				)}
 
 				{/* Question list */}
 				<div className="max-h-[420px] overflow-y-auto">
-					{visibleQuestions.length === 0 ? (
+					{loadingQuestions ? (
+						<div className="space-y-2 p-4">
+							{[1, 2, 3].map((i) => (
+								<div
+									key={i}
+									className="h-12 animate-pulse rounded-lg bg-gray-100"
+								/>
+							))}
+						</div>
+					) : visibleQuestions.length === 0 ? (
 						<div className="flex items-center justify-center py-12 text-sm text-gray-400">
 							No questions found
 						</div>
@@ -201,30 +189,27 @@ export const SelectFromQuestionBankModal = ({
 													? "cursor-not-allowed opacity-40"
 													: "cursor-pointer hover:bg-gray-50",
 											)}
-											onClick={() =>
-												!isAlready && toggleSelect(q.id)
-											}
+											onClick={() => !isAlready && toggleSelect(q.id)}
 										>
 											<td className="w-10 py-3.5 pr-3 pl-5">
 												<input
 													type="checkbox"
 													checked={isSelected}
 													disabled={isAlready}
-													onChange={() =>
-														!isAlready && toggleSelect(q.id)
-													}
+													onChange={() => !isAlready && toggleSelect(q.id)}
 													onClick={(e) => e.stopPropagation()}
 													className="h-4 w-4 cursor-pointer accent-blue-600"
 												/>
 											</td>
 											<td className="w-36 py-3.5 pr-4">
 												<span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-semibold tracking-wide text-gray-500 uppercase">
-													{typeLabel(q)}
+													{TYPE_LABELS[q.questionType] ??
+														q.questionType}
 												</span>
 											</td>
 											<td className="py-3.5 pr-4">
 												<p className="line-clamp-1 text-sm text-gray-800">
-													{q.text}
+													{q.questionText}
 												</p>
 											</td>
 											<td className="py-3.5 pr-3 text-right whitespace-nowrap">

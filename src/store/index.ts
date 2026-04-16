@@ -62,12 +62,12 @@ interface CBTStore {
 export const useCBTStore = create<CBTStore>()(
 	persist(
 		(set, get) => ({
-			classes: mockClasses,
-			subjects: mockSubjects,
-			topics: mockTopics,
-			questions: mockQuestions,
+			classes: mockClasses as unknown as Class[],
+			subjects: mockSubjects as unknown as Subject[],
+			topics: mockTopics as unknown as Topic[],
+			questions: mockQuestions as unknown as Question[],
 			tests: [],
-			attempts: mockAttempts,
+			attempts: mockAttempts as unknown as StudentAttempt[],
 			isLoading: false,
 
 			setLoading: (val) => set({ isLoading: val }),
@@ -152,7 +152,7 @@ export const useCBTStore = create<CBTStore>()(
 			deleteTest: (id) =>
 				set((s) => ({ tests: s.tests.filter((t) => t.id !== id) })),
 			getTestsBySubject: (subjectId) =>
-				get().tests.filter((t) => t.subjectId === Number(subjectId)),
+				get().tests.filter((t) => t.subjectId === String(subjectId)),
 
 			getAttemptsByTest: (testId) =>
 				get().attempts.filter((a) => a.testId === testId),

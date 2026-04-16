@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronRight } from "lucide-react";
 import { cn, getQuestionTypeLabel } from "@/lib/utils";
 import type { QuestionType, SubQuestionType } from "@/types/question";
 

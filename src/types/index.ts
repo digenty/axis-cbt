@@ -117,6 +117,25 @@
 // 	options?: Option[];
 // }
 
+import { JwtPayload } from "jwt-decode";
+
+interface JWTUser {
+	id: string;
+	branchId: number;
+	schoolId: number;
+	permissions: string[];
+}
+
+export type JWTPayload = JwtPayload & JWTUser;
+
+export type LevelType =
+	| "CRECHE"
+	| "KINDERGARTEN"
+	| "NURSERY"
+	| "PRIMARY"
+	| "JUNIOR_SECONDARY"
+	| "SENIOR_SECONDARY";
+
 export interface Question {
 	id: string;
 	topicId: number;
@@ -292,6 +311,21 @@ export type QuestionType =
 	| "multiple-answers"
 	| "comprehension-passage"
 	| "multiple-blanks";
+
+// Re-export types from results.ts so "@/types" resolves everything
+export type {
+	Test,
+	TestSection,
+	TestStatus,
+	TestType,
+	TermType,
+	AssessmentMapping,
+	StudentAttempt,
+	StudentAnswer,
+	AttemptStatus,
+	Assessment,
+	Result,
+} from "./results";
 
 // export interface Option {
 // 	id: string;

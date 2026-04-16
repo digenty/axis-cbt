@@ -338,3 +338,160 @@ export type StimulusType =
 	| "Table"
 	| "Chart"
 	| "Multiple Blanks";
+
+// ─── Assessment API types ─────────────────────────────────────────────────────
+
+export type ApiAssessmentStatus = "DRAFT" | "PUBLISHED" | "COMPLETED";
+export type ApiTerm = "FIRST" | "SECOND" | "THIRD";
+export type ApiTestType = "CONTINUOUS_ASSESSMENT" | "EXAMINATION";
+
+export interface ApiAssessment {
+	id: number;
+	name: string;
+	classId: number;
+	subjectId: number;
+	branchId: number;
+	term: ApiTerm;
+	testType: ApiTestType;
+	assessmentMapping: string;
+	durationMinutes: number;
+	totalMarks: number;
+	passingMarks: number;
+	startDateTime: string;
+	endDateTime: string;
+	instructions: string;
+	shuffleQuestions: boolean;
+	shuffleOptions: boolean;
+	showResultsImmediately: boolean;
+	allowReview: boolean;
+	status: ApiAssessmentStatus;
+	questionCount: number;
+}
+
+export interface ApiAssessmentQuestion {
+	assessmentQuestionId: number;
+	questionId: number;
+	questionText: string;
+	questionType: QuestionType;
+	marks: number;
+	displayOrder: number;
+}
+
+export interface ApiSection {
+	id: number;
+	name: string;
+	instructions: string;
+	sectionOrder: number;
+	timeLimitMinutes: number;
+	questions: ApiAssessmentQuestion[];
+}
+
+export interface CreateAssessmentPayload {
+	name: string;
+	classId: number;
+	subjectId: number;
+	branchId: number;
+	term: ApiTerm;
+	testType: ApiTestType;
+	assessmentMapping: string;
+	durationMinutes: number;
+	totalMarks: number;
+	passingMarks: number;
+	startDateTime: string;
+	endDateTime: string;
+	instructions: string;
+	shuffleQuestions: boolean;
+	shuffleOptions: boolean;
+	showResultsImmediately: boolean;
+	allowReview: boolean;
+}
+
+export type UpdateAssessmentPayload = Partial<CreateAssessmentPayload>;
+
+export interface CreateSectionPayload {
+	name: string;
+	instructions: string;
+	sectionOrder: number;
+	timeLimitMinutes?: number;
+	questionIds?: number[];
+}
+
+export interface GradeManuallyPayload {
+	answerId: number;
+	marksAwarded: number;
+	feedback: string;
+	gradedBy: number;
+}
+
+export type StudentResultStatus =
+	| "IN_PROGRESS"
+	| "COMPLETED"
+	| "PENDING"
+	| "TIMED_OUT"
+	| "ABSENT";
+
+export interface AssessmentStudentResult {
+	studentAssessmentId: number;
+	studentId: number;
+	studentName: string;
+	admissionNumber: string;
+	className: string;
+	status: StudentResultStatus;
+	score: number | null;
+	totalMarks: number;
+	percentage: number | null;
+	passed: boolean | null;
+	submissionTime: string | null;
+	timeSpentSeconds: number | null;
+}
+
+export interface AssessmentResultsResponse {
+	data: AssessmentStudentResult[];
+	message: string;
+	status: string;
+}
+
+export interface AssessmentStats {
+	assessmentId: number;
+	totalStudents: number;
+	completed: number;
+	pending: number;
+	absent: number;
+	averageScore: number;
+	averagePercentage: number;
+	highestScore: number;
+	lowestScore: number;
+	passCount: number;
+	failCount: number;
+	passRate: number;
+}
+
+export interface AssessmentStatsResponse {
+	data: AssessmentStats;
+	message: string;
+	status: string;
+}
+
+export interface AssessmentListResponse {
+	data: ApiAssessment[];
+	message: string;
+	status: string;
+}
+
+export interface AssessmentResponse {
+	data: ApiAssessment;
+	message: string;
+	status: string;
+}
+
+export interface SectionsResponse {
+	data: ApiSection[];
+	message: string;
+	status: string;
+}
+
+export interface SectionResponse {
+	data: ApiSection;
+	message: string;
+	status: string;
+}

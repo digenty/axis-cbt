@@ -2,13 +2,13 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-// import { StudentAttempt, StudentAnswer, Question } from "@/types";
 import { cn } from "@/lib/utils";
 import { Flag, ChevronRight, RotateCcw } from "lucide-react";
 import { useCBTStore } from "@/store";
 import { Modal } from "@/components/Modal";
 import Layout from "@/components/Layout";
-import { StudentAnswer } from "@/types/results";
+import type { Question } from "@/types";
+import type { StudentAttempt, StudentAnswer } from "@/types/results";
 
 // ─── Demo test sections (mirrors what the test editor would store) ────────────
 const DEMO_SECTIONS = [
@@ -33,12 +33,13 @@ const DEMO_SECTIONS = [
 ];
 
 interface GradeAttemptViewProps {
-	// attempt: StudentAttempt;
+	attempt?: StudentAttempt;
 	classId: string;
 	subjectId: string;
 }
 
 export const GradeAttemptView = ({
+	attempt,
 	classId,
 	subjectId,
 }: GradeAttemptViewProps) => {
@@ -46,12 +47,13 @@ export const GradeAttemptView = ({
 	const { questions: allQuestions, tests, gradeAttempt } = useCBTStore();
 	const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
 	const [gradeModalOpen, setGradeModalOpen] = useState(false);
-	const [answers, setAnswers] = useState<StudentAnswer[]>();
-	// attempt.answers || [],
+	const [answers, setAnswers] = useState<StudentAnswer[]>(
+		() => attempt?.answers ?? [],
+	);
 	const [awardedMarks, setAwardedMarks] = useState<Record<string, number>>(
 		() => {
 			const m: Record<string, number> = {};
-			(attempt.answers || []).forEach((a) => {
+			(attempt?.answers ?? []).forEach((a) => {
 				if (a.awardedMarks !== undefined) m[a.questionId] = a.awardedMarks;
 			});
 			return m;
@@ -59,7 +61,7 @@ export const GradeAttemptView = ({
 	);
 
 	// Get test (real or demo)
-	const test = tests.find((t) => t.id === attempt.testId);
+	const test = tests.find((t) => t.id === attempt?.testId);
 	const sections = test?.sections?.length ? test.sections : DEMO_SECTIONS;
 	const totalSections = sections.length;
 	const currentSection = sections[currentSectionIdx];
@@ -113,7 +115,7 @@ export const GradeAttemptView = ({
 
 	// Total auto-calculated score
 	const totalScore = Object.values(awardedMarks).reduce((s, m) => s + m, 0);
-	const totalPossible = attempt.totalMarks || 100;
+	const totalPossible = attempt?.totalMarks ?? 100;
 
 	// Has passage (question-group with passage text)
 	const firstQ = sectionQuestions[0];
@@ -132,7 +134,7 @@ export const GradeAttemptView = ({
 						<div className="flex items-center gap-2">
 							<div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center overflow-hidden">
 								<span className="text-xs font-bold text-gray-600">
-									{attempt.studentName
+									{(attempt?.studentName ?? "")
 										.split(" ")
 										.map((n) => n[0])
 										.join("")
@@ -141,10 +143,10 @@ export const GradeAttemptView = ({
 							</div>
 							<div>
 								<p className="text-sm font-semibold text-gray-900 leading-tight">
-									{attempt.studentName}
+									{attempt?.studentName}
 								</p>
 								<p className="text-xs text-gray-400 leading-tight">
-									{attempt.studentClass}
+									{attempt?.studentClass}
 								</p>
 							</div>
 						</div>
@@ -385,7 +387,7 @@ export const GradeAttemptView = ({
 				{/* Total Score Modal */}
 				<TotalScoreModal
 					open={gradeModalOpen}
-					studentName={attempt.studentName}
+					studentName={attempt?.studentName ?? ""}
 					testTitle={test?.title || "Mathematics Test"}
 					score={totalScore}
 					totalMarks={totalPossible}
@@ -395,7 +397,7 @@ export const GradeAttemptView = ({
 							...a,
 							awardedMarks: awardedMarks[a.questionId] ?? a.awardedMarks,
 						}));
-						gradeAttempt(attempt.id, totalScore, feedback, finalAnswers);
+						gradeAttempt(attempt?.id ?? "", totalScore, feedback, finalAnswers);
 						router.push(
 							`/classes/${classId}/subjects/${subjectId}/results`,
 						);

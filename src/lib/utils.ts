@@ -161,8 +161,8 @@ export function generateId(): string {
 	return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
 }
 
-export function getQuestionTypeLabel(type: QuestionType): string {
-	const labels: Record<QuestionType, string> = {
+export function getQuestionTypeLabel(type: QuestionType | string): string {
+	const labels: Record<string, string> = {
 		"multiple-choice": "Multiple Choice",
 		"true-false": "True/False",
 		essay: "Essay",

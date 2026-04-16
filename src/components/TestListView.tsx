@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Assessment, Test } from "@/types";
-import { useCBTStore } from "@/store";
 import { cn } from "@/lib/utils";
 import {
 	Plus,
@@ -22,79 +20,98 @@ import { CreateTestModal } from "./CreateTestModal";
 import { DeleteTestModal } from "./DeleteTestModal";
 import { useGetClassDetails } from "@/hooks/queryHooks/useSubjects";
 import { useGetAssessments } from "@/hooks/queryHooks/useAssessment";
+import type { ApiAssessment, ApiAssessmentStatus } from "@/types/question";
 
 interface TestListViewProps {
 	subjectId: number;
 	classId: number;
+	subjectName?: string;
 }
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<
+	ApiAssessmentStatus,
+	{ label: string; icon: React.ElementType; className: string }
+> = {
 	PUBLISHED: {
-		label: "PUBLISHED",
+		label: "Published",
 		icon: Upload,
 		className: "bg-green-50 text-green-700 border-green-200",
 	},
 	DRAFT: {
-		label: "DRAFT",
+		label: "Draft",
 		icon: FileText,
 		className: "bg-gray-100 text-gray-600 border-gray-200",
 	},
 	COMPLETED: {
-		label: "COMPLETED",
+		label: "Completed",
 		icon: CheckCircle2,
 		className: "bg-blue-50 text-blue-700 border-blue-200",
 	},
 };
 
-export const TestListView = ({ subjectId, classId }: TestListViewProps) => {
-	const router = useRouter();
-	const { addTest, updateTest, deleteTest } = useCBTStore();
-	const [createOpen, setCreateOpen] = useState(false);
-	const [editingTest, setEditingTest] = useState<Assessment | null>(null);
-	const [deletingTest, setDeletingTest] = useState<Assessment | null>(null);
+const TERM_LABELS: Record<string, string> = {
+	FIRST: "First Term",
+	SECOND: "Second Term",
+	THIRD: "Third Term",
+};
 
-	const { data: classDetailsResponse, refetch: refetchClassDetails } =
-		useGetClassDetails(Number(classId));
+export const TestListView = ({
+	subjectId,
+	classId,
+	subjectName = "",
+}: TestListViewProps) => {
+	const router = useRouter();
+	const [createOpen, setCreateOpen] = useState(false);
+	const [deletingAssessment, setDeletingAssessment] =
+		useState<ApiAssessment | null>(null);
+
+	const { data: classDetailsResponse } = useGetClassDetails(classId);
 	const classDetails = classDetailsResponse?.data;
 
-	const { data: assessmentsResponse, refetch: refetchAssessments } =
-		useGetAssessments({
-			classId,
-			subjectId,
-			branchId: classDetails?.branchId,
-		});
+	const branchId = classDetails?.branchId;
 
-	useEffect(() => {
-		refetchClassDetails();
-	}, [refetchClassDetails]);
+	const {
+		data: assessmentsResponse,
+		isLoading,
+		refetch,
+	} = useGetAssessments({
+		classId,
+		subjectId,
+		branchId: branchId ?? 0,
+	});
 
-	useEffect(() => {
-		if (classDetails?.branchId) refetchAssessments();
-	}, [refetchAssessments, classDetails?.branchId]);
+	const assessments = assessmentsResponse?.data ?? [];
 
-	const assessments = assessmentsResponse?.data;
-
-	console.log({ classDetails, assessments });
-
-	const handleSaveTest = (test: Test) => {
-		if (editingTest) {
-			updateTest(test.id, test);
-		} else {
-			addTest(test);
-			router.push(
-				`/classes/${classId}/subjects/${subjectId}/assessments/${test.id}`,
-			);
-		}
+	const handleCreated = (assessmentId: number) => {
 		setCreateOpen(false);
-		setEditingTest(null);
+		refetch();
+		router.push(
+			`/classes/${classId}/subjects/${subjectId}/assessments/${assessmentId}`,
+		);
 	};
 
 	const handleDelete = async () => {
-		if (!deletingTest) return;
-		await new Promise((r) => setTimeout(r, 400));
-		// deleteTest(deletingTest.id);
-		setDeletingTest(null);
+		setDeletingAssessment(null);
 	};
+
+	if (isLoading || !classDetails) {
+		return (
+			<div>
+				<div className="mb-5 flex items-center justify-between">
+					<div className="h-6 w-20 animate-pulse rounded-lg bg-gray-200" />
+					<div className="h-9 w-36 animate-pulse rounded-lg bg-gray-200" />
+				</div>
+				<div className="space-y-3">
+					{[1, 2, 3].map((i) => (
+						<div
+							key={i}
+							className="h-20 animate-pulse rounded-xl border border-gray-100 bg-gray-50"
+						/>
+					))}
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<>
@@ -112,9 +129,8 @@ export const TestListView = ({ subjectId, classId }: TestListViewProps) => {
 				</div>
 
 				{/* List or empty state */}
-				{assessments?.length === 0 ? (
+				{assessments.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-24 text-center">
-						{/* Cube icon */}
 						<svg
 							className="mb-4 h-14 w-14 text-gray-200"
 							viewBox="0 0 56 56"
@@ -141,15 +157,14 @@ export const TestListView = ({ subjectId, classId }: TestListViewProps) => {
 					</div>
 				) : (
 					<div className="space-y-3">
-						{assessments?.map((test: Assessment) => (
+						{assessments.map((assessment) => (
 							<TestCard
-								key={test.id}
-								test={test}
-								onEdit={() => setEditingTest(test)}
-								onDelete={() => setDeletingTest(test)}
+								key={assessment.id}
+								assessment={assessment}
+								onDelete={() => setDeletingAssessment(assessment)}
 								onClick={() =>
 									router.push(
-										`/classes/${classId}/subjects/${subjectId}/assessments/${test.id}`,
+										`/classes/${classId}/subjects/${subjectId}/assessments/${assessment.id}`,
 									)
 								}
 							/>
@@ -159,22 +174,20 @@ export const TestListView = ({ subjectId, classId }: TestListViewProps) => {
 			</div>
 
 			<CreateTestModal
-				open={createOpen || !!editingTest}
-				onClose={() => {
-					setCreateOpen(false);
-					setEditingTest(null);
-				}}
+				open={createOpen}
+				onClose={() => setCreateOpen(false)}
 				subjectId={subjectId}
 				classId={classId}
-				className={classDetails?.name}
-				editTest={editingTest}
-				onSaved={handleSaveTest}
+				branchId={branchId ?? 0}
+				className={classDetails.name}
+				subjectName={subjectName}
+				onCreated={handleCreated}
 			/>
 
 			<DeleteTestModal
-				open={!!deletingTest}
-				testTitle={deletingTest?.name || ""}
-				onClose={() => setDeletingTest(null)}
+				open={!!deletingAssessment}
+				testTitle={deletingAssessment?.name || ""}
+				onClose={() => setDeletingAssessment(null)}
 				onConfirm={handleDelete}
 			/>
 		</>
@@ -183,17 +196,15 @@ export const TestListView = ({ subjectId, classId }: TestListViewProps) => {
 
 // ─── Test card ────────────────────────────────────────────────────────────────
 const TestCard = ({
-	test,
-	onEdit,
+	assessment,
 	onDelete,
 	onClick,
 }: {
-	test: Assessment;
-	onEdit: () => void;
+	assessment: ApiAssessment;
 	onDelete: () => void;
 	onClick: () => void;
 }) => {
-	const cfg = STATUS_CONFIG[test.status];
+	const cfg = STATUS_CONFIG[assessment.status] ?? STATUS_CONFIG.DRAFT;
 	const StatusIcon = cfg.icon;
 
 	return (
@@ -210,7 +221,7 @@ const TestCard = ({
 			<div className="min-w-0 flex-1">
 				<div className="mb-0.5 flex items-center gap-2">
 					<span className="text-sm font-semibold text-gray-900">
-						{test?.name}
+						{assessment.name}
 					</span>
 					<span
 						className={cn(
@@ -222,42 +233,37 @@ const TestCard = ({
 						{cfg.label}
 					</span>
 				</div>
-				<p className="mb-1 text-xs text-gray-400">{test.term}</p>
+				<p className="mb-1 text-xs text-gray-400">
+					{TERM_LABELS[assessment.term] ?? assessment.term}
+				</p>
 				<div className="flex flex-wrap items-center gap-3">
 					<span className="flex items-center gap-1 text-xs text-gray-500">
 						<MessageSquare className="h-3 w-3 text-gray-400" />
-						{test?.questionCount} questions
+						{assessment.questionCount} questions
 					</span>
 					<span className="flex items-center gap-1 text-xs text-gray-500">
 						<Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-						{test?.totalMarks} marks
+						{assessment.totalMarks} marks
 					</span>
 					<span className="flex items-center gap-1 text-xs text-gray-500">
 						<Clock className="h-3 w-3 text-gray-400" />
-						{test.durationMinutes} min
+						{assessment.durationMinutes} min
 					</span>
-					{/* {test.mappingLabel && (
-						<span className="flex items-center gap-1 text-xs text-gray-500">
-							<Tag className="h-3 w-3 text-gray-400" />
-							{test.mappingLabel}
-						</span>
-					)} */}
-					{test?.startDateTime && (
+					{assessment.startDateTime && (
 						<span className="flex items-center gap-1 text-xs text-gray-500">
 							<Calendar className="h-3 w-3 text-gray-400" />
-							{new Date(test?.startDateTime).toLocaleDateString(
-								"en-US",
-								{
-									month: "short",
-									day: "numeric",
-									year: "numeric",
-								},
-							)}
+							{new Date(assessment.startDateTime).toLocaleDateString("en-US", {
+								month: "short",
+								day: "numeric",
+								year: "numeric",
+							})}
 						</span>
 					)}
 					<span className="flex items-center gap-1 text-xs text-gray-500">
 						<FileText className="h-3 w-3 text-gray-400" />
-						{test?.testType}
+						{assessment.testType === "CONTINUOUS_ASSESSMENT"
+							? "Continuous Assessment"
+							: "Examination"}
 					</span>
 				</div>
 			</div>
@@ -274,7 +280,7 @@ const TestCard = ({
 					<Trash2 className="h-4 w-4" />
 				</button>
 				<button
-					onClick={onEdit}
+					onClick={() => onClick()}
 					className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
 				>
 					<Pencil className="h-4 w-4" />
