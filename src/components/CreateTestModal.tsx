@@ -29,12 +29,26 @@ const TEST_TYPE_MAP: Record<TestTypeOption, ApiTestType> = {
 
 const TERMS: TermOption[] = ["First Term", "Second Term", "Third Term"];
 const TEST_TYPES: TestTypeOption[] = ["Continuous Assessment", "Examination"];
-const ASSESSMENT_MAPPINGS = [
+
+type AssessmentMappingOption =
+  | "None ( Manual Scoring)"
+  | "Continuous Assessment 1 (20%)"
+  | "Continuous Assessment 2 (20%)"
+  | "Examination (60%)";
+
+const ASSESSMENT_MAPPINGS: AssessmentMappingOption[] = [
   "None ( Manual Scoring)",
   "Continuous Assessment 1 (20%)",
   "Continuous Assessment 2 (20%)",
   "Examination (60%)",
 ];
+
+const ASSESSMENT_MAPPING_MAP: Record<AssessmentMappingOption, string> = {
+  "None ( Manual Scoring)": "NONE_MANUAL_SCORING",
+  "Continuous Assessment 1 (20%)": "CONTINUOUS_ASSESSMENT_1_20_PERCENT",
+  "Continuous Assessment 2 (20%)": "CONTINUOUS_ASSESSMENT_2_20_PERCENT",
+  "Examination (60%)": "EXAMINATION_60_PERCENT",
+};
 
 interface FormState {
   title: string;
@@ -150,7 +164,9 @@ export const CreateTestModal = ({
       branchId,
       term: TERM_MAP[form.term],
       testType: TEST_TYPE_MAP[form.testType],
-      assessmentMapping: form.assessmentMapping,
+      assessmentMapping: form.assessmentMapping
+        ? ASSESSMENT_MAPPING_MAP[form.assessmentMapping as AssessmentMappingOption]
+        : "",
       durationMinutes: form.duration,
       totalMarks: 0,
       passingMarks: 0,
