@@ -165,7 +165,9 @@ export const CreateTestModal = ({
       term: TERM_MAP[form.term],
       testType: TEST_TYPE_MAP[form.testType],
       assessmentMapping: form.assessmentMapping
-        ? ASSESSMENT_MAPPING_MAP[form.assessmentMapping as AssessmentMappingOption]
+        ? ASSESSMENT_MAPPING_MAP[
+            form.assessmentMapping as AssessmentMappingOption
+          ]
         : "",
       durationMinutes: form.duration,
       totalMarks: 0,
