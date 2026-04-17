@@ -2,11 +2,11 @@ import axios from "axios";
 import { deleteSession, getSessionToken } from "./cookies";
 
 const api = axios.create({
-	baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
-	withCredentials: true, // if using cookies
-	headers: {
-		"Content-Type": "application/json",
-	},
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  withCredentials: true, // if using cookies
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
 /**
@@ -14,16 +14,16 @@ const api = axios.create({
  * - Attach auth token
  */
 api.interceptors.request.use(
-	async (config) => {
-		const { token } = await getSessionToken();
+  async (config) => {
+    const { token } = await getSessionToken();
 
-		if (token) {
-			config.headers.Authorization = `Bearer ${token}`;
-		}
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
 
-		return config;
-	},
-	(error) => Promise.reject(error),
+    return config;
+  },
+  (error) => Promise.reject(error),
 );
 
 /**
@@ -31,16 +31,16 @@ api.interceptors.request.use(
  * - Centralized error handling
  */
 api.interceptors.response.use(
-	(response) => response,
-	async (error) => {
-		if (error.response?.status === 401 || error.response?.status === 403) {
-			// Unauthorized
-			// await redirect("/auth");
-			deleteSession();
-		}
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      // Unauthorized
+      // await redirect("/auth");
+      deleteSession();
+    }
 
-		return Promise.reject(error);
-	},
+    return Promise.reject(error);
+  },
 );
 
 export default api;

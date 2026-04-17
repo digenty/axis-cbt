@@ -17,79 +17,79 @@ import { QuestionType } from "./question";
 // 	| "comprehension-passage";
 
 export interface Option {
-	id: string;
-	text: string;
-	isCorrect: boolean;
+  id: string;
+  text: string;
+  isCorrect: boolean;
 }
 
 export interface Blank {
-	id: string;
-	label: string;
-	answerType: "short-answer" | "multiple-choice";
-	answers: string[];
-	mark: number;
-	options?: Option[];
+  id: string;
+  label: string;
+  answerType: "short-answer" | "multiple-choice";
+  answers: string[];
+  mark: number;
+  options?: Option[];
 }
 
 export interface MatchItem {
-	id: string;
-	text: string;
+  id: string;
+  text: string;
 }
 
 // ─── The core form state for single questions ─────────────────────────────────
 
 export interface SingleQuestionFormState {
-	questionType: QuestionType;
-	questionText: string;
-	marks: number;
-	instruction: string;
-	options: Option[];
-	correctAnswer: string;
-	imageUrl: string | null;
+  questionType: QuestionType;
+  questionText: string;
+  marks: number;
+  instruction: string;
+  options: Option[];
+  correctAnswer: string;
+  imageUrl: string | null;
 }
 
 // ─── Group / blanks form state lives in their own components ─────────────────
 
 export interface SubQuestion {
-	id: string;
-	questionText: string;
-	marks: number;
-	instruction: string;
-	options: Option[];
-	correctAnswer: string;
+  id: string;
+  questionText: string;
+  marks: number;
+  instruction: string;
+  options: Option[];
+  correctAnswer: string;
 }
 
 export interface QuestionGroupFormState {
-	groupName: string;
-	materialType: string;
-	passage: string;
-	instruction: string;
-	subQuestions: SubQuestion[];
+  groupName: string;
+  materialType: string;
+  passage: string;
+  instruction: string;
+  subQuestions: SubQuestion[];
 }
 
 export interface MultipleBlanksFormState {
-	instruction: string;
-	questionText: string;
-	blanks: Blank[];
+  instruction: string;
+  questionText: string;
+  blanks: Blank[];
 }
 
 // ─── Shape returned from API, normalized for display ─────────────────────────
 
 export interface NormalizedQuestion {
-	id: number;
-	topicId: number;
-	questionType: QuestionType;
-	questionText: string;
-	marks: number;
-	instruction?: string;
-	options?: Option[];
-	correctAnswer?: string | string[];
-	blanks?: Blank[];
-	passage?: string;
-	subQuestions?: NormalizedQuestion[];
-	matchItems?: MatchItem[];
-	matchOptions?: MatchItem[];
-	imageUrl?: string;
-	createdAt?: string;
-	updatedAt?: string;
+  id: number;
+  topicId: number;
+  questionType: QuestionType;
+  questionText: string;
+  marks: number;
+  instruction?: string;
+  options?: Option[];
+  correctAnswer?: string | string[];
+  blanks?: Blank[];
+  passage?: string;
+  subQuestions?: NormalizedQuestion[];
+  matchItems?: MatchItem[];
+  matchOptions?: MatchItem[];
+  imageUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
