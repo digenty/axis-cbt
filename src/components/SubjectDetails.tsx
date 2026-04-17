@@ -8,6 +8,7 @@ import {
 	useGetTeacherSubjects,
 } from "@/hooks/queryHooks/useSubjects";
 import { ApiSubject } from "@/api/subjects";
+import { BackButton } from "./PageHeader";
 
 const SubjectDetails = ({
 	params,
@@ -15,6 +16,7 @@ const SubjectDetails = ({
 	params: Promise<{ classId: string; subjectId: string }>;
 }>) => {
 	const { classId, subjectId } = use(params);
+	console.log({ params });
 
 	const {
 		data: response,
@@ -36,10 +38,13 @@ const SubjectDetails = ({
 	const classDetails = classDetailsResponse?.data;
 
 	return (
-		<Layout href={`/classes/${classId}`}>
-			<div className="mb-5">
-				<h1 className="text-lg font-semibold text-gray-900">
-					{classDetails?.name} - {getCurrentSubject?.subjectName}
+		<Layout>
+			<div className="mb-6 flex items-center gap-3">
+				<BackButton href={`/classes/${classId}`} />
+				<h1 className="text-lg font-semibold text-zinc-900">
+					{[classDetails?.name, getCurrentSubject?.subjectName]
+						.filter(Boolean)
+						.join(" ") || "Subject"}
 				</h1>
 			</div>
 			<SubjectDetailView classId={classId} subjectId={subjectId} />

@@ -1,14 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+	addQuestionsToSection,
 	createAssessment,
+	createSection,
 	deleteAssessment,
+	deleteAssessmentQuestion,
+	deleteSection,
 	getAssessment,
 	getAssessments,
+	getSections,
 	publishAssessment,
 	updateAssessment,
 } from "@/api/assessment";
 import type {
 	CreateAssessmentPayload,
+	CreateSectionPayload,
 	UpdateAssessmentPayload,
 } from "@/types/assessment";
 
@@ -17,7 +23,7 @@ import type {
 export const assessmentKeys = {
 	list: (branchId: number, classId?: number, subjectId?: number) =>
 		["assessments", branchId, classId, subjectId] as const,
-	detail: (uuid: string) => ["assessments", uuid] as const,
+	detail: (id: number) => ["assessments", id] as const,
 };
 
 // ─── List ─────────────────────────────────────────────────────────────────────
@@ -41,11 +47,11 @@ export const useGetAssessments = (params: {
 
 // ─── Single ───────────────────────────────────────────────────────────────────
 
-export const useGetAssessment = (uuid: string) => {
+export const useGetAssessment = (id: number) => {
 	return useQuery({
-		queryKey: assessmentKeys.detail(uuid),
-		queryFn: () => getAssessment(uuid),
-		enabled: !!uuid,
+		queryKey: assessmentKeys.detail(id),
+		queryFn: () => getAssessment(id),
+		enabled: !!id,
 	});
 };
 
@@ -70,16 +76,16 @@ export const useUpdateAssessment = () => {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: ({
-			uuid,
+			id,
 			payload,
 		}: {
-			uuid: string;
+			id: number;
 			payload: UpdateAssessmentPayload;
-		}) => updateAssessment(uuid, payload),
+		}) => updateAssessment(id, payload),
 		onSuccess: (res) => {
 			const a = res.data;
 			qc.invalidateQueries({ queryKey: ["assessments", a.branchId] });
-			qc.invalidateQueries({ queryKey: assessmentKeys.detail(a.uuid) });
+			qc.invalidateQueries({ queryKey: assessmentKeys.detail(a.id) });
 		},
 	});
 };
@@ -89,11 +95,11 @@ export const useUpdateAssessment = () => {
 export const usePublishAssessment = () => {
 	const qc = useQueryClient();
 	return useMutation({
-		mutationFn: (uuid: string) => publishAssessment(uuid),
+		mutationFn: (id: number) => publishAssessment(id),
 		onSuccess: (res) => {
 			const a = res.data;
 			qc.invalidateQueries({ queryKey: ["assessments", a.branchId] });
-			qc.invalidateQueries({ queryKey: assessmentKeys.detail(a.uuid) });
+			qc.invalidateQueries({ queryKey: assessmentKeys.detail(a.id) });
 		},
 	});
 };
@@ -103,9 +109,71 @@ export const usePublishAssessment = () => {
 export const useDeleteAssessment = () => {
 	const qc = useQueryClient();
 	return useMutation({
-		mutationFn: (uuid: string) => deleteAssessment(uuid),
+		mutationFn: (id: number) => deleteAssessment(id),
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey: ["assessments"] });
+		},
+	});
+};
+
+// ─── Sections ─────────────────────────────────────────────────────────────────
+
+export const sectionKeys = {
+	list: (assessmentId: number) => ["sections", assessmentId] as const,
+};
+
+export const useGetSections = (assessmentId: number) => {
+	return useQuery({
+		queryKey: sectionKeys.list(assessmentId),
+		queryFn: () => getSections(assessmentId),
+		enabled: !!assessmentId,
+		staleTime: 1000 * 60 * 2,
+	});
+};
+
+export const useCreateSection = (assessmentId: number) => {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (payload: CreateSectionPayload) =>
+			createSection(assessmentId, payload),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: sectionKeys.list(assessmentId) });
+		},
+	});
+};
+
+export const useDeleteSection = (assessmentId: number) => {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (sectionId: number) => deleteSection(sectionId),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: sectionKeys.list(assessmentId) });
+		},
+	});
+};
+
+export const useAddQuestionsToSection = (assessmentId: number) => {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: ({
+			sectionId,
+			questionIds,
+		}: {
+			sectionId: number;
+			questionIds: number[];
+		}) => addQuestionsToSection(sectionId, questionIds),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: sectionKeys.list(assessmentId) });
+		},
+	});
+};
+
+export const useDeleteAssessmentQuestion = (assessmentId: number) => {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (aqId: number) => deleteAssessmentQuestion(aqId),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: sectionKeys.list(assessmentId) });
 		},
 	});
 };

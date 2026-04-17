@@ -196,3 +196,41 @@ export const ASSESSMENT_FORM_INITIAL: AssessmentFormState = {
 export interface ApiAssessmentSummary extends ApiAssessment {
 	questionCount?: number;
 }
+
+// ─── Section types ────────────────────────────────────────────────────────────
+
+import type { ApiQuestion } from "@/types/question";
+
+export interface ApiSectionQuestion {
+	aqId: number;
+	question: ApiQuestion;
+}
+
+export interface ApiSection {
+	id: number;
+	name: string;
+	instructions: string | null;
+	sectionOrder: number;
+	timeLimitMinutes: number;
+	questions: ApiSectionQuestion[];
+}
+
+export interface CreateSectionPayload {
+	name: string;
+	instructions?: string;
+	sectionOrder: number;
+	timeLimitMinutes?: number;
+	questionIds?: number[];
+}
+
+export interface SectionResponse {
+	data: ApiSection;
+	message: string;
+	status: string;
+}
+
+export interface SectionsListResponse {
+	data: ApiSection[];
+	message: string;
+	status: string;
+}

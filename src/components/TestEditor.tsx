@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	DndContext,
 	closestCenter,
@@ -30,6 +30,7 @@ import {
 	Save,
 	Star,
 	Tag,
+	Trash2,
 	Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -38,13 +39,28 @@ import { CreateTestModal } from "./CreateTestModal";
 import { AddAssessmentItemModal } from "./AddAssessmentItemModal";
 import { SelectFromQuestionBankModal } from "./SelectFromQuestionBankModal";
 import {
+	useAddQuestionsToSection,
+	useCreateSection,
+	useDeleteAssessmentQuestion,
+	useDeleteSection,
 	useGetAssessment,
+	useGetSections,
 	usePublishAssessment,
 	useUpdateAssessment,
 } from "@/hooks/queryHooks/useAssessment";
+import {
+	useGetClassDetails,
+	useGetTeacherSubjects,
+} from "@/hooks/queryHooks/useSubjects";
+import { BackButton } from "./PageHeader";
+import { useGetTopics } from "@/hooks/queryHooks/useQuestionBank";
+import { AddQuestionForm } from "./AddQuestionForm";
+import { FillInBlanksForm } from "./FillInBlanksForm";
+import { QuestionGroupForm } from "./QuestionGroupForm";
 import { toast } from "@/components/Toast";
 import type {
 	ApiAssessment,
+	ApiSection,
 	UpdateAssessmentPayload,
 } from "@/types/assessment";
 import {
@@ -52,21 +68,22 @@ import {
 	TERM_LABELS,
 	TEST_TYPE_LABELS,
 } from "@/types/assessment";
-import type { ApiQuestion, QuestionType } from "@/types/question";
+import type { ApiQuestion, ApiTopic, QuestionType } from "@/types/question";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface TestEditorProps {
-	/** The assessment uuid from the URL */
 	assessmentUuid: string;
 	classId: number;
 	subjectId: number;
-	branchId: number;
-	className?: string;
-	subjectName?: string;
+	backHref?: string;
 }
 
-// ─── Local section shape ──────────────────────────────────────────────────────
+// ─── Local section / question shapes ──────────────────────────────────────────
+
+interface LocalQuestion extends ApiQuestion {
+	aqId?: number;
+}
 
 interface LocalSection {
 	id?: number;
@@ -75,20 +92,21 @@ interface LocalSection {
 	instructions: string;
 	sectionOrder: number;
 	timeLimitMinutes: number;
-	questions: ApiQuestion[];
+	questions: LocalQuestion[];
 }
 
 let _localCounter = 1;
 const newLocalId = () => `local-${_localCounter++}`;
 
-function defaultSection(index: number): LocalSection {
+function apiSectionToLocal(s: ApiSection): LocalSection {
 	return {
+		id: s?.id,
 		localId: newLocalId(),
-		name: `Section ${String.fromCharCode(65 + index)}`,
-		instructions: "",
-		sectionOrder: index,
-		timeLimitMinutes: 0,
-		questions: [],
+		name: s?.name,
+		instructions: s?.instructions ?? "",
+		sectionOrder: s?.sectionOrder,
+		timeLimitMinutes: s?.timeLimitMinutes,
+		questions: s?.questions?.map((sq) => ({ ...sq.question, aqId: sq.aqId })),
 	};
 }
 
@@ -98,72 +116,192 @@ export const TestEditor = ({
 	assessmentUuid,
 	classId,
 	subjectId,
-	branchId,
-	className,
-	subjectName,
+	backHref,
 }: TestEditorProps) => {
-	const { data: assessmentResponse, isLoading } =
-		useGetAssessment(assessmentUuid);
+	const { data: assessmentResponse, isLoading: isLoadingAssessment } =
+		useGetAssessment(Number(assessmentUuid));
 	const assessment: ApiAssessment | undefined = assessmentResponse?.data;
+
+	const { data: classDetailsResponse } = useGetClassDetails(classId);
+	const className = classDetailsResponse?.data?.name;
+
+	const { data: subjectsResponse } = useGetTeacherSubjects();
+	const subjectName = subjectsResponse?.data?.find(
+		(s: { subjectId: number; subjectName: string }) =>
+			s.subjectId === subjectId,
+	)?.subjectName;
+
+	const { data: topicsResponse } = useGetTopics({ classId, subjectId });
+	const topics: ApiTopic[] = topicsResponse?.data ?? [];
+
+	const { data: sectionsResponse, isLoading: isLoadingSections } =
+		useGetSections(assessment?.id ?? 0);
 
 	const { mutateAsync: updateAssessment, isPending: isSaving } =
 		useUpdateAssessment();
 	const { mutateAsync: publishAssessment, isPending: isPublishing } =
 		usePublishAssessment();
-
-	const [sections, setSections] = useState<LocalSection[]>([
-		defaultSection(0),
-	]);
-	const [editDetailsOpen, setEditDetailsOpen] = useState(false);
-	const [addItemModal, setAddItemModal] = useState<{ localId: string } | null>(
-		null,
+	const { mutateAsync: createSection, isPending: isCreatingSection } =
+		useCreateSection(assessment?.id ?? 0);
+	const { mutateAsync: removeSectionApi } = useDeleteSection(
+		assessment?.id ?? 0,
 	);
+	const { mutateAsync: addQuestionsApi, isPending: isAddingQuestions } =
+		useAddQuestionsToSection(assessment?.id ?? 0);
+	const { mutateAsync: deleteAqApi } = useDeleteAssessmentQuestion(
+		assessment?.id ?? 0,
+	);
+
+	const [sections, setSections] = useState<LocalSection[]>([]);
+	const [sectionsInitialized, setSectionsInitialized] = useState(false);
+	const [editDetailsOpen, setEditDetailsOpen] = useState(false);
+	const [addItemModal, setAddItemModal] = useState<{
+		localId: string;
+	} | null>(null);
 	const [selectFromBankModal, setSelectFromBankModal] = useState<{
 		localId: string;
 	} | null>(null);
+	const [newQuestionState, setNewQuestionState] = useState<{
+		localId: string;
+		questionType: QuestionType;
+		topicId: number | null;
+	} | null>(null);
 
-	// Derived counts
-	const totalQuestions = sections.reduce(
-		(s, sec) => s + sec.questions.length,
+	// Sync sections from API on first load
+	useEffect(() => {
+		if (!sectionsInitialized && sectionsResponse?.data) {
+			setSections(sectionsResponse?.data?.map(apiSectionToLocal));
+			setSectionsInitialized(true);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [sectionsResponse]);
+
+	// Derived totals
+	const totalQuestions = sections?.reduce(
+		(s, sec) => s + sec?.questions?.length,
 		0,
 	);
-	const totalMarks = sections.reduce(
-		(s, sec) => s + sec.questions.reduce((ss, q) => ss + (q.marks ?? 0), 0),
+	const totalMarks = sections?.reduce(
+		(s, sec) => s + sec?.questions?.reduce((ss, q) => ss + (q.marks ?? 0), 0),
 		0,
 	);
 
-	const alreadySelectedIds = sections.flatMap((s) =>
-		s.questions.map((q) => q.id),
+	const alreadySelectedIds = sections?.flatMap((s) =>
+		s.questions?.map((q) => q.id),
 	);
 
-	// ── Section helpers ───────────────────────────────────────────────────────
+	// ── Section helpers ────────────────────────────────────────────────────────
 
-	const updateSection = (localId: string, patch: Partial<LocalSection>) =>
+	const updateSectionLocal = (localId: string, patch: Partial<LocalSection>) =>
 		setSections((prev) =>
 			prev.map((s) => (s.localId === localId ? { ...s, ...patch } : s)),
 		);
 
-	const addSection = () =>
-		setSections((prev) => [...prev, defaultSection(prev.length)]);
+	const handleAddSection = async () => {
+		if (!assessment) return;
+		const sectionOrder = sections?.length;
+		const name = `Section ${String.fromCharCode(65 + sectionOrder)}`;
+		try {
+			const res = await createSection({
+				name,
+				instructions: "",
+				sectionOrder,
+				timeLimitMinutes: 0,
+			});
+			setSections((prev) => [...prev, apiSectionToLocal(res.data)]);
+		} catch {
+			toast({ title: "Could not add section", type: "error" });
+		}
+	};
 
-	const addQuestionsToSection = (localId: string, qs: ApiQuestion[]) =>
-		setSections((prev) =>
-			prev.map((s) =>
-				s.localId !== localId
-					? s
-					: {
-							...s,
-							questions: [
-								...s.questions,
-								...qs.filter(
-									(q) => !s.questions.some((sq) => sq.id === q.id),
-								),
-							],
-						},
-			),
+	const handleDeleteSection = async (localId: string, sectionId?: number) => {
+		if (sectionId) {
+			try {
+				await removeSectionApi(sectionId);
+			} catch {
+				toast({ title: "Could not delete section", type: "error" });
+				return;
+			}
+		}
+		setSections((prev) => prev.filter((s) => s.localId !== localId));
+	};
+
+	const handleAddQuestionsFromBank = async (
+		localId: string,
+		questions: ApiQuestion[],
+	) => {
+		const section = sections?.find((s) => s.localId === localId);
+		if (!section) return;
+
+		const newQuestions = questions?.filter(
+			(q) => !section.questions.some((sq) => sq.id === q.id),
 		);
+		if (!newQuestions?.length) return;
 
-	const removeQuestionFromSection = (localId: string, questionId: number) =>
+		if (section.id) {
+			try {
+				const res = await addQuestionsApi({
+					sectionId: section?.id,
+					questionIds: newQuestions?.map((q) => q.id),
+				});
+				// Merge returned questions (with aqIds) into local state
+				const returnedQs = res?.data?.questions?.map((sq) => ({
+					...sq.question,
+					aqId: sq.aqId,
+				}));
+				setSections((prev) =>
+					prev.map((s) =>
+						s.localId !== localId
+							? s
+							: {
+									...s,
+									questions: [
+										...s.questions,
+										...returnedQs.filter(
+											(rq) =>
+												!s.questions?.some((sq) => sq.id === rq.id),
+										),
+									],
+								},
+					),
+				);
+			} catch {
+				toast({ title: "Could not add questions", type: "error" });
+			}
+		} else {
+			// Section not yet persisted — add locally only
+			setSections((prev) =>
+				prev.map((s) =>
+					s.localId !== localId
+						? s
+						: {
+								...s,
+								questions: [
+									...s.questions,
+									...newQuestions.map((q) => ({
+										...q,
+										aqId: undefined,
+									})),
+								],
+							},
+				),
+			);
+		}
+	};
+
+	const handleRemoveQuestion = async (
+		localId: string,
+		questionId: number,
+		aqId?: number,
+	) => {
+		if (aqId) {
+			try {
+				await deleteAqApi(aqId);
+			} catch {
+				toast({ title: "Could not remove question", type: "error" });
+				return;
+			}
+		}
 		setSections((prev) =>
 			prev.map((s) =>
 				s.localId !== localId
@@ -174,8 +312,9 @@ export const TestEditor = ({
 						},
 			),
 		);
+	};
 
-	const reorderQuestions = (localId: string, orderedIds: number[]) =>
+	const handleReorderQuestions = (localId: string, orderedIds: number[]) =>
 		setSections((prev) =>
 			prev.map((s) => {
 				if (s.localId !== localId) return s;
@@ -184,12 +323,12 @@ export const TestEditor = ({
 					...s,
 					questions: orderedIds
 						.map((id) => map.get(id))
-						.filter(Boolean) as ApiQuestion[],
+						.filter(Boolean) as LocalQuestion[],
 				};
 			}),
 		);
 
-	// ── Save / Publish ────────────────────────────────────────────────────────
+	// ── Save / Publish ─────────────────────────────────────────────────────────
 
 	const buildPayload = (): UpdateAssessmentPayload => {
 		if (!assessment) return {};
@@ -197,7 +336,7 @@ export const TestEditor = ({
 			name: assessment.name,
 			classId,
 			subjectId,
-			branchId,
+			branchId: assessment.branchId,
 			term: assessment.term,
 			testType: assessment.testType,
 			assessmentMapping: assessment.assessmentMapping,
@@ -217,7 +356,7 @@ export const TestEditor = ({
 		if (!assessment) return;
 		try {
 			await updateAssessment({
-				uuid: assessment.uuid,
+				id: assessment?.id,
 				payload: buildPayload(),
 			});
 			toast({ title: "Saved as draft", type: "success" });
@@ -234,10 +373,10 @@ export const TestEditor = ({
 		if (!assessment) return;
 		try {
 			await updateAssessment({
-				uuid: assessment.uuid,
+				id: assessment?.id,
 				payload: buildPayload(),
 			});
-			await publishAssessment(assessment.uuid);
+			await publishAssessment(assessment.id);
 			toast({ title: "Test published", type: "success" });
 		} catch (err: unknown) {
 			const msg =
@@ -248,9 +387,9 @@ export const TestEditor = ({
 		}
 	};
 
-	// ── Render ────────────────────────────────────────────────────────────────
+	// ── Render ─────────────────────────────────────────────────────────────────
 
-	if (isLoading || !assessment) {
+	if (isLoadingAssessment || isLoadingSections || !assessment) {
 		return (
 			<div className="flex items-center justify-center py-20">
 				<span className="h-7 w-7 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
@@ -263,14 +402,17 @@ export const TestEditor = ({
 			<div className="mx-auto max-w-4xl">
 				{/* Header */}
 				<div className="mb-4 flex items-start justify-between">
-					<div>
-						<h1 className="text-xl font-bold text-gray-900">
-							{assessment.name}
-						</h1>
-						<p className="mt-0.5 text-xs text-gray-400">
-							{TERM_LABELS[assessment.term]} •{" "}
-							{TEST_TYPE_LABELS[assessment.testType]}
-						</p>
+					<div className="flex items-center gap-3">
+						{backHref && <BackButton href={backHref} />}
+						<div>
+							<h1 className="text-xl font-bold text-gray-900">
+								{assessment?.name}
+							</h1>
+							<p className="mt-0.5 text-xs text-gray-400">
+								{TERM_LABELS[assessment?.term]} •{" "}
+								{TEST_TYPE_LABELS[assessment?.testType]}
+							</p>
+						</div>
 					</div>
 					<div className="flex items-center gap-2">
 						<button
@@ -281,12 +423,12 @@ export const TestEditor = ({
 							<Pencil className="h-3.5 w-3.5" />
 							Edit Details
 						</button>
-						{assessment.status !== "PUBLISHED" && (
+						{assessment?.status !== "PUBLISHED" && (
 							<button
 								type="button"
 								onClick={handleSaveDraft}
 								disabled={isSaving}
-								className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
+								className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-60"
 							>
 								{isSaving ? (
 									<span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-400 border-t-gray-800" />
@@ -324,33 +466,33 @@ export const TestEditor = ({
 					<MetaBadge
 						color="gray"
 						icon={<MessageSquare className="h-3 w-3" />}
-						label={`${totalQuestions} question${totalQuestions !== 1 ? "s" : ""}`}
+						label={`${totalQuestions ?? 0} question${totalQuestions !== 1 ? "s" : ""}`}
 					/>
 					<MetaBadge
 						color="amber"
 						icon={<Star className="h-3 w-3" />}
-						label={`${totalMarks} marks`}
+						label={`${totalMarks ?? 0} marks`}
 					/>
-					{assessment.durationMinutes && (
+					{assessment?.durationMinutes && (
 						<MetaBadge
 							color="purple"
 							icon={<Clock className="h-3 w-3" />}
-							label={`${assessment.durationMinutes} min`}
+							label={`${assessment?.durationMinutes} min`}
 						/>
 					)}
-					{assessment.assessmentMapping && (
+					{assessment?.assessmentMapping && (
 						<MetaBadge
 							color="green"
 							icon={<Tag className="h-3 w-3" />}
-							label={MAPPING_SHORT[assessment.assessmentMapping]}
+							label={MAPPING_SHORT[assessment?.assessmentMapping]}
 						/>
 					)}
-					{assessment.startDateTime && (
+					{assessment?.startDateTime && (
 						<MetaBadge
 							color="gray"
 							icon={<Calendar className="h-3 w-3" />}
 							label={new Date(
-								assessment.startDateTime,
+								assessment?.startDateTime,
 							).toLocaleDateString("en-US", {
 								month: "short",
 								day: "numeric",
@@ -366,12 +508,15 @@ export const TestEditor = ({
 						<SectionCard
 							key={section.localId}
 							section={section}
+							isAddingQuestions={isAddingQuestions}
 							onUpdateSection={(patch) =>
-								updateSection(section.localId, patch)
+								updateSectionLocal(section.localId, patch)
 							}
-							onReorder={(ids) => reorderQuestions(section.localId, ids)}
-							onRemoveQuestion={(qId) =>
-								removeQuestionFromSection(section.localId, qId)
+							onReorder={(ids) =>
+								handleReorderQuestions(section.localId, ids)
+							}
+							onRemoveQuestion={(qId, aqId) =>
+								handleRemoveQuestion(section.localId, qId, aqId)
 							}
 							onAddQuestion={() =>
 								setAddItemModal({ localId: section.localId })
@@ -379,16 +524,24 @@ export const TestEditor = ({
 							onAddFromBank={() =>
 								setSelectFromBankModal({ localId: section.localId })
 							}
+							onDeleteSection={() =>
+								handleDeleteSection(section.localId, section.id)
+							}
 						/>
 					))}
 				</div>
 
 				<button
 					type="button"
-					onClick={addSection}
-					className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-3.5 text-sm text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600"
+					onClick={handleAddSection}
+					disabled={isCreatingSection}
+					className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-3.5 text-sm text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600 disabled:opacity-60"
 				>
-					<Plus className="h-4 w-4" />
+					{isCreatingSection ? (
+						<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-400 border-t-gray-600" />
+					) : (
+						<Plus className="h-4 w-4" />
+					)}
 					Add New Section
 				</button>
 			</div>
@@ -399,7 +552,7 @@ export const TestEditor = ({
 				onClose={() => setEditDetailsOpen(false)}
 				classId={classId}
 				subjectId={subjectId}
-				branchId={branchId}
+				branchId={assessment.branchId}
 				editAssessment={assessment}
 				onSaved={() => setEditDetailsOpen(false)}
 			/>
@@ -408,9 +561,14 @@ export const TestEditor = ({
 			<AddAssessmentItemModal
 				open={!!addItemModal}
 				onClose={() => setAddItemModal(null)}
-				onSelectType={() => {
-					// Inline creation: close and guide user to question bank
+				onSelectType={(type) => {
+					const localId = addItemModal?.localId ?? "";
 					setAddItemModal(null);
+					setNewQuestionState({
+						localId,
+						questionType: type,
+						topicId: topics?.[0]?.id ?? null,
+					});
 				}}
 			/>
 
@@ -423,8 +581,33 @@ export const TestEditor = ({
 					alreadySelectedIds={alreadySelectedIds}
 					onClose={() => setSelectFromBankModal(null)}
 					onAdd={(qs) => {
-						addQuestionsToSection(selectFromBankModal.localId, qs);
+						handleAddQuestionsFromBank(selectFromBankModal.localId, qs);
 						setSelectFromBankModal(null);
+					}}
+				/>
+			)}
+
+			{/* New question overlay */}
+			{newQuestionState && (
+				<NewQuestionOverlay
+					classId={classId}
+					subjectId={subjectId}
+					topics={topics}
+					questionType={newQuestionState.questionType}
+					topicId={newQuestionState.topicId}
+					onTopicChange={(id) =>
+						setNewQuestionState(
+							(prev) => prev && { ...prev, topicId: id },
+						)
+					}
+					onClose={() => setNewQuestionState(null)}
+					onSaved={(question) => {
+						setNewQuestionState(null);
+						if (question) {
+							handleAddQuestionsFromBank(newQuestionState.localId, [
+								question,
+							]);
+						}
 					}}
 				/>
 			)}
@@ -462,22 +645,146 @@ const MetaBadge = ({
 	</span>
 );
 
+// ─── New Question Overlay ─────────────────────────────────────────────────────
+
+const NewQuestionOverlay = ({
+	classId,
+	subjectId,
+	topics,
+	questionType,
+	topicId,
+	onTopicChange,
+	onClose,
+	onSaved,
+}: {
+	classId: number;
+	subjectId: number;
+	topics: ApiTopic[];
+	questionType: QuestionType;
+	topicId: number | null;
+	onTopicChange: (id: number) => void;
+	onClose: () => void;
+	onSaved: (question?: ApiQuestion) => void;
+}) => {
+	const resolvedTopicId = topicId ?? topics?.[0]?.id ?? 0;
+
+	return (
+		<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+			{/* Backdrop */}
+			<div
+				className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+				onClick={onClose}
+			/>
+
+			{/* Panel */}
+			<div className="relative flex h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+				{/* Topic picker bar */}
+				<div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-gray-50/60 px-5 py-3">
+					<span className="text-sm font-semibold text-gray-800">
+						New Question
+					</span>
+					<div className="flex items-center gap-3">
+						{topics?.length > 1 && (
+							<div className="flex items-center gap-2">
+								<label className="text-xs text-gray-500">Topic</label>
+								<select
+									value={resolvedTopicId}
+									onChange={(e) => onTopicChange(Number(e.target.value))}
+									className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+								>
+									{topics?.map((t) => (
+										<option key={t?.id} value={t?.id}>
+											{t?.name}
+										</option>
+									))}
+								</select>
+							</div>
+						)}
+						{topics?.length === 0 && (
+							<p className="text-xs text-amber-600">
+								No topics — create one in the Question Bank first.
+							</p>
+						)}
+					</div>
+				</div>
+
+				{/* Form area */}
+				{resolvedTopicId ? (
+					<div className="flex flex-1 overflow-hidden">
+						{(questionType === "QUESTION_GROUP" ||
+							questionType === "COMPREHENSION") && (
+							<QuestionGroupForm
+								classId={classId}
+								subjectId={subjectId}
+								topicId={resolvedTopicId}
+								initialQuestionType={questionType}
+								onClose={onClose}
+								onSaved={onSaved}
+							/>
+						)}
+						{questionType === "FILL_IN_THE_BLANK" && (
+							<FillInBlanksForm
+								classId={classId}
+								subjectId={subjectId}
+								topicId={resolvedTopicId}
+								onClose={onClose}
+								onSaved={onSaved}
+							/>
+						)}
+						{questionType !== "QUESTION_GROUP" &&
+							questionType !== "COMPREHENSION" &&
+							questionType !== "FILL_IN_THE_BLANK" && (
+								<AddQuestionForm
+									classId={classId}
+									subjectId={subjectId}
+									topicId={resolvedTopicId}
+									onClose={onClose}
+									onSaved={onSaved}
+								/>
+							)}
+					</div>
+				) : (
+					<div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+						<p className="text-sm text-gray-500">
+							No topics available for this subject.
+						</p>
+						<p className="text-xs text-gray-400">
+							Go to the Question Bank and create a topic first.
+						</p>
+						<button
+							type="button"
+							onClick={onClose}
+							className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
+						>
+							Close
+						</button>
+					</div>
+				)}
+			</div>
+		</div>
+	);
+};
+
 // ─── Section Card ─────────────────────────────────────────────────────────────
 
 const SectionCard = ({
 	section,
+	isAddingQuestions,
 	onUpdateSection,
 	onReorder,
 	onRemoveQuestion,
 	onAddQuestion,
 	onAddFromBank,
+	onDeleteSection,
 }: {
 	section: LocalSection;
+	isAddingQuestions: boolean;
 	onUpdateSection: (patch: Partial<LocalSection>) => void;
 	onReorder: (ids: number[]) => void;
-	onRemoveQuestion: (questionId: number) => void;
+	onRemoveQuestion: (questionId: number, aqId?: number) => void;
 	onAddQuestion: () => void;
 	onAddFromBank: () => void;
+	onDeleteSection: () => void;
 }) => {
 	const [collapsed, setCollapsed] = useState(false);
 
@@ -495,19 +802,19 @@ const SectionCard = ({
 	};
 
 	return (
-		<div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+		<div className="group/section overflow-hidden rounded-xl border border-gray-200 bg-white">
 			{/* Section header */}
 			<div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
 				<div className="min-w-0 flex-1">
 					<input
 						type="text"
-						value={section.name}
+						value={section?.name}
 						onChange={(e) => onUpdateSection({ name: e.target.value })}
 						className="w-full border-0 bg-transparent text-base font-semibold text-gray-900 focus:ring-0 focus:outline-none"
 					/>
 					<input
 						type="text"
-						value={section.instructions}
+						value={section?.instructions}
 						onChange={(e) =>
 							onUpdateSection({ instructions: e.target.value })
 						}
@@ -515,17 +822,27 @@ const SectionCard = ({
 						className="mt-0.5 w-full border-0 bg-transparent text-xs text-gray-400 placeholder:text-gray-300 focus:ring-0 focus:outline-none"
 					/>
 				</div>
-				<button
-					type="button"
-					onClick={() => setCollapsed((v) => !v)}
-					className="ml-4 text-gray-400 transition-colors hover:text-gray-600"
-				>
-					{collapsed ? (
-						<ChevronDown className="h-5 w-5" />
-					) : (
-						<ChevronUp className="h-5 w-5" />
-					)}
-				</button>
+				<div className="ml-4 flex items-center gap-1">
+					<button
+						type="button"
+						onClick={onDeleteSection}
+						className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-300 opacity-0 transition-all group-hover/section:opacity-100 hover:bg-red-50 hover:text-red-500"
+						title="Delete section"
+					>
+						<Trash2 className="h-3.5 w-3.5" />
+					</button>
+					<button
+						type="button"
+						onClick={() => setCollapsed((v) => !v)}
+						className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:text-gray-600"
+					>
+						{collapsed ? (
+							<ChevronDown className="h-5 w-5" />
+						) : (
+							<ChevronUp className="h-5 w-5" />
+						)}
+					</button>
+				</div>
 			</div>
 
 			{!collapsed && (
@@ -534,24 +851,29 @@ const SectionCard = ({
 					<div className="mb-4 flex items-center gap-2">
 						<button
 							type="button"
-							onClick={onAddFromBank}
+							onClick={onAddQuestion}
 							className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
 						>
-							<BookOpen className="h-3.5 w-3.5" />
-							Add from Question Bank
+							<Plus className="h-3.5 w-3.5" />
+							Add Question
 						</button>
 						<button
 							type="button"
-							onClick={onAddQuestion}
-							className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+							onClick={onAddFromBank}
+							disabled={isAddingQuestions}
+							className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
 						>
-							<Plus className="h-3.5 w-3.5" />
-							New Question
+							{isAddingQuestions ? (
+								<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-400 border-t-gray-700" />
+							) : (
+								<BookOpen className="h-3.5 w-3.5" />
+							)}
+							Add from Question Bank
 						</button>
 					</div>
 
 					{/* Questions */}
-					{section.questions.length === 0 ? (
+					{section?.questions?.length === 0 ? (
 						<div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-10 text-center">
 							<p className="mb-1 text-sm text-gray-500">
 								No questions yet
@@ -575,16 +897,20 @@ const SectionCard = ({
 							onDragEnd={handleDragEnd}
 						>
 							<SortableContext
-								items={section.questions.map((q) => q.id)}
+								items={
+									section?.questions
+										? section?.questions?.map((q) => q?.id)
+										: []
+								}
 								strategy={verticalListSortingStrategy}
 							>
 								<div className="space-y-2">
-									{section.questions.map((q, idx) => (
+									{section?.questions?.map((q, idx) => (
 										<SortableQuestionRow
 											key={q.id}
 											question={q}
 											number={idx + 1}
-											onRemove={() => onRemoveQuestion(q.id)}
+											onRemove={() => onRemoveQuestion(q.id, q.aqId)}
 										/>
 									))}
 								</div>
@@ -592,8 +918,16 @@ const SectionCard = ({
 						</DndContext>
 					)}
 
-					{section.questions.length > 0 && (
+					{section?.questions?.length > 0 && (
 						<div className="mt-3 grid grid-cols-2 gap-2">
+							<button
+								type="button"
+								onClick={onAddQuestion}
+								className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-2.5 text-xs text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600"
+							>
+								<Plus className="h-3.5 w-3.5" />
+								Add Question
+							</button>
 							<button
 								type="button"
 								onClick={onAddFromBank}
@@ -601,14 +935,6 @@ const SectionCard = ({
 							>
 								<BookOpen className="h-3.5 w-3.5" />
 								Add from Question Bank
-							</button>
-							<button
-								type="button"
-								onClick={onAddQuestion}
-								className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-2.5 text-xs text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600"
-							>
-								<Plus className="h-3.5 w-3.5" />
-								New Question
 							</button>
 						</div>
 					)}
@@ -618,14 +944,14 @@ const SectionCard = ({
 	);
 };
 
-// ─── Sortable question row ────────────────────────────────────────────────────
+// ─── Sortable question row ─────────────────────────────────────────────────────
 
 const SortableQuestionRow = ({
 	question,
 	number,
 	onRemove,
 }: {
-	question: ApiQuestion;
+	question: LocalQuestion;
 	number: number;
 	onRemove: () => void;
 }) => {
@@ -646,8 +972,8 @@ const SortableQuestionRow = ({
 		opacity: isDragging ? 0.4 : 1,
 	};
 
-	const qType = question.questionType as QuestionType;
-	const tsd = question.typeSpecificData;
+	const qType = question?.questionType as QuestionType;
+	const tsd = question?.typeSpecificData;
 	const isGroup = qType === "QUESTION_GROUP" || qType === "COMPREHENSION";
 	const subCount = isGroup ? ((tsd as any)?.subQuestions?.length ?? 0) : 0;
 
@@ -679,7 +1005,7 @@ const SortableQuestionRow = ({
 					onClick={() => setExpanded((v) => !v)}
 				>
 					<p className="truncate text-sm font-medium text-gray-800">
-						{question.questionText}
+						{question?.questionText}
 					</p>
 					<div className="mt-0.5 flex items-center gap-2">
 						<span
@@ -691,7 +1017,7 @@ const SortableQuestionRow = ({
 							{getQuestionTypeLabel(qType)}
 						</span>
 						<span className="text-xs text-gray-400">
-							• {question.marks} mark{question.marks !== 1 ? "s" : ""}
+							• {question?.marks} mark{question?.marks !== 1 ? "s" : ""}
 						</span>
 						{isGroup && subCount > 0 && (
 							<span className="text-xs text-gray-400">
@@ -742,11 +1068,10 @@ const SortableQuestionRow = ({
 			{/* Expanded preview */}
 			{expanded && tsd && (
 				<>
-					{/* MCQ / Multiple Answers options */}
-					{(tsd.questionType === "MULTIPLE_CHOICE" ||
-						tsd.questionType === "MULTIPLE_ANSWERS") && (
+					{(tsd?.questionType === "MULTIPLE_CHOICE" ||
+						tsd?.questionType === "MULTIPLE_ANSWERS") && (
 						<div className="space-y-1.5 border-t border-gray-100 bg-gray-50/50 px-10 py-3">
-							{tsd.options.map((opt) => (
+							{tsd?.options.map((opt) => (
 								<div
 									key={opt.optionLabel}
 									className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700"
@@ -762,8 +1087,7 @@ const SortableQuestionRow = ({
 						</div>
 					)}
 
-					{/* True/False */}
-					{tsd.questionType === "TRUE_FALSE" && (
+					{tsd?.questionType === "TRUE_FALSE" && (
 						<div className="flex gap-2 border-t border-gray-100 bg-gray-50/50 px-10 py-3">
 							{["True", "False"].map((l) => (
 								<span
@@ -776,18 +1100,16 @@ const SortableQuestionRow = ({
 						</div>
 					)}
 
-					{/* Short answer hint */}
-					{tsd.questionType === "SHORT_ANSWER" && (
+					{tsd?.questionType === "SHORT_ANSWER" && (
 						<p className="border-t border-gray-100 bg-gray-50/50 px-10 py-3 text-xs italic text-gray-400">
 							Students type a short response.
 						</p>
 					)}
 
-					{/* Fill-in-blank blanks */}
-					{tsd.questionType === "FILL_IN_THE_BLANK" &&
-						(tsd.blanks ?? []).length > 0 && (
+					{tsd?.questionType === "FILL_IN_THE_BLANK" &&
+						(tsd?.blanks ?? []).length > 0 && (
 							<div className="space-y-1 border-t border-gray-100 bg-gray-50/50 px-10 py-3">
-								{(tsd.blanks ?? []).map((b, i) => (
+								{(tsd?.blanks ?? []).map((b, i) => (
 									<p key={i} className="text-xs text-gray-600">
 										{b.blankLabel || `Blank ${i + 1}`}
 										{b.marks ? ` — ${b.marks} mk` : ""}
@@ -796,10 +1118,9 @@ const SortableQuestionRow = ({
 							</div>
 						)}
 
-					{/* Group / Comprehension sub-questions */}
-					{(tsd.questionType === "QUESTION_GROUP" ||
-						tsd.questionType === "COMPREHENSION") &&
-						(tsd as any).subQuestions?.length > 0 && (
+					{(tsd?.questionType === "QUESTION_GROUP" ||
+						tsd?.questionType === "COMPREHENSION") &&
+						(tsd as any)?.subQuestions?.length > 0 && (
 							<div className="space-y-1 border-t border-gray-100 bg-gray-50/50 px-10 py-3">
 								{(tsd as any).subQuestions.map((sq: any, i: number) => (
 									<p key={i} className="text-xs text-gray-600">

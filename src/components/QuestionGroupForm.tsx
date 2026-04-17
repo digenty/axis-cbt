@@ -117,7 +117,7 @@ interface QuestionGroupFormProps {
 	initialQuestionType?: GroupQuestionType;
 	editQuestion?: ApiQuestion | null;
 	onClose: () => void;
-	onSaved: () => void;
+	onSaved: (question?: ApiQuestion) => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -222,11 +222,12 @@ export const QuestionGroupForm = ({
 			if (editQuestion) {
 				await updateQuestion({ id: editQuestion?.id, payload });
 				toast({ title: "Group updated", type: "success" });
+				onSaved();
 			} else {
-				await createQuestion(payload);
+				const res = await createQuestion(payload);
 				toast({ title: "Group saved", type: "success" });
+				onSaved(res?.data);
 			}
-			onSaved();
 		} catch (err: unknown) {
 			const msg =
 				err && typeof err === "object" && "message" in err

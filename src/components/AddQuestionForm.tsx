@@ -151,7 +151,7 @@ interface AddQuestionFormProps {
 	topicId: number;
 	editQuestion?: ApiQuestion | null;
 	onClose: () => void;
-	onSaved: () => void;
+	onSaved: (question?: ApiQuestion) => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -213,11 +213,12 @@ export const AddQuestionForm = ({
 			if (editQuestion) {
 				await updateQuestion({ id: editQuestion?.id, payload });
 				toast({ title: "Question updated", type: "success" });
+				onSaved();
 			} else {
-				await createQuestion(payload);
+				const res = await createQuestion(payload);
 				toast({ title: "Question saved", type: "success" });
+				onSaved(res?.data);
 			}
-			onSaved();
 		} catch (err: unknown) {
 			const msg =
 				err && typeof err === "object" && "message" in err

@@ -9,6 +9,7 @@ import {
 } from "@/hooks/queryHooks/useSubjects";
 import { ApiSubject } from "@/api/subjects";
 import { Loader2 } from "lucide-react";
+import { BackButton } from "./PageHeader";
 
 export default function QuestionBank({
 	params,
@@ -40,20 +41,25 @@ export default function QuestionBank({
 	const isLoading = isFetchingSubjectDetails || isFetchingClassDetails;
 
 	return (
-		<Layout href={`/classes/${classId}/subjects/${subjectId}`}>
+		<Layout>
 			<div className="flex h-[calc(100vh-3rem)] flex-col">
 				<div className="mb-4">
-					<h1 className="text-base font-semibold text-gray-900">
-						Question Bank
-					</h1>
-					<div className="mt-0.5 text-xs text-gray-400">
-						{isLoading ? (
-							<div className="flex items-center justify-center py-8">
-								<Loader2 className="h-4 w-4 animate-spin text-gray-300" />
+					<div className="mb-1 flex items-center gap-3">
+						<BackButton
+							href={`/classes/${classId}/subjects/${subjectId}`}
+						/>
+						<div className="">
+							<h1 className="text-base font-semibold text-gray-900">
+								Question Bank
+							</h1>
+							<div className="text-xs text-gray-400">
+								{isLoading ? (
+									<Loader2 className="h-3.5 w-3.5 animate-spin text-gray-300" />
+								) : (
+									`${classDetails?.name} - ${getCurrentSubject?.subjectName}`
+								)}
 							</div>
-						) : (
-							`${classDetails?.name} - ${getCurrentSubject?.subjectName}`
-						)}
+						</div>
 					</div>
 				</div>
 				<div className="flex-1 overflow-hidden">

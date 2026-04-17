@@ -25,6 +25,28 @@ export interface TeacherSubjectsResponse {
 	status: string;
 }
 
+export interface ApiClassSubject {
+	id: number;
+	uuid: string;
+	active: boolean;
+	version: number;
+	createdAt: string;
+	updatedAt: string;
+	name: string;
+	branchId: number;
+	schoolId: number;
+
+	teacherName: string;
+	questionsInBank: number;
+	assessmentCount: number;
+}
+
+export interface ClassSubjectsResponse {
+	data: ApiClassSubject[];
+	message: string;
+	status: string;
+}
+
 export interface ApiSchoolResponse {
 	active: boolean;
 	address: string;
@@ -60,6 +82,20 @@ export const getTeacherSubjects = async () => {
 export const getClassDetails = async (id: number) => {
 	try {
 		const { data } = await api.get(`/classes/${id}`);
+		return data;
+	} catch (error: unknown) {
+		if (isAxiosError(error)) throw error.response?.data;
+		throw error;
+	}
+};
+
+export const getSubjectsByClassId = async (
+	classId: number,
+): Promise<ClassSubjectsResponse> => {
+	try {
+		const { data } = await api.get<ClassSubjectsResponse>(
+			`/subjects/class/${classId}`,
+		);
 		return data;
 	} catch (error: unknown) {
 		if (isAxiosError(error)) throw error.response?.data;

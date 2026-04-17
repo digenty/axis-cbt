@@ -6,6 +6,7 @@ import Layout from "./Layout";
 import { useGetClassDetails } from "@/hooks/queryHooks/useSubjects";
 import { useGetSchools } from "@/hooks/queryHooks/useSchool";
 import { ApiSchoolResponse } from "@/api/subjects";
+import { BackButton } from "./PageHeader";
 
 const ClassDetails = ({
 	params,
@@ -31,17 +32,18 @@ const ClassDetails = ({
 		(obj: ApiSchoolResponse) => obj?.id === classDetails?.schoolId,
 	);
 
-	console.log({ classDetails, currentSchool });
-
 	return (
-		<Layout href="/subjects">
-			<div className="mb-5">
-				<h1 className="text-lg font-semibold text-gray-900">
-					{classDetails?.name || "Class Name"} - {"Subject Name"}
-				</h1>
-				<p className="mt-0.5 text-sm text-gray-500">
-					{currentSchool?.name}
-				</p>
+		<Layout>
+			<div className="mb-6 flex items-center gap-3">
+				<BackButton href="/classes" />
+				<div>
+					<h1 className="text-lg font-semibold text-zinc-900">
+						{classDetails?.name ?? "Class"}
+					</h1>
+					{currentSchool?.name && (
+						<p className="text-xs text-zinc-500">{currentSchool.name}</p>
+					)}
+				</div>
 			</div>
 			<ClassSubjectsView classId={classId} />
 		</Layout>

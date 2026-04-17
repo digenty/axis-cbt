@@ -29,6 +29,7 @@ import type {
 	AssessmentStatus,
 } from "@/types/assessment";
 import { TERM_LABELS, TEST_TYPE_LABELS } from "@/types/assessment";
+import { BackButton } from "./PageHeader";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,8 @@ export const TestListView = ({ subjectId, classId }: TestListViewProps) => {
 	const assessments: ApiAssessmentSummary[] =
 		(assessmentsResponse?.data as ApiAssessmentSummary[]) ?? [];
 
+	console.log({ assessments });
+
 	const { mutateAsync: publishAssessment } = usePublishAssessment();
 
 	useEffect(() => {
@@ -108,14 +111,14 @@ export const TestListView = ({ subjectId, classId }: TestListViewProps) => {
 		setEditingAssessment(null);
 		if (!editingAssessment) {
 			router.push(
-				`/classes/${classId}/subjects/${subjectId}/assessments/${assessment.uuid}`,
+				`/classes/${classId}/subjects/${subjectId}/assessments/${assessment?.id}`,
 			);
 		}
 	};
 
-	const handlePublish = async (uuid: string) => {
+	const handlePublish = async (id: number) => {
 		try {
-			await publishAssessment(uuid);
+			await publishAssessment(id);
 		} catch {
 			// error handled inside hook
 		}
@@ -126,7 +129,12 @@ export const TestListView = ({ subjectId, classId }: TestListViewProps) => {
 			<div>
 				{/* Header */}
 				<div className="mb-5 flex items-center justify-between">
-					<h1 className="text-lg font-bold text-gray-900">CBT</h1>
+					<div className="flex items-center gap-4">
+						<BackButton
+							href={`/classes/${classId}/subjects/${subjectId}`}
+						/>
+						<h1 className="text-lg font-bold text-gray-900">CBT</h1>
+					</div>
 					<button
 						type="button"
 						onClick={() => setCreateOpen(true)}
@@ -142,20 +150,20 @@ export const TestListView = ({ subjectId, classId }: TestListViewProps) => {
 					<div className="flex items-center justify-center py-24">
 						<span className="h-7 w-7 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
 					</div>
-				) : !assessments.length ? (
+				) : !assessments?.length ? (
 					<EmptyState onCreate={() => setCreateOpen(true)} />
 				) : (
 					<div className="space-y-3">
-						{assessments.map((assessment) => (
+						{assessments?.map((assessment) => (
 							<AssessmentCard
-								key={assessment.uuid}
+								key={assessment?.id}
 								assessment={assessment}
 								onEdit={() => setEditingAssessment(assessment)}
 								onDelete={() => setDeletingAssessment(assessment)}
-								onPublish={() => handlePublish(assessment.uuid)}
+								onPublish={() => handlePublish(assessment?.id)}
 								onClick={() =>
 									router.push(
-										`/classes/${classId}/subjects/${subjectId}/assessments/${assessment.uuid}`,
+										`/classes/${classId}/subjects/${subjectId}/assessments/${assessment?.id}`,
 									)
 								}
 							/>
