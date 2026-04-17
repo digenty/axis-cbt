@@ -152,13 +152,12 @@ export const deleteSection = async (
 export const addQuestionsToSection = async (
 	sectionId: number,
 	questionIds: number[],
-): Promise<SectionResponse> => {
+): Promise<void> => {
 	try {
-		const { data } = await api.post(
+		await api.post(
 			`/api/cbt/assessments/sections/${sectionId}/questions`,
-			{ questionIds },
+			questionIds,
 		);
-		return data;
 	} catch (error) {
 		if (isAxiosError(error)) throw error.response?.data;
 		throw error;

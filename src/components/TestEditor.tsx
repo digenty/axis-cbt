@@ -106,7 +106,7 @@ function apiSectionToLocal(s: ApiSection): LocalSection {
 		instructions: s?.instructions ?? "",
 		sectionOrder: s?.sectionOrder,
 		timeLimitMinutes: s?.timeLimitMinutes,
-		questions: s?.questions?.map((sq) => ({ ...sq.question, aqId: sq.aqId })),
+		questions: [],
 	};
 }
 
@@ -136,6 +136,8 @@ export const TestEditor = ({
 
 	const { data: sectionsResponse, isLoading: isLoadingSections } =
 		useGetSections(assessment?.id ?? 0);
+
+	const allSections = sectionsResponse?.data;
 
 	const { mutateAsync: updateAssessment, isPending: isSaving } =
 		useUpdateAssessment();
@@ -169,12 +171,12 @@ export const TestEditor = ({
 
 	// Sync sections from API on first load
 	useEffect(() => {
-		if (!sectionsInitialized && sectionsResponse?.data) {
-			setSections(sectionsResponse?.data?.map(apiSectionToLocal));
+		if (!sectionsInitialized && allSections) {
+			setSections(allSections?.map(apiSectionToLocal));
 			setSectionsInitialized(true);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [sectionsResponse]);
+	}, [allSections]);
 
 	// Derived totals
 	const totalQuestions = sections?.reduce(
@@ -208,7 +210,7 @@ export const TestEditor = ({
 				sectionOrder,
 				timeLimitMinutes: 0,
 			});
-			setSections((prev) => [...prev, apiSectionToLocal(res.data)]);
+			setSections((prev) => [...prev, apiSectionToLocal(res?.data)]);
 		} catch {
 			toast({ title: "Could not add section", type: "error" });
 		}
@@ -234,39 +236,38 @@ export const TestEditor = ({
 		if (!section) return;
 
 		const newQuestions = questions?.filter(
-			(q) => !section.questions.some((sq) => sq.id === q.id),
+			(q) => !section?.questions?.some((sq) => sq.id === q.id),
 		);
 		if (!newQuestions?.length) return;
 
-		if (section.id) {
+		if (section?.id) {
+			// Optimistically add to the list immediately for instant feedback
+			setSections((prev) =>
+				prev.map((s) =>
+					s.localId !== localId
+						? s
+						: {
+								...s,
+								questions: [
+									...s.questions,
+									...newQuestions?.map((q) => ({
+										...q,
+										aqId: undefined,
+									})),
+								],
+							},
+				),
+			);
 			try {
-				const res = await addQuestionsApi({
+				await addQuestionsApi({
 					sectionId: section?.id,
 					questionIds: newQuestions?.map((q) => q.id),
 				});
-				// Merge returned questions (with aqIds) into local state
-				const returnedQs = res?.data?.questions?.map((sq) => ({
-					...sq.question,
-					aqId: sq.aqId,
-				}));
-				setSections((prev) =>
-					prev.map((s) =>
-						s.localId !== localId
-							? s
-							: {
-									...s,
-									questions: [
-										...s.questions,
-										...returnedQs.filter(
-											(rq) =>
-												!s.questions?.some((sq) => sq.id === rq.id),
-										),
-									],
-								},
-					),
-				);
 			} catch {
-				toast({ title: "Could not add questions", type: "error" });
+				toast({
+					title: "Could not save questions to server",
+					type: "error",
+				});
 			}
 		} else {
 			// Section not yet persisted — add locally only
@@ -277,8 +278,8 @@ export const TestEditor = ({
 						: {
 								...s,
 								questions: [
-									...s.questions,
-									...newQuestions.map((q) => ({
+									...s?.questions,
+									...newQuestions?.map((q) => ({
 										...q,
 										aqId: undefined,
 									})),
@@ -308,7 +309,9 @@ export const TestEditor = ({
 					? s
 					: {
 							...s,
-							questions: s.questions.filter((q) => q.id !== questionId),
+							questions: s?.questions?.filter(
+								(q) => q.id !== questionId,
+							),
 						},
 			),
 		);
@@ -318,7 +321,7 @@ export const TestEditor = ({
 		setSections((prev) =>
 			prev.map((s) => {
 				if (s.localId !== localId) return s;
-				const map = new Map(s.questions.map((q) => [q.id, q]));
+				const map = new Map(s?.questions?.map((q) => [q.id, q]));
 				return {
 					...s,
 					questions: orderedIds
@@ -333,22 +336,22 @@ export const TestEditor = ({
 	const buildPayload = (): UpdateAssessmentPayload => {
 		if (!assessment) return {};
 		return {
-			name: assessment.name,
+			name: assessment?.name,
 			classId,
 			subjectId,
-			branchId: assessment.branchId,
-			term: assessment.term,
-			testType: assessment.testType,
-			assessmentMapping: assessment.assessmentMapping,
-			durationMinutes: assessment.durationMinutes,
-			passingMarks: assessment.passingMarks,
-			startDateTime: assessment.startDateTime,
-			endDateTime: assessment.endDateTime,
-			instructions: assessment.instructions,
-			shuffleQuestions: assessment.shuffleQuestions,
-			shuffleOptions: assessment.shuffleOptions,
-			showResultsImmediately: assessment.showResultsImmediately,
-			allowReview: assessment.allowReview,
+			branchId: assessment?.branchId,
+			term: assessment?.term,
+			testType: assessment?.testType,
+			assessmentMapping: assessment?.assessmentMapping,
+			durationMinutes: assessment?.durationMinutes,
+			passingMarks: assessment?.passingMarks,
+			startDateTime: assessment?.startDateTime,
+			endDateTime: assessment?.endDateTime,
+			instructions: assessment?.instructions,
+			shuffleQuestions: assessment?.shuffleQuestions,
+			shuffleOptions: assessment?.shuffleOptions,
+			showResultsImmediately: assessment?.showResultsImmediately,
+			allowReview: assessment?.allowReview,
 		};
 	};
 
@@ -376,7 +379,7 @@ export const TestEditor = ({
 				id: assessment?.id,
 				payload: buildPayload(),
 			});
-			await publishAssessment(assessment.id);
+			await publishAssessment(assessment?.id);
 			toast({ title: "Test published", type: "success" });
 		} catch (err: unknown) {
 			const msg =
@@ -399,7 +402,7 @@ export const TestEditor = ({
 
 	return (
 		<>
-			<div className="mx-auto max-w-4xl">
+			<div className="w-full">
 				{/* Header */}
 				<div className="mb-4 flex items-start justify-between">
 					<div className="flex items-center gap-3">
@@ -504,28 +507,53 @@ export const TestEditor = ({
 
 				{/* Sections */}
 				<div className="space-y-4">
-					{sections.map((section) => (
+					{sections?.map((section) => (
 						<SectionCard
 							key={section.localId}
 							section={section}
+							classId={classId}
+							subjectId={subjectId}
+							topics={topics}
 							isAddingQuestions={isAddingQuestions}
+							inlineForm={
+								newQuestionState?.localId === section.localId
+									? {
+											questionType: newQuestionState?.questionType,
+											topicId: newQuestionState?.topicId,
+										}
+									: null
+							}
+							onTopicChange={(id) =>
+								setNewQuestionState(
+									(prev) => prev && { ...prev, topicId: id },
+								)
+							}
+							onCloseInlineForm={() => setNewQuestionState(null)}
+							onQuestionSaved={(question) => {
+								setNewQuestionState(null);
+								if (question) {
+									handleAddQuestionsFromBank(section?.localId, [
+										question,
+									]);
+								}
+							}}
 							onUpdateSection={(patch) =>
-								updateSectionLocal(section.localId, patch)
+								updateSectionLocal(section?.localId, patch)
 							}
 							onReorder={(ids) =>
-								handleReorderQuestions(section.localId, ids)
+								handleReorderQuestions(section?.localId, ids)
 							}
 							onRemoveQuestion={(qId, aqId) =>
-								handleRemoveQuestion(section.localId, qId, aqId)
+								handleRemoveQuestion(section?.localId, qId, aqId)
 							}
 							onAddQuestion={() =>
-								setAddItemModal({ localId: section.localId })
+								setAddItemModal({ localId: section?.localId })
 							}
 							onAddFromBank={() =>
-								setSelectFromBankModal({ localId: section.localId })
+								setSelectFromBankModal({ localId: section?.localId })
 							}
 							onDeleteSection={() =>
-								handleDeleteSection(section.localId, section.id)
+								handleDeleteSection(section?.localId, section?.id)
 							}
 						/>
 					))}
@@ -552,7 +580,7 @@ export const TestEditor = ({
 				onClose={() => setEditDetailsOpen(false)}
 				classId={classId}
 				subjectId={subjectId}
-				branchId={assessment.branchId}
+				branchId={assessment?.branchId}
 				editAssessment={assessment}
 				onSaved={() => setEditDetailsOpen(false)}
 			/>
@@ -583,31 +611,6 @@ export const TestEditor = ({
 					onAdd={(qs) => {
 						handleAddQuestionsFromBank(selectFromBankModal.localId, qs);
 						setSelectFromBankModal(null);
-					}}
-				/>
-			)}
-
-			{/* New question overlay */}
-			{newQuestionState && (
-				<NewQuestionOverlay
-					classId={classId}
-					subjectId={subjectId}
-					topics={topics}
-					questionType={newQuestionState.questionType}
-					topicId={newQuestionState.topicId}
-					onTopicChange={(id) =>
-						setNewQuestionState(
-							(prev) => prev && { ...prev, topicId: id },
-						)
-					}
-					onClose={() => setNewQuestionState(null)}
-					onSaved={(question) => {
-						setNewQuestionState(null);
-						if (question) {
-							handleAddQuestionsFromBank(newQuestionState.localId, [
-								question,
-							]);
-						}
 					}}
 				/>
 			)}
@@ -645,131 +648,18 @@ const MetaBadge = ({
 	</span>
 );
 
-// ─── New Question Overlay ─────────────────────────────────────────────────────
-
-const NewQuestionOverlay = ({
-	classId,
-	subjectId,
-	topics,
-	questionType,
-	topicId,
-	onTopicChange,
-	onClose,
-	onSaved,
-}: {
-	classId: number;
-	subjectId: number;
-	topics: ApiTopic[];
-	questionType: QuestionType;
-	topicId: number | null;
-	onTopicChange: (id: number) => void;
-	onClose: () => void;
-	onSaved: (question?: ApiQuestion) => void;
-}) => {
-	const resolvedTopicId = topicId ?? topics?.[0]?.id ?? 0;
-
-	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-			{/* Backdrop */}
-			<div
-				className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
-				onClick={onClose}
-			/>
-
-			{/* Panel */}
-			<div className="relative flex h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
-				{/* Topic picker bar */}
-				<div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-gray-50/60 px-5 py-3">
-					<span className="text-sm font-semibold text-gray-800">
-						New Question
-					</span>
-					<div className="flex items-center gap-3">
-						{topics?.length > 1 && (
-							<div className="flex items-center gap-2">
-								<label className="text-xs text-gray-500">Topic</label>
-								<select
-									value={resolvedTopicId}
-									onChange={(e) => onTopicChange(Number(e.target.value))}
-									className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-								>
-									{topics?.map((t) => (
-										<option key={t?.id} value={t?.id}>
-											{t?.name}
-										</option>
-									))}
-								</select>
-							</div>
-						)}
-						{topics?.length === 0 && (
-							<p className="text-xs text-amber-600">
-								No topics — create one in the Question Bank first.
-							</p>
-						)}
-					</div>
-				</div>
-
-				{/* Form area */}
-				{resolvedTopicId ? (
-					<div className="flex flex-1 overflow-hidden">
-						{(questionType === "QUESTION_GROUP" ||
-							questionType === "COMPREHENSION") && (
-							<QuestionGroupForm
-								classId={classId}
-								subjectId={subjectId}
-								topicId={resolvedTopicId}
-								initialQuestionType={questionType}
-								onClose={onClose}
-								onSaved={onSaved}
-							/>
-						)}
-						{questionType === "FILL_IN_THE_BLANK" && (
-							<FillInBlanksForm
-								classId={classId}
-								subjectId={subjectId}
-								topicId={resolvedTopicId}
-								onClose={onClose}
-								onSaved={onSaved}
-							/>
-						)}
-						{questionType !== "QUESTION_GROUP" &&
-							questionType !== "COMPREHENSION" &&
-							questionType !== "FILL_IN_THE_BLANK" && (
-								<AddQuestionForm
-									classId={classId}
-									subjectId={subjectId}
-									topicId={resolvedTopicId}
-									onClose={onClose}
-									onSaved={onSaved}
-								/>
-							)}
-					</div>
-				) : (
-					<div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-						<p className="text-sm text-gray-500">
-							No topics available for this subject.
-						</p>
-						<p className="text-xs text-gray-400">
-							Go to the Question Bank and create a topic first.
-						</p>
-						<button
-							type="button"
-							onClick={onClose}
-							className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
-						>
-							Close
-						</button>
-					</div>
-				)}
-			</div>
-		</div>
-	);
-};
-
 // ─── Section Card ─────────────────────────────────────────────────────────────
 
 const SectionCard = ({
 	section,
+	classId,
+	subjectId,
+	topics,
 	isAddingQuestions,
+	inlineForm,
+	onTopicChange,
+	onCloseInlineForm,
+	onQuestionSaved,
 	onUpdateSection,
 	onReorder,
 	onRemoveQuestion,
@@ -778,7 +668,14 @@ const SectionCard = ({
 	onDeleteSection,
 }: {
 	section: LocalSection;
+	classId: number;
+	subjectId: number;
+	topics: ApiTopic[];
 	isAddingQuestions: boolean;
+	inlineForm: { questionType: QuestionType; topicId: number | null } | null;
+	onTopicChange: (id: number) => void;
+	onCloseInlineForm: () => void;
+	onQuestionSaved: (question?: ApiQuestion) => void;
 	onUpdateSection: (patch: Partial<LocalSection>) => void;
 	onReorder: (ids: number[]) => void;
 	onRemoveQuestion: (questionId: number, aqId?: number) => void;
@@ -787,6 +684,7 @@ const SectionCard = ({
 	onDeleteSection: () => void;
 }) => {
 	const [collapsed, setCollapsed] = useState(false);
+	const resolvedTopicId = inlineForm?.topicId ?? topics?.[0]?.id ?? 0;
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -800,6 +698,8 @@ const SectionCard = ({
 		const newIdx = ids.indexOf(Number(over.id));
 		onReorder(arrayMove(ids, oldIdx, newIdx));
 	};
+
+	console.log({ sectionQues: section?.questions, inlineForm });
 
 	return (
 		<div className="group/section overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -846,96 +746,184 @@ const SectionCard = ({
 			</div>
 
 			{!collapsed && (
-				<div className="px-5 py-4">
-					{/* Action buttons */}
-					<div className="mb-4 flex items-center gap-2">
-						<button
-							type="button"
-							onClick={onAddQuestion}
-							className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-						>
-							<Plus className="h-3.5 w-3.5" />
-							Add Question
-						</button>
-						<button
-							type="button"
-							onClick={onAddFromBank}
-							disabled={isAddingQuestions}
-							className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
-						>
-							{isAddingQuestions ? (
-								<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-400 border-t-gray-700" />
-							) : (
-								<BookOpen className="h-3.5 w-3.5" />
+				<div>
+					{/* Inline question form — replaces button row */}
+					{inlineForm ? (
+						<div className="flex h-[520px] flex-col overflow-hidden border-t border-gray-100">
+							{/* Topic selector (only when multiple topics) */}
+							{topics?.length > 1 && (
+								<div className="flex shrink-0 items-center gap-2 border-b border-gray-100 bg-gray-50/60 px-5 py-2.5">
+									<label className="text-xs text-gray-500">
+										Topic
+									</label>
+									<select
+										value={resolvedTopicId}
+										onChange={(e) =>
+											onTopicChange(Number(e.target.value))
+										}
+										className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+									>
+										{topics?.map((t) => (
+											<option key={t?.id} value={t?.id}>
+												{t?.name}
+											</option>
+										))}
+									</select>
+								</div>
 							)}
-							Add from Question Bank
-						</button>
-					</div>
-
-					{/* Questions */}
-					{section?.questions?.length === 0 ? (
-						<div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-10 text-center">
-							<p className="mb-1 text-sm text-gray-500">
-								No questions yet
-							</p>
-							<p className="mb-3 text-xs text-gray-400">
-								Add from the question bank to get started
-							</p>
-							<button
-								type="button"
-								onClick={onAddFromBank}
-								className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-1.5 text-sm transition-colors hover:bg-gray-50"
-							>
-								<BookOpen className="h-3.5 w-3.5" />
-								Add from Question Bank
-							</button>
+							{!resolvedTopicId ? (
+								<div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+									<p className="text-sm text-gray-500">
+										No topics found for this subject.
+									</p>
+									<p className="text-xs text-gray-400">
+										Create a topic in the Question Bank first.
+									</p>
+									<button
+										type="button"
+										onClick={onCloseInlineForm}
+										className="mt-1 rounded-lg border border-gray-200 px-4 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-50"
+									>
+										Cancel
+									</button>
+								</div>
+							) : (
+								<div className="flex flex-1 overflow-hidden">
+									{(inlineForm?.questionType === "QUESTION_GROUP" ||
+										inlineForm?.questionType === "COMPREHENSION") && (
+										<QuestionGroupForm
+											classId={classId}
+											subjectId={subjectId}
+											topicId={resolvedTopicId}
+											initialQuestionType={inlineForm?.questionType}
+											onClose={onCloseInlineForm}
+											onSaved={onQuestionSaved}
+										/>
+									)}
+									{inlineForm?.questionType ===
+										"FILL_IN_THE_BLANK" && (
+										<FillInBlanksForm
+											classId={classId}
+											subjectId={subjectId}
+											topicId={resolvedTopicId}
+											onClose={onCloseInlineForm}
+											onSaved={onQuestionSaved}
+										/>
+									)}
+									{inlineForm?.questionType !== "QUESTION_GROUP" &&
+										inlineForm?.questionType !== "COMPREHENSION" &&
+										inlineForm?.questionType !==
+											"FILL_IN_THE_BLANK" && (
+											<AddQuestionForm
+												classId={classId}
+												subjectId={subjectId}
+												topicId={resolvedTopicId}
+												onClose={onCloseInlineForm}
+												onSaved={onQuestionSaved}
+											/>
+										)}
+								</div>
+							)}
 						</div>
 					) : (
-						<DndContext
-							sensors={sensors}
-							collisionDetection={closestCenter}
-							onDragEnd={handleDragEnd}
-						>
-							<SortableContext
-								items={
-									section?.questions
-										? section?.questions?.map((q) => q?.id)
-										: []
-								}
-								strategy={verticalListSortingStrategy}
-							>
-								<div className="space-y-2">
-									{section?.questions?.map((q, idx) => (
-										<SortableQuestionRow
-											key={q.id}
-											question={q}
-											number={idx + 1}
-											onRemove={() => onRemoveQuestion(q.id, q.aqId)}
-										/>
-									))}
-								</div>
-							</SortableContext>
-						</DndContext>
+						<div className="px-5 py-4">
+							{/* Action buttons */}
+							<div className="mb-4 flex items-center gap-2">
+								<button
+									type="button"
+									onClick={onAddQuestion}
+									className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+								>
+									<Plus className="h-3.5 w-3.5" />
+									Add Question
+								</button>
+								<button
+									type="button"
+									onClick={onAddFromBank}
+									disabled={isAddingQuestions}
+									className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
+								>
+									{isAddingQuestions ? (
+										<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-400 border-t-gray-700" />
+									) : (
+										<BookOpen className="h-3.5 w-3.5" />
+									)}
+									Add from Question Bank
+								</button>
+							</div>
+						</div>
 					)}
 
-					{section?.questions?.length > 0 && (
-						<div className="mt-3 grid grid-cols-2 gap-2">
-							<button
-								type="button"
-								onClick={onAddQuestion}
-								className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-2.5 text-xs text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600"
-							>
-								<Plus className="h-3.5 w-3.5" />
-								Add Question
-							</button>
-							<button
-								type="button"
-								onClick={onAddFromBank}
-								className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-2.5 text-xs text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600"
-							>
-								<BookOpen className="h-3.5 w-3.5" />
-								Add from Question Bank
-							</button>
+					{/* Questions — always visible below */}
+					{!inlineForm && (
+						<div className="px-5 pb-4">
+							{section?.questions?.length === 0 ? (
+								<div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-10 text-center">
+									<p className="mb-1 text-sm text-gray-500">
+										No questions yet
+									</p>
+									<p className="mb-3 text-xs text-gray-400">
+										Add from the question bank to get started
+									</p>
+									<button
+										type="button"
+										onClick={onAddFromBank}
+										className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-1.5 text-sm transition-colors hover:bg-gray-50"
+									>
+										<BookOpen className="h-3.5 w-3.5" />
+										Add from Question Bank
+									</button>
+								</div>
+							) : (
+								<DndContext
+									sensors={sensors}
+									collisionDetection={closestCenter}
+									onDragEnd={handleDragEnd}
+								>
+									<SortableContext
+										items={
+											section?.questions
+												? section?.questions?.map((q) => q?.id)
+												: []
+										}
+										strategy={verticalListSortingStrategy}
+									>
+										<div className="space-y-2">
+											{section?.questions?.map((q, idx) => (
+												<SortableQuestionRow
+													key={q.id}
+													question={q}
+													number={idx + 1}
+													onRemove={() =>
+														onRemoveQuestion(q.id, q.aqId)
+													}
+												/>
+											))}
+										</div>
+									</SortableContext>
+								</DndContext>
+							)}
+
+							{section?.questions?.length > 0 && (
+								<div className="mt-3 grid grid-cols-2 gap-2">
+									<button
+										type="button"
+										onClick={onAddQuestion}
+										className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-2.5 text-xs text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600"
+									>
+										<Plus className="h-3.5 w-3.5" />
+										Add Question
+									</button>
+									<button
+										type="button"
+										onClick={onAddFromBank}
+										className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-2.5 text-xs text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600"
+									>
+										<BookOpen className="h-3.5 w-3.5" />
+										Add from Question Bank
+									</button>
+								</div>
+							)}
 						</div>
 					)}
 				</div>
@@ -976,6 +964,8 @@ const SortableQuestionRow = ({
 	const tsd = question?.typeSpecificData;
 	const isGroup = qType === "QUESTION_GROUP" || qType === "COMPREHENSION";
 	const subCount = isGroup ? ((tsd as any)?.subQuestions?.length ?? 0) : 0;
+
+	console.log({ tsd, question });
 
 	return (
 		<div

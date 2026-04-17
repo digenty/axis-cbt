@@ -208,11 +208,16 @@ export interface ApiSectionQuestion {
 
 export interface ApiSection {
 	id: number;
+	uuid: string;
+	active: boolean;
+	version: number;
+	createdAt: string;
+	updatedAt: string;
+	assessmentId: number;
 	name: string;
 	instructions: string | null;
 	sectionOrder: number;
 	timeLimitMinutes: number;
-	questions: ApiSectionQuestion[];
 }
 
 export interface CreateSectionPayload {
