@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { cn, getQuestionTypeLabel } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { getQuestionTypeLabel } from "@/utils/question";
 import type { QuestionType, SubQuestionType } from "@/types/question";
 
 // ─── Types available inside single-question form ──────────────────────────────

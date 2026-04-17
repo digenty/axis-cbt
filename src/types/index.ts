@@ -1,4 +1,4 @@
-// import { JwtPayload } from "jwt-decode";
+import { JwtPayload } from "jwt-decode";
 
 // export type SchoolOption = "Primary School" | "Secondary School";
 // export type Crumb = { label: string; url?: string };
@@ -54,14 +54,14 @@
 // 	},
 // ];
 
-// interface User {
-// 	id: string;
-// 	branchId: number;
-// 	schoolId: number;
-// 	permissions: string[];
-// }
+interface User {
+	id: string;
+	branchId: number;
+	schoolId: number;
+	permissions: string[];
+}
 
-// export type JWTPayload = JwtPayload & User;
+export type JWTPayload = JwtPayload & User;
 
 // export interface Pagination {
 // 	limit: number;
@@ -119,7 +119,7 @@
 
 export interface Question {
 	id: string;
-	topicId: number;
+	topicId: string;
 	type: QuestionType;
 	text: string;
 	marks: number;
@@ -140,7 +140,7 @@ export interface Question {
 export interface Topic {
 	id: string;
 	name: string;
-	subjectId: number;
+	subjectId: string;
 	questions: Question[];
 	createdAt: string;
 }
@@ -242,24 +242,24 @@ export interface Blank {
 // 	createdAt: string;
 // }
 
-// // ─── Test / Assessment ────────────────────────────────────────────────────────
+// ─── Test / Assessment ────────────────────────────────────────────────────────
 
-// export type TestStatus = "draft" | "published" | "completed";
-// export type TestType = "Continuous Assessment" | "Examination";
-// export type TermType = "First Term" | "Second Term" | "Third Term";
-// export type AssessmentMapping =
-// 	| "None ( Manual Scoring)"
-// 	| "Continuous Assessment 1 (20%)"
-// 	| "Continuous Assessment 2 (20%)"
-// 	| "Examination (60%)";
+export type TestStatus = "draft" | "published" | "completed";
+export type TestType = "Continuous Assessment" | "Examination";
+export type TermType = "First Term" | "Second Term" | "Third Term";
+export type AssessmentMapping =
+	| "None ( Manual Scoring)"
+	| "Continuous Assessment 1 (20%)"
+	| "Continuous Assessment 2 (20%)"
+	| "Examination (60%)";
 
-// export interface TestSection {
-// 	id: string;
-// 	title: string;
-// 	instruction: string;
-// 	/** Ordered list of question IDs in this section */
-// 	questionIds: string[];
-// }
+export interface TestSection {
+	id: string;
+	title: string;
+	instruction: string;
+	/** Ordered list of question IDs in this section */
+	questionIds: string[];
+}
 
 // export interface Result {
 // 	id: string;
@@ -357,81 +357,74 @@ export type QuestionType =
 // // 	| "Continuous Assessment 2 (20%)"
 // // 	| "Examination (60%)";
 
-// export interface TestSection {
-// 	id: string;
-// 	title: string;
-// 	instruction: string;
-// 	questionIds: string[];
-// }
-
-// export interface Test {
-// 	id: string;
-// 	title: string;
-// 	subjectId: number;
-// 	classId: number;
-// 	term: TermType;
-// 	testType: TestType;
-// 	assessmentMapping: AssessmentMapping | "";
-// 	/** label shown as badge e.g. "CA 1" */
-// 	mappingLabel: string;
-// 	testDate: string;
-// 	startTime: string;
-// 	amPm: "AM" | "PM";
-// 	duration: number;
-// 	studentResultAccess: boolean;
-// 	status: TestStatus;
-// 	sections: TestSection[];
-// 	totalMarks: number;
-// 	createdAt: string;
-// 	updatedAt: string;
-// }
+export interface Test {
+	id: string;
+	title: string;
+	subjectId: number;
+	classId: number;
+	term: TermType;
+	testType: TestType;
+	assessmentMapping: AssessmentMapping | "";
+	/** label shown as badge e.g. "CA 1" */
+	mappingLabel: string;
+	testDate: string;
+	startTime: string;
+	amPm: "AM" | "PM";
+	duration: number;
+	studentResultAccess: boolean;
+	status: TestStatus;
+	sections: TestSection[];
+	totalMarks: number;
+	createdAt: string;
+	updatedAt: string;
+}
 
 // // ─── Student Attempts & Results ───────────────────────────────────────────────
 
-// export type AttemptStatus =
-// 	| "in-progress"
-// 	| "submitted"
-// 	| "missed"
-// 	| "graded"
-// 	| "retake-pending";
+export type AttemptStatus =
+	| "in-progress"
+	| "submitted"
+	| "missed"
+	| "graded"
+	| "retake-pending";
 
-// /** One student's answer to one question */
-// export interface StudentAnswer {
-// 	questionId: string;
-// 	/** For MCQ / T-F: selected option ID(s) */
-// 	selectedOptionIds?: string[];
-// 	/** For short-answer / essay / fill-in-blank / numerical */
-// 	textAnswer?: string;
-// 	/** For matching: map from matchItem.id → matchOption.id */
-// 	matchAnswers?: Record<string, string>;
-// 	/** For multiple-blanks: map from blank.id → answer */
-// 	blankAnswers?: Record<string, string | string[]>;
-// 	/** Teacher-assigned marks for this question (overrides auto-grade) */
-// 	awardedMarks?: number;
-// }
+/** One student's answer to one question */
+export interface StudentAnswer {
+	questionId: string;
+	/** For MCQ / T-F: selected option ID(s) */
+	selectedOptionIds?: string[];
+	/** For short-answer / essay / fill-in-blank / numerical */
+	textAnswer?: string;
+	/** For matching: map from matchItem.id → matchOption.id */
+	matchAnswers?: Record<string, string>;
+	/** For multiple-blanks: map from blank.id → answer */
+	blankAnswers?: Record<string, string | string[]>;
+	/** Teacher-assigned marks for this question (overrides auto-grade) */
+	awardedMarks?: number;
+}
 
-// export interface StudentAttempt {
-// 	id: string;
-// 	testId: string;
-// 	subjectId: string;
-// 	classId: string;
-// 	studentId: string;
-// 	studentName: string;
-// 	studentClass: string;
-// 	studentAvatar?: string;
-// 	status: AttemptStatus;
-// 	answers: StudentAnswer[];
-// 	/** Raw score out of test totalMarks */
-// 	score?: number;
-// 	totalMarks?: number;
-// 	percentage?: number;
-// 	/** Weighted score after applying assessmentMapping weight */
-// 	weightedScore?: number;
-// 	feedback?: string;
-// 	startedAt: string;
-// 	submittedAt?: string;
-// 	gradedAt?: string;
-// }
+export interface StudentAttempt {
+	id: string;
+	testId: string;
+	subjectId: string;
+	classId: string;
+	studentId: string;
+	studentName: string;
+	studentClass: string;
+	studentAvatar?: string;
+	status: AttemptStatus;
+	answers: StudentAnswer[];
+	/** Raw score out of test totalMarks */
+	score?: number;
+	totalMarks?: number;
+	percentage?: number;
+	/** Weighted score after applying assessmentMapping weight */
+	weightedScore?: number;
+	feedback?: string;
+	startedAt: string;
+	submittedAt?: string;
+	gradedAt?: string;
+}
 
 // export interface Result {
 // 	id: string;
@@ -452,10 +445,10 @@ export type QuestionType =
 // 	questions: Partial<Question>[];
 // }
 
-// export type LevelType =
-// 	| "CRECHE"
-// 	| "KINDERGARTEN"
-// 	| "NURSERY"
-// 	| "PRIMARY"
-// 	| "JUNIOR_SECONDARY"
-// 	| "SENIOR_SECONDARY";
+export type LevelType =
+	| "CRECHE"
+	| "KINDERGARTEN"
+	| "NURSERY"
+	| "PRIMARY"
+	| "JUNIOR_SECONDARY"
+	| "SENIOR_SECONDARY";

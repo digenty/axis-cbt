@@ -49,7 +49,7 @@ export const ResultsView = ({
 	const { tests, getAttemptsByTest, updateAttempt } = useCBTStore();
 
 	// Tests for this subject + demo test
-	const subjectTests = tests.filter((t) => t.subjectId === subjectId);
+	const subjectTests = tests.filter((t) => String(t.subjectId) === subjectId);
 	// For demo: inject a synthetic test entry if no real tests exist yet
 	const allTests: { id: string; title: string }[] =
 		subjectTests.length > 0

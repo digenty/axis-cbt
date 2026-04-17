@@ -219,7 +219,7 @@ export const CreateTestModal = ({
 			let result: ApiAssessment;
 			if (editAssessment) {
 				const res = await updateAssessment({
-					uuid: editAssessment.uuid,
+					id: editAssessment.id,
 					payload,
 				});
 				result = res.data;

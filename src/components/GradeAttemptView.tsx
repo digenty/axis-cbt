@@ -2,13 +2,12 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-// import { StudentAttempt, StudentAnswer, Question } from "@/types";
+import { StudentAttempt, StudentAnswer, Question } from "@/types";
 import { cn } from "@/lib/utils";
 import { Flag, ChevronRight, RotateCcw } from "lucide-react";
 import { useCBTStore } from "@/store";
 import { Modal } from "@/components/Modal";
 import Layout from "@/components/Layout";
-import { StudentAnswer } from "@/types/results";
 
 // ─── Demo test sections (mirrors what the test editor would store) ────────────
 const DEMO_SECTIONS = [
@@ -33,12 +32,13 @@ const DEMO_SECTIONS = [
 ];
 
 interface GradeAttemptViewProps {
-	// attempt: StudentAttempt;
+	attempt: StudentAttempt;
 	classId: string;
 	subjectId: string;
 }
 
 export const GradeAttemptView = ({
+	attempt,
 	classId,
 	subjectId,
 }: GradeAttemptViewProps) => {
@@ -46,8 +46,9 @@ export const GradeAttemptView = ({
 	const { questions: allQuestions, tests, gradeAttempt } = useCBTStore();
 	const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
 	const [gradeModalOpen, setGradeModalOpen] = useState(false);
-	const [answers, setAnswers] = useState<StudentAnswer[]>();
-	// attempt.answers || [],
+	const [answers, setAnswers] = useState<StudentAnswer[]>(
+		attempt.answers || [],
+	);
 	const [awardedMarks, setAwardedMarks] = useState<Record<string, number>>(
 		() => {
 			const m: Record<string, number> = {};
