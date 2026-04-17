@@ -1,8 +1,11 @@
 "use client";
 
-import { useCBTStore } from "@/store";
-import React, { use } from "react";
+import { use, useEffect } from "react";
 import { ClassSubjectsView } from "./ClassSubjectsView";
+import Layout from "./Layout";
+import { useGetClassDetails } from "@/hooks/queryHooks/useSubjects";
+import { useGetSchools } from "@/hooks/queryHooks/useSchool";
+import { ApiSchoolResponse } from "@/api/subjects";
 import { BackButton } from "./PageHeader";
 
 const ClassDetails = ({
@@ -11,19 +14,39 @@ const ClassDetails = ({
 	params: Promise<{ classId: string }>;
 }>) => {
 	const { classId } = use(params);
-	const cls = useCBTStore((s) => s.classes.find((c) => c.id === classId));
+
+	const { data: classDetailsResponse, refetch } = useGetClassDetails(
+		Number(classId),
+	);
+	const { data: schoolsResponse, refetch: refetchSchool } = useGetSchools();
+
+	useEffect(() => {
+		refetch();
+		refetchSchool();
+	}, [refetch, refetchSchool]);
+
+	const classDetails = classDetailsResponse?.data;
+	const schools = schoolsResponse?.data;
+
+	const currentSchool = schools?.find(
+		(obj: ApiSchoolResponse) => obj?.id === classDetails?.schoolId,
+	);
 
 	return (
-		<div className="p-8">
-			<BackButton href="/classes" />
-			<div className="mb-5">
-				<h1 className="text-lg font-semibold text-gray-900">
-					{cls?.name || classId}
-				</h1>
-				<p className="mt-0.5 text-sm text-gray-500">{cls?.school}</p>
+		<Layout>
+			<div className="mb-6 flex items-center gap-3">
+				<BackButton href="/classes" />
+				<div>
+					<h1 className="text-lg font-semibold text-zinc-900">
+						{classDetails?.name ?? "Class"}
+					</h1>
+					{currentSchool?.name && (
+						<p className="text-xs text-zinc-500">{currentSchool.name}</p>
+					)}
+				</div>
 			</div>
 			<ClassSubjectsView classId={classId} />
-		</div>
+		</Layout>
 	);
 };
 

@@ -103,7 +103,7 @@ export const EmptyState = ({
 	description,
 	action,
 }: EmptyStateProps) => (
-	<div className="flex flex-col items-center justify-center py-16 text-center">
+	<div className="w-full flex flex-col items-center justify-center py-16 text-center">
 		{icon && <div className="mb-4 text-gray-300">{icon}</div>}
 		<p className="mb-1 text-sm font-medium text-gray-600">{title}</p>
 		{description && (

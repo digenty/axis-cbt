@@ -1,8 +1,8 @@
 "use client";
+
 import { use } from "react";
-import { useCBTStore } from "@/store";
-import { BackButton } from "@/components/PageHeader";
 import { TestEditor } from "@/components/TestEditor";
+import Layout from "@/components/Layout";
 
 export default function TestEditorPage({
 	params,
@@ -14,36 +14,17 @@ export default function TestEditorPage({
 	}>;
 }) {
 	const { classId, subjectId, assessmentId } = use(params);
-	const test = useCBTStore((s) => s.tests.find((t) => t.id === assessmentId));
-	const cls = useCBTStore((s) => s.classes.find((c) => c.id === classId));
-	const subject = useCBTStore((s) =>
-		s.subjects.find((sub) => sub.id === subjectId),
-	);
-
-	if (!test) {
-		return (
-			<div>
-				<BackButton
-					href={`/classes/${classId}/subjects/${subjectId}/assessments`}
-				/>
-				<p className="py-20 text-center text-sm text-gray-400">
-					Test not found
-				</p>
-			</div>
-		);
-	}
 
 	return (
-		<div className="p-8">
-			<BackButton
-				href={`/classes/${classId}/subjects/${subjectId}/assessments`}
-			/>
-			<TestEditor
-				test={test}
-				classId={classId}
-				className={cls?.name || classId}
-				subjectName={subject?.name || subjectId}
-			/>
-		</div>
+		<Layout>
+			<div className="flex h-[calc(100vh-3rem)] flex-col overflow-y-auto">
+				<TestEditor
+					assessmentUuid={assessmentId}
+					classId={Number(classId)}
+					subjectId={Number(subjectId)}
+					backHref={`/classes/${classId}/subjects/${subjectId}/assessments`}
+				/>
+			</div>
+		</Layout>
 	);
 }

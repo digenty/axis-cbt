@@ -1,4 +1,5 @@
 "use client";
+
 import Link from "next/link";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -64,7 +65,7 @@ export const BackButton = ({ href }: { href?: string }) => {
 	return (
 		<button
 			onClick={() => (href ? router.push(href) : router.back())}
-			className="mb-4 flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-800"
+			className="flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-800"
 		>
 			<ArrowLeft className="h-3.5 w-3.5" />
 			Back

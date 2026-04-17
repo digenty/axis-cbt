@@ -1,170 +1,263 @@
 "use client";
-import { useState, useEffect } from "react";
-// import { Modal } from "@/components/ui/modal";
-import { Test, TestType, TermType, AssessmentMapping } from "@/types";
-import { generateId, cn } from "@/lib/utils";
-import { ChevronDown, Check } from "lucide-react";
-import { Modal } from "./Modal";
-// import { Modal } from "@/Modal";
+
+import React, { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Modal } from "@/components/Modal";
+import { toast } from "@/components/Toast";
+import {
+	useCreateAssessment,
+	useUpdateAssessment,
+} from "@/hooks/queryHooks/useAssessment";
+import type {
+	ApiAssessment,
+	AssessmentFormState,
+	AssessmentMapping,
+	AssessmentTerm,
+	AssessmentTestType,
+	CreateAssessmentPayload,
+} from "@/types/assessment";
+import {
+	ASSESSMENT_FORM_INITIAL,
+	ASSESSMENT_MAPPING_LABELS,
+	ASSESSMENT_TERM_LABELS,
+	ASSESSMENT_TEST_TYPE_LABELS,
+} from "@/types/assessment";
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface CreateTestModalProps {
 	open: boolean;
+	branchId: number;
+	classId: number;
+	subjectId: number;
+	/** Display-only — shown in the read-only Class/Subject fields */
+	className?: string;
+	subjectName?: string;
+	editAssessment?: ApiAssessment | null;
 	onClose: () => void;
-	subjectId: string;
-	classId: string;
-	className: string;
-	subjectName: string;
-	editTest?: Test | null;
-	onSaved: (test: Test) => void;
+	onSaved?: (assessment: ApiAssessment) => void;
 }
 
-const TERMS: TermType[] = ["First Term", "Second Term", "Third Term"];
-const TEST_TYPES: TestType[] = ["Continuous Assessment", "Examination"];
-const ASSESSMENT_MAPPINGS: AssessmentMapping[] = [
-	"None ( Manual Scoring)",
-	"Continuous Assessment 1 (20%)",
-	"Continuous Assessment 2 (20%)",
-	"Examination (60%)",
-];
+// ─── Time helpers ─────────────────────────────────────────────────────────────
 
-const MAPPING_LABELS: Record<string, string> = {
-	"None ( Manual Scoring)": "Manual",
-	"Continuous Assessment 1 (20%)": "CA 1",
-	"Continuous Assessment 2 (20%)": "CA 2",
-	"Examination (60%)": "Exam",
-};
-
-interface FormState {
-	title: string;
-	term: TermType;
-	testType: TestType;
-	assessmentMapping: AssessmentMapping | "";
-	testDate: string;
-	startHour: string;
-	startMinute: string;
-	amPm: "AM" | "PM";
-	duration: number;
-	studentResultAccess: boolean;
+/** "2024-09-01T10:30:00" → { date: "2024-09-01", hour: "10", minute: "30", period: "AM" } */
+function parseDateTime(iso: string | null): {
+	date: string;
+	hour: string;
+	minute: string;
+	period: "AM" | "PM";
+} {
+	if (!iso) return { date: "", hour: "00", minute: "00", period: "AM" };
+	const d = new Date(iso);
+	const date = iso.slice(0, 10);
+	let h = d.getHours();
+	const period: "AM" | "PM" = h >= 12 ? "PM" : "AM";
+	if (h > 12) h -= 12;
+	if (h === 0) h = 12;
+	return {
+		date,
+		hour: String(h).padStart(2, "0"),
+		minute: String(d.getMinutes()).padStart(2, "0"),
+		period,
+	};
 }
 
-const defaultForm = (): FormState => ({
-	title: "",
-	term: "First Term",
-	testType: "Continuous Assessment",
-	assessmentMapping: "",
-	testDate: "",
-	startHour: "00",
-	startMinute: "00",
-	amPm: "AM",
-	duration: 60,
-	studentResultAccess: false,
-});
+/** date + hour + minute + period → ISO string "2024-09-01T10:30:00" */
+function buildIso(
+	date: string,
+	hour: string,
+	minute: string,
+	period: "AM" | "PM",
+): string | null {
+	if (!date) return null;
+	let h = parseInt(hour || "12", 10);
+	if (period === "AM" && h === 12) h = 0;
+	if (period === "PM" && h !== 12) h += 12;
+	return `${date}T${String(h).padStart(2, "0")}:${(minute || "00").padStart(2, "0")}:00`;
+}
+
+// ─── Form state helpers ───────────────────────────────────────────────────────
+
+interface TimeState {
+	date: string;
+	hour: string;
+	minute: string;
+	period: "AM" | "PM";
+}
+
+function hydrateForm(a: ApiAssessment): AssessmentFormState {
+	return {
+		name: a.name,
+		term: a.term,
+		testType: a.testType,
+		assessmentMapping: a.assessmentMapping,
+		startDateTime: a.startDateTime ?? "",
+		endDateTime: a.endDateTime ?? "",
+		durationMinutes:
+			a.durationMinutes != null ? String(a.durationMinutes) : "60",
+		totalMarks: String(a.totalMarks ?? ""),
+		passingMarks: a.passingMarks != null ? String(a.passingMarks) : "",
+		shuffleQuestions: a.shuffleQuestions,
+		shuffleOptions: a.shuffleOptions,
+		showResultsImmediately: a.showResultsImmediately,
+		allowReview: a.allowReview,
+		instructions: a.instructions ?? "",
+	};
+}
+
+function buildPayload(
+	form: AssessmentFormState,
+	timeState: TimeState,
+	branchId: number,
+	classId: number,
+	subjectId: number,
+): CreateAssessmentPayload {
+	return {
+		name: form.name.trim(),
+		branchId,
+		classId,
+		subjectId,
+		term: form.term as AssessmentTerm,
+		testType: form.testType as AssessmentTestType,
+		assessmentMapping: form.assessmentMapping as AssessmentMapping,
+		startDateTime: buildIso(
+			timeState.date,
+			timeState.hour,
+			timeState.minute,
+			timeState.period,
+		),
+		durationMinutes: form.durationMinutes
+			? Number(form.durationMinutes)
+			: null,
+		totalMarks: form.totalMarks ? Number(form.totalMarks) : undefined,
+		passingMarks: form.passingMarks ? Number(form.passingMarks) : null,
+		shuffleQuestions: form.shuffleQuestions,
+		shuffleOptions: form.shuffleOptions,
+		showResultsImmediately: form.showResultsImmediately,
+		allowReview: form.allowReview,
+		instructions: form.instructions.trim() || null,
+	};
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export const CreateTestModal = ({
 	open,
-	onClose,
-	subjectId,
+	branchId,
 	classId,
+	subjectId,
 	className,
 	subjectName,
-	editTest,
+	editAssessment,
+	onClose,
 	onSaved,
 }: CreateTestModalProps) => {
-	const [form, setForm] = useState<FormState>(defaultForm);
+	const [form, setForm] = useState<AssessmentFormState>(
+		ASSESSMENT_FORM_INITIAL,
+	);
+	const [timeState, setTimeState] = useState<TimeState>({
+		date: "",
+		hour: "00",
+		minute: "00",
+		period: "AM",
+	});
 	const [errors, setErrors] = useState<
-		Partial<Record<keyof FormState, string>>
+		Partial<Record<keyof AssessmentFormState, string>>
 	>({});
-	const [saving, setSaving] = useState(false);
-	const [testTypeOpen, setTestTypeOpen] = useState(false);
-	const [mappingOpen, setMappingOpen] = useState(false);
+
+	const { mutateAsync: createAssessment, isPending: isCreating } =
+		useCreateAssessment();
+	const { mutateAsync: updateAssessment, isPending: isUpdating } =
+		useUpdateAssessment();
+	const saving = isCreating || isUpdating;
 
 	useEffect(() => {
-		if (open) {
-			if (editTest) {
-				// eslint-disable-next-line react-hooks/set-state-in-effect
-				setForm({
-					title: editTest.title,
-					term: editTest.term,
-					testType: editTest.testType,
-					assessmentMapping: editTest.assessmentMapping,
-					testDate: editTest.testDate,
-					startHour: editTest.startTime.split(":")[0] || "00",
-					startMinute: editTest.startTime.split(":")[1] || "00",
-					amPm: editTest.amPm,
-					duration: editTest.duration,
-					studentResultAccess: editTest.studentResultAccess,
-				});
-			} else {
-				setForm(defaultForm());
-				setErrors({});
-			}
+		if (!open) return;
+		if (editAssessment) {
+			const f = hydrateForm(editAssessment);
+			setForm(f);
+			setTimeState(parseDateTime(editAssessment.startDateTime));
+		} else {
+			setForm(ASSESSMENT_FORM_INITIAL);
+			setTimeState({ date: "", hour: "00", minute: "00", period: "AM" });
 		}
-	}, [open, editTest]);
+		setErrors({});
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [editAssessment]);
 
-	const update = <K extends keyof FormState>(k: K, v: FormState[K]) => {
-		setForm((p) => ({ ...p, [k]: v }));
-		setErrors((p) => ({ ...p, [k]: undefined }));
+	const update = <K extends keyof AssessmentFormState>(
+		key: K,
+		val: AssessmentFormState[K],
+	) => {
+		setForm((p) => ({ ...p, [key]: val }));
+		setErrors((p) => ({ ...p, [key]: undefined }));
 	};
 
-	const validate = () => {
-		const e: Partial<Record<keyof FormState, string>> = {};
-		if (!form.title.trim()) e.title = "Test name is required";
-		setErrors(e);
-		return Object.keys(e).length === 0;
+	const validate = (): boolean => {
+		const errs: Partial<Record<keyof AssessmentFormState, string>> = {};
+		if (!form.name.trim()) errs.name = "Test name is required";
+		if (!form.term) errs.term = "Term is required";
+		if (!form.testType) errs.testType = "Test type is required";
+		if (!form.assessmentMapping)
+			errs.assessmentMapping = "Assessment mapping is required";
+		setErrors(errs);
+		return Object.keys(errs).length === 0;
 	};
 
 	const handleSave = async () => {
 		if (!validate()) return;
-		setSaving(true);
-		await new Promise((r) => setTimeout(r, 400));
-		const test: Test = {
-			id: editTest?.id || generateId(),
-			title: form.title,
-			subjectId,
+		const payload = buildPayload(
+			form,
+			timeState,
+			branchId,
 			classId,
-			term: form.term,
-			testType: form.testType,
-			assessmentMapping: form.assessmentMapping as AssessmentMapping,
-			mappingLabel: MAPPING_LABELS[form.assessmentMapping] || "CA 1",
-			testDate: form.testDate,
-			startTime: `${form.startHour}:${form.startMinute}`,
-			amPm: form.amPm,
-			duration: form.duration,
-			studentResultAccess: form.studentResultAccess,
-			status: editTest?.status || "draft",
-			sections: editTest?.sections || [
-				{
-					id: generateId(),
-					title: "Section A",
-					instruction: "",
-					questionIds: [],
-				},
-			],
-			totalMarks: editTest?.totalMarks || 0,
-			createdAt: editTest?.createdAt || new Date().toISOString(),
-			updatedAt: new Date().toISOString(),
-		};
-		setSaving(false);
-		onSaved(test);
+			subjectId,
+		);
+
+		try {
+			let result: ApiAssessment;
+			if (editAssessment) {
+				const res = await updateAssessment({
+					id: editAssessment.id,
+					payload,
+				});
+				result = res.data;
+				toast({ title: "Assessment updated", type: "success" });
+			} else {
+				const res = await createAssessment(payload);
+				result = res.data;
+				toast({ title: "Assessment created", type: "success" });
+			}
+			onSaved?.(result);
+			onClose();
+		} catch (err: unknown) {
+			const msg =
+				err && typeof err === "object" && "message" in err
+					? String((err as { message: string }).message)
+					: "Could not save assessment";
+			toast({ title: msg, type: "error" });
+		}
 	};
 
 	return (
 		<Modal
 			open={open}
 			onClose={onClose}
-			title="Create Test"
-			className="max-h-[90vh] overflow-y-auto"
+			title={editAssessment ? "Edit Test" : "Create Test"}
 			subtitle="Set up the basic details. You'll add questions in the next step."
-			// size="xl"
+			className="max-h-[90vh] overflow-y-auto"
 			footer={
 				<div className="flex items-center justify-between px-5 pb-5">
 					<button
+						type="button"
 						onClick={onClose}
-						className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
+						className="rounded-lg border border-gray-200 px-5 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
 					>
 						Cancel
 					</button>
 					<button
+						type="button"
 						onClick={handleSave}
 						disabled={saving}
 						className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
@@ -172,42 +265,44 @@ export const CreateTestModal = ({
 						{saving && (
 							<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
 						)}
-						Save & Continue
+						{editAssessment ? "Save Changes" : "Save & Continue"}
 					</button>
 				</div>
 			}
 		>
-			<div className="space-y-5 px-6 py-5">
-				{/* Test name */}
+			<div className="space-y-4 px-5 py-4">
+				{/* Test Name */}
 				<div>
 					<label className="mb-1.5 block text-sm font-medium text-gray-800">
 						Test Name
 					</label>
 					<input
 						type="text"
-						value={form.title}
-						onChange={(e) => update("title", e.target.value)}
+						value={form.name}
+						onChange={(e) => update("name", e.target.value)}
 						placeholder="e.g Mid-term mathematics test"
 						className={cn(
-							"h-11 w-full rounded-xl border px-4 py-2.5 text-sm transition placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none",
-							errors.title ? "border-red-400" : "border-gray-200",
+							"h-10 w-full rounded-lg border px-3 text-sm transition placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none",
+							errors.name ? "border-red-400" : "border-gray-200",
 						)}
 					/>
-					{errors.title && (
-						<p className="mt-1 text-xs text-red-500">{errors.title}</p>
+					{errors.name && (
+						<p className="mt-1 text-xs text-red-500">{errors.name}</p>
 					)}
 				</div>
 
 				{/* Class + Subject (read-only) */}
-				<div className="grid grid-cols-2 gap-4">
+				<div className="grid grid-cols-2 gap-3">
 					<div>
 						<label className="mb-1.5 block text-sm font-medium text-gray-800">
 							Class
 						</label>
 						<input
+							type="text"
+							value={className ?? ""}
 							readOnly
-							value={className}
-							className="h-11 w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-500"
+							placeholder="Class"
+							className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-500 outline-none"
 						/>
 					</div>
 					<div>
@@ -215,63 +310,54 @@ export const CreateTestModal = ({
 							Subject
 						</label>
 						<input
+							type="text"
+							value={subjectName ?? ""}
 							readOnly
-							value={subjectName}
-							className="h-11 w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-500"
+							placeholder="Subject"
+							className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-500 outline-none"
 						/>
 					</div>
 				</div>
 
 				{/* Term + Test Type */}
-				<div className="grid grid-cols-2 gap-4">
+				<div className="grid grid-cols-2 gap-3">
 					<div>
 						<label className="mb-1.5 block text-sm font-medium text-gray-800">
 							Term
 						</label>
-						<div className="relative">
-							<select
-								value={form.term}
-								onChange={(e) =>
-									update("term", e.target.value as TermType)
-								}
-								className="h-11 w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
-							>
-								{TERMS.map((t) => (
-									<option key={t}>{t}</option>
-								))}
-							</select>
-							<ChevronDown className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
-						</div>
+						<SelectField
+							value={form.term}
+							onChange={(v) => update("term", v as AssessmentTerm)}
+							placeholder="Select term"
+							options={Object.entries(ASSESSMENT_TERM_LABELS).map(
+								([value, label]) => ({ value, label }),
+							)}
+							error={!!errors.term}
+						/>
+						{errors.term && (
+							<p className="mt-1 text-xs text-red-500">{errors.term}</p>
+						)}
 					</div>
 					<div>
 						<label className="mb-1.5 block text-sm font-medium text-gray-800">
 							Test Type
 						</label>
-						<div className="relative">
-							<button
-								onClick={() => setTestTypeOpen((v) => !v)}
-								className="flex h-11 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-							>
-								<span>{form.testType}</span>
-								<ChevronDown className="h-4 w-4 text-gray-400" />
-							</button>
-							{testTypeOpen && (
-								<div className="absolute top-full right-0 z-30 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-									{TEST_TYPES.map((t) => (
-										<button
-											key={t}
-											onClick={() => {
-												update("testType", t);
-												setTestTypeOpen(false);
-											}}
-											className="w-full px-4 py-2.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
-										>
-											{t}
-										</button>
-									))}
-								</div>
+						<SelectField
+							value={form.testType}
+							onChange={(v) =>
+								update("testType", v as AssessmentTestType)
+							}
+							placeholder="Select type"
+							options={Object.entries(ASSESSMENT_TEST_TYPE_LABELS).map(
+								([value, label]) => ({ value, label }),
 							)}
-						</div>
+							error={!!errors.testType}
+						/>
+						{errors.testType && (
+							<p className="mt-1 text-xs text-red-500">
+								{errors.testType}
+							</p>
+						)}
 					</div>
 				</div>
 
@@ -280,106 +366,95 @@ export const CreateTestModal = ({
 					<label className="mb-1.5 block text-sm font-medium text-gray-800">
 						Assessment Mapping
 					</label>
-					<div className="relative">
-						<button
-							onClick={() => setMappingOpen((v) => !v)}
-							className="flex h-11 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-						>
-							<span
-								className={
-									form.assessmentMapping
-										? "text-gray-800"
-										: "text-gray-400"
-								}
-							>
-								{form.assessmentMapping || "Map assessment"}
-							</span>
-							<ChevronDown className="h-4 w-4 text-gray-400" />
-						</button>
-						{mappingOpen && (
-							<div className="absolute top-full left-0 z-30 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-								{ASSESSMENT_MAPPINGS.map((m) => (
-									<button
-										key={m}
-										onClick={() => {
-											update("assessmentMapping", m);
-											setMappingOpen(false);
-										}}
-										className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-									>
-										{m}
-										{form.assessmentMapping === m && (
-											<Check className="h-3.5 w-3.5 text-blue-600" />
-										)}
-									</button>
-								))}
-							</div>
+					<SelectField
+						value={form.assessmentMapping}
+						onChange={(v) =>
+							update("assessmentMapping", v as AssessmentMapping)
+						}
+						placeholder="Map assessment"
+						options={Object.entries(ASSESSMENT_MAPPING_LABELS).map(
+							([value, label]) => ({ value, label }),
 						)}
-					</div>
+						error={!!errors.assessmentMapping}
+					/>
+					{errors.assessmentMapping && (
+						<p className="mt-1 text-xs text-red-500">
+							{errors.assessmentMapping}
+						</p>
+					)}
 				</div>
 
-				{/* Test Date + Time */}
-				<div className="grid grid-cols-2 gap-4">
+				{/* Test Date + Select Time */}
+				<div className="grid grid-cols-2 gap-3">
 					<div>
 						<label className="mb-1.5 block text-sm font-medium text-gray-800">
 							Test Date
 						</label>
 						<input
 							type="date"
-							value={form.testDate}
-							onChange={(e) => update("testDate", e.target.value)}
-							className="h-11 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-600 transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
+							value={timeState.date}
+							onChange={(e) =>
+								setTimeState((p) => ({ ...p, date: e.target.value }))
+							}
+							className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm transition focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none"
 						/>
 					</div>
 					<div>
 						<label className="mb-1.5 block text-sm font-medium text-gray-800">
 							Select Time
 						</label>
-						<div className="flex items-center gap-2">
+						<div className="flex h-10 items-center gap-1 rounded-lg border border-gray-200 px-2">
+							{/* Hour */}
 							<input
 								type="text"
+								inputMode="numeric"
 								maxLength={2}
-								value={form.startHour}
-								onChange={(e) =>
-									update(
-										"startHour",
-										e.target.value
-											.replace(/\D/g, "")
-											.padStart(2, "0")
-											.slice(-2),
-									)
-								}
-								className="h-11 w-16 rounded-xl border border-gray-200 px-2 py-2.5 text-center text-sm transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
+								value={timeState.hour}
+								onChange={(e) => {
+									const v = e.target.value
+										.replace(/\D/g, "")
+										.slice(0, 2);
+									setTimeState((p) => ({ ...p, hour: v }));
+								}}
+								className="w-8 bg-transparent text-center text-sm focus:outline-none"
+								placeholder="00"
 							/>
-							<span className="font-bold text-gray-400">:</span>
+							<span className="text-gray-400">:</span>
+							{/* Minute */}
 							<input
 								type="text"
+								inputMode="numeric"
 								maxLength={2}
-								value={form.startMinute}
-								onChange={(e) =>
-									update(
-										"startMinute",
-										e.target.value
-											.replace(/\D/g, "")
-											.padStart(2, "0")
-											.slice(-2),
-									)
-								}
-								className="h-11 w-16 rounded-xl border border-gray-200 px-2 py-2.5 text-center text-sm transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
+								value={timeState.minute}
+								onChange={(e) => {
+									const v = e.target.value
+										.replace(/\D/g, "")
+										.slice(0, 2);
+									setTimeState((p) => ({ ...p, minute: v }));
+								}}
+								className="w-8 bg-transparent text-center text-sm focus:outline-none"
+								placeholder="00"
 							/>
-							<div className="flex overflow-hidden rounded-xl border border-gray-200">
-								{(["AM", "PM"] as const).map((period) => (
+							{/* AM / PM toggle */}
+							<div className="ml-auto flex overflow-hidden rounded-md border border-gray-200">
+								{(["AM", "PM"] as const).map((p) => (
 									<button
-										key={period}
-										onClick={() => update("amPm", period)}
+										key={p}
+										type="button"
+										onClick={() =>
+											setTimeState((prev) => ({
+												...prev,
+												period: p,
+											}))
+										}
 										className={cn(
-											"px-3 py-2 text-sm font-medium transition-colors",
-											form.amPm === period
-												? "bg-gray-800 text-white"
-												: "bg-white text-gray-600 hover:bg-gray-50",
+											"px-2.5 py-1 text-xs font-medium transition-colors",
+											timeState.period === p
+												? "bg-blue-600 text-white"
+												: "bg-white text-gray-500 hover:bg-gray-50",
 										)}
 									>
-										{period}
+										{p}
 									</button>
 								))}
 							</div>
@@ -390,40 +465,46 @@ export const CreateTestModal = ({
 				{/* Duration */}
 				<div>
 					<label className="mb-1.5 block text-sm font-medium text-gray-800">
-						Duration{" "}
-						<span className="font-normal text-gray-400">(minutes)</span>
+						Duration (minutes)
 					</label>
 					<input
 						type="number"
 						min={1}
-						value={form.duration}
-						onChange={(e) => update("duration", Number(e.target.value))}
-						className="h-11 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
+						value={form.durationMinutes}
+						onChange={(e) => update("durationMinutes", e.target.value)}
+						placeholder="60"
+						className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm transition placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					/>
 				</div>
 
-				{/* Student result access */}
-				<div className="flex items-start gap-3">
-					<button
-						onClick={() =>
-							update("studentResultAccess", !form.studentResultAccess)
-						}
+				{/* Student result access toggle */}
+				<button
+					type="button"
+					onClick={() =>
+						update("showResultsImmediately", !form.showResultsImmediately)
+					}
+					className="flex w-full items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left transition-colors hover:bg-gray-50"
+				>
+					{/* Pill toggle */}
+					<div
 						className={cn(
-							"relative mt-0.5 h-6 w-10 shrink-0 rounded-full transition-colors",
-							form.studentResultAccess ? "bg-blue-600" : "bg-gray-200",
+							"relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors duration-200",
+							form.showResultsImmediately
+								? "bg-blue-600"
+								: "bg-gray-200",
 						)}
 					>
 						<span
 							className={cn(
-								"absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform",
-								form.studentResultAccess
-									? "translate-x-5"
-									: "translate-x-1",
+								"absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200",
+								form.showResultsImmediately
+									? "translate-x-4"
+									: "translate-x-0.5",
 							)}
 						/>
-					</button>
+					</div>
 					<div>
-						<p className="text-sm font-medium text-gray-800">
+						<p className="text-sm font-medium text-gray-900">
 							Student result access
 						</p>
 						<p className="mt-0.5 text-xs text-gray-500">
@@ -431,8 +512,46 @@ export const CreateTestModal = ({
 							feedback after submission.
 						</p>
 					</div>
-				</div>
+				</button>
 			</div>
 		</Modal>
 	);
 };
+
+// ─── SelectField ──────────────────────────────────────────────────────────────
+
+const SelectField = ({
+	value,
+	onChange,
+	placeholder,
+	options,
+	error,
+}: {
+	value: string;
+	onChange: (v: string) => void;
+	placeholder: string;
+	options: { value: string; label: string }[];
+	error?: boolean;
+}) => (
+	<div className="relative">
+		<select
+			value={value}
+			onChange={(e) => onChange(e.target.value)}
+			className={cn(
+				"h-10 w-full appearance-none rounded-lg border bg-white px-3 pr-9 text-sm transition focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none",
+				error ? "border-red-400" : "border-gray-200",
+				!value && "text-gray-400",
+			)}
+		>
+			<option value="" disabled>
+				{placeholder}
+			</option>
+			{options.map((opt) => (
+				<option key={opt.value} value={opt.value}>
+					{opt.label}
+				</option>
+			))}
+		</select>
+		<ChevronDown className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
+	</div>
+);

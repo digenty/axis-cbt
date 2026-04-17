@@ -1,36 +1,41 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
+import { AlertTriangle, CheckCircle, Download, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { X, Download, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
-import { Modal } from "./Modal";
-
-interface ImportQuestionsModalProps {
-	open: boolean;
-	onClose: () => void;
-	onImported: (count: number) => void;
-}
+import { Modal } from "@/components/Modal";
+import { useImportQuestions } from "@/hooks/queryHooks/useQuestionBank";
+import { toast } from "@/components/Toast";
 
 type Step = 1 | 2;
 
 interface UploadedFile {
 	name: string;
 	size: string;
+	raw: File;
 }
 
 interface ParseResult {
-	total: number;
-	valid: number;
-	invalid: number;
+	imported: number;
+	failed: number;
 	errors: string[];
 }
 
-// ─── Step indicator ────────────────────────────────────────────────────────────
+interface ImportQuestionsModalProps {
+	open: boolean;
+	classId: number;
+	subjectId: number;
+	onClose: () => void;
+	onImported: (count: number) => void;
+}
+
+// ─── Step indicator ───────────────────────────────────────────────────────────
+
 const StepIndicator = ({ step }: { step: Step }) => (
-	<div className="mb-5 flex items-center gap-0 overflow-hidden rounded-xl border border-gray-200">
+	<div className="mb-5 flex items-center overflow-hidden rounded-xl border border-gray-200">
 		{[
-			{ n: 1, label: "Import questions" },
-			{ n: 2, label: "Confirm & Upload" },
+			{ n: 1 as Step, label: "Import questions" },
+			{ n: 2 as Step, label: "Confirm & Upload" },
 		].map(({ n, label }, i) => {
 			const done = step > n;
 			const active = step === n;
@@ -55,7 +60,7 @@ const StepIndicator = ({ step }: { step: Step }) => (
 						{done ? (
 							<CheckCircle className="h-4 w-4 text-white" />
 						) : active ? (
-							<Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+							<span className="h-2 w-2 rounded-full bg-blue-500" />
 						) : (
 							<span className="text-xs font-semibold text-gray-400">
 								{n}
@@ -80,9 +85,12 @@ const StepIndicator = ({ step }: { step: Step }) => (
 	</div>
 );
 
-// ─── Main modal ────────────────────────────────────────────────────────────────
+// ─── Main modal ───────────────────────────────────────────────────────────────
+
 export const ImportQuestionsModal = ({
 	open,
+	classId,
+	subjectId,
 	onClose,
 	onImported,
 }: ImportQuestionsModalProps) => {
@@ -90,9 +98,12 @@ export const ImportQuestionsModal = ({
 	const [file, setFile] = useState<UploadedFile | null>(null);
 	const [isDragging, setIsDragging] = useState(false);
 	const [parseResult, setParseResult] = useState<ParseResult | null>(null);
-	const [processing, setProcessing] = useState(false);
-	const [importing, setImporting] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
+
+	const { mutate: importQ, isPending } = useImportQuestions(
+		classId,
+		subjectId,
+	);
 
 	const handleClose = () => {
 		onClose();
@@ -103,47 +114,43 @@ export const ImportQuestionsModal = ({
 		}, 200);
 	};
 
-	const formatSize = (bytes: number) => {
-		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-	};
+	const formatSize = (bytes: number) =>
+		bytes < 1024 * 1024
+			? `${(bytes / 1024).toFixed(1)} KB`
+			: `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
-	const handleFileAccepted = useCallback(async (f: File) => {
-		setFile({ name: f.name, size: formatSize(f.size) });
+	const acceptFile = useCallback((f: File) => {
+		setFile({ name: f.name, size: formatSize(f.size), raw: f });
 	}, []);
 
-	const handleDrop = (e: React.DragEvent) => {
-		e.preventDefault();
-		setIsDragging(false);
-		const f = e.dataTransfer.files[0];
-		if (f) handleFileAccepted(f);
-	};
-
-	const handleContinue = async () => {
+	const handleContinue = () => {
 		if (!file) return;
-		setProcessing(true);
-		// Simulate parsing
-		await new Promise((r) => setTimeout(r, 1200));
-		setParseResult({
-			total: 67,
-			valid: 78,
-			invalid: 45,
-			errors: [
-				"3 missing Admission Numbers",
-				"1 invalid question",
-				"1 unrecognized class",
-			],
+		importQ(file.raw, {
+			onSuccess: (res) => {
+				setParseResult({
+					imported: res.data?.imported ?? 0,
+					failed: res.data?.failed ?? 0,
+					errors: res.data?.errors ?? [],
+				});
+				setStep(2);
+			},
+			onError: (e: unknown) => {
+				const msg =
+					e && typeof e === "object" && "message" in e
+						? String((e as { message: string }).message)
+						: "Failed to process file";
+				toast({ title: msg, type: "error" });
+			},
 		});
-		setProcessing(false);
-		setStep(2);
 	};
 
-	const handleImport = async () => {
+	const handleConfirm = () => {
 		if (!parseResult) return;
-		setImporting(true);
-		await new Promise((r) => setTimeout(r, 1000));
-		onImported(parseResult.valid);
-		setImporting(false);
+		toast({
+			title: `${parseResult?.imported} question${parseResult?.imported !== 1 ? "s" : ""} imported successfully`,
+			type: "success",
+		});
+		onImported(parseResult?.imported);
 		handleClose();
 	};
 
@@ -155,301 +162,260 @@ export const ImportQuestionsModal = ({
 		>
 			<div className="px-6 pt-6 pb-5">
 				<StepIndicator step={step} />
-
 				{step === 1 ? (
-					<Step1
-						file={file}
-						isDragging={isDragging}
-						inputRef={inputRef}
-						processing={processing}
-						onDrop={handleDrop}
-						onDragOver={(e) => {
-							e.preventDefault();
-							setIsDragging(true);
-						}}
-						onDragLeave={() => setIsDragging(false)}
-						onFileChange={(e) => {
-							const f = e.target.files?.[0];
-							if (f) handleFileAccepted(f);
-						}}
-						onBrowseClick={() => inputRef.current?.click()}
-						onRemoveFile={() => setFile(null)}
-						onCancel={handleClose}
-						onContinue={handleContinue}
-					/>
+					<div className="space-y-4">
+						<div className="mb-2 text-center">
+							<h2 className="text-lg font-bold text-gray-900">
+								Import Questions
+							</h2>
+							<p className="mt-1 text-sm text-gray-500">
+								Upload your questions in CSV or XLSX format to quickly
+								add them to the question bank.
+							</p>
+						</div>
+
+						{/* Drop zone */}
+						<div
+							onDrop={(e) => {
+								e.preventDefault();
+								setIsDragging(false);
+								const f = e.dataTransfer.files[0];
+								if (f) acceptFile(f);
+							}}
+							onDragOver={(e) => {
+								e.preventDefault();
+								setIsDragging(true);
+							}}
+							onDragLeave={() => setIsDragging(false)}
+							className={cn(
+								"flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 text-center transition-all",
+								isDragging
+									? "border-blue-400 bg-blue-50"
+									: "border-gray-200 bg-gray-50/50 hover:border-gray-300",
+							)}
+						>
+							<svg
+								className="mb-3 h-12 w-12 text-gray-300"
+								viewBox="0 0 48 48"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="1.5"
+							>
+								<rect x="6" y="6" width="15" height="15" rx="2" />
+								<rect x="27" y="6" width="15" height="15" rx="2" />
+								<rect x="6" y="27" width="15" height="15" rx="2" />
+								<rect x="27" y="27" width="15" height="15" rx="2" />
+							</svg>
+							<p className="text-sm text-gray-600">
+								Drag and drop a CSV or XLSX file here, or{" "}
+								<button
+									type="button"
+									onClick={() => inputRef.current?.click()}
+									className="font-medium text-blue-600 hover:underline"
+								>
+									click to browse
+								</button>
+							</p>
+							<p className="mt-1 text-xs text-gray-400">
+								Maximum file size: 40 MB
+							</p>
+							<input
+								ref={inputRef}
+								type="file"
+								accept=".csv,.xlsx"
+								className="hidden"
+								onChange={(e) => {
+									const f = e.target.files?.[0];
+									if (f) acceptFile(f);
+								}}
+							/>
+						</div>
+
+						{/* Selected file */}
+						{file && (
+							<div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
+								<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+									<span className="text-xs font-bold text-gray-500">
+										{file?.name.endsWith(".xlsx") ? "XLSX" : "CSV"}
+									</span>
+								</div>
+								<div className="min-w-0 flex-1">
+									<p className="truncate text-sm font-medium text-gray-800">
+										{file?.name}
+									</p>
+									<p className="text-xs text-gray-400">
+										{file?.size}{" "}
+										<span className="font-medium text-green-600">
+											• Ready
+										</span>
+									</p>
+								</div>
+								<button
+									type="button"
+									onClick={() => setFile(null)}
+									className="text-gray-400 transition-colors hover:text-gray-600"
+								>
+									<X className="h-4 w-4" />
+								</button>
+							</div>
+						)}
+
+						{/* Template download */}
+						<div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+							<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-600">
+								<span className="text-xs font-bold text-white">
+									XLS
+								</span>
+							</div>
+							<div className="min-w-0 flex-1">
+								<p className="text-sm font-semibold text-gray-800">
+									Download Template
+								</p>
+								<p className="text-xs text-gray-500">
+									Download the CSV / XLSX template and use it as a
+									starting point
+								</p>
+							</div>
+							<a
+								href="/templates/questions-import-template.xlsx"
+								download
+								className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors hover:bg-gray-50"
+							>
+								<Download className="h-3.5 w-3.5" />
+								Download
+							</a>
+						</div>
+
+						<div className="flex items-center justify-between pt-1">
+							<button
+								type="button"
+								onClick={handleClose}
+								className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={handleContinue}
+								disabled={!file || isPending}
+								className={cn(
+									"flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+									file && !isPending
+										? "bg-blue-600 text-white hover:bg-blue-700"
+										: "cursor-not-allowed bg-gray-100 text-gray-400",
+								)}
+							>
+								{isPending && (
+									<Loader2 className="h-3.5 w-3.5 animate-spin" />
+								)}
+								{isPending ? "Uploading…" : "Continue"}
+							</button>
+						</div>
+					</div>
 				) : (
-					<Step2
-						result={parseResult!}
-						importing={importing}
-						onBack={() => setStep(1)}
-						onImport={handleImport}
-					/>
+					<div className="space-y-4">
+						<div className="mb-2 text-center">
+							<h2 className="text-lg font-bold text-gray-900">
+								Confirm Question Upload
+							</h2>
+							<p className="mt-1 text-sm text-gray-500">
+								Review the summary before completing the import.
+							</p>
+						</div>
+
+						<div className="grid grid-cols-2 gap-3">
+							{[
+								{
+									label: "Imported",
+									value: parseResult!.imported,
+									icon: "✅",
+									color: "text-green-700",
+									bg: "bg-green-50 border-green-200",
+								},
+								{
+									label: "Failed",
+									value: parseResult!.failed,
+									icon: "⚠️",
+									color: "text-red-700",
+									bg:
+										parseResult!.failed > 0
+											? "bg-red-50 border-red-200"
+											: "bg-white border-gray-200",
+								},
+							].map(({ label, value, icon, color, bg }) => (
+								<div
+									key={label}
+									className={cn("rounded-xl border p-4", bg)}
+								>
+									<div className="mb-2 flex items-center gap-2">
+										<span className="text-base">{icon}</span>
+										<span className="text-xs text-gray-500">
+											{label}
+										</span>
+									</div>
+									<p className={cn("text-2xl font-bold", color)}>
+										{value}
+									</p>
+								</div>
+							))}
+						</div>
+
+						{parseResult!.failed > 0 && (
+							<div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+								<AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+								<p className="text-sm text-amber-800">
+									{parseResult!.failed} question
+									{parseResult!.failed !== 1 ? "s" : ""} could not be
+									imported. Fix the errors and re-upload to include
+									them.
+								</p>
+							</div>
+						)}
+
+						{parseResult!.errors.length > 0 && (
+							<div className="rounded-xl border border-gray-200 bg-white p-4">
+								<h3 className="mb-3 text-sm font-semibold text-gray-900">
+									Error Breakdown
+								</h3>
+								<ul className="space-y-2">
+									{parseResult!.errors.map((err, i) => (
+										<li
+											key={i}
+											className="flex items-start gap-2 text-sm text-gray-700"
+										>
+											<span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+											{err}
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
+
+						<div className="flex items-center justify-between pt-1">
+							<button
+								type="button"
+								onClick={() => setStep(1)}
+								className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
+							>
+								Back
+							</button>
+							<button
+								type="button"
+								onClick={handleConfirm}
+								disabled={parseResult!.imported === 0}
+								className={cn(
+									"flex items-center gap-1.5 rounded-lg px-5 py-2 text-sm font-medium transition-colors",
+									parseResult!.imported > 0
+										? "bg-blue-600 text-white hover:bg-blue-700"
+										: "cursor-not-allowed bg-gray-100 text-gray-400",
+								)}
+							>
+								Confirm & Done
+							</button>
+						</div>
+					</div>
 				)}
 			</div>
 		</Modal>
 	);
 };
-
-// ─── Step 1: Upload ────────────────────────────────────────────────────────────
-const Step1 = ({
-	file,
-	isDragging,
-	inputRef,
-	processing,
-	onDrop,
-	onDragOver,
-	onDragLeave,
-	onFileChange,
-	onBrowseClick,
-	onRemoveFile,
-	onCancel,
-	onContinue,
-}: {
-	file: UploadedFile | null;
-	isDragging: boolean;
-	inputRef: React.RefObject<HTMLInputElement | null>;
-	processing: boolean;
-	onDrop: (e: React.DragEvent) => void;
-	onDragOver: (e: React.DragEvent) => void;
-	onDragLeave: () => void;
-	onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-	onBrowseClick: () => void;
-	onRemoveFile: () => void;
-	onCancel: () => void;
-	onContinue: () => void;
-}) => (
-	<div className="space-y-4">
-		<div className="mb-2 text-center">
-			<h2 className="text-lg font-bold text-gray-900">Import Questions</h2>
-			<p className="mt-1 text-sm text-gray-500">
-				Upload your questions in CSV format to quickly add them to the
-				question bank.
-			</p>
-		</div>
-
-		{/* Drop zone */}
-		<div
-			onDrop={onDrop}
-			onDragOver={onDragOver}
-			onDragLeave={onDragLeave}
-			className={cn(
-				"flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 text-center transition-all",
-				isDragging
-					? "border-blue-400 bg-blue-50"
-					: "border-gray-200 bg-gray-50/50 hover:border-gray-300",
-			)}
-		>
-			{/* Grid icon */}
-			<svg
-				className="mb-3 h-12 w-12 text-gray-300"
-				viewBox="0 0 48 48"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="1.5"
-			>
-				<rect x="6" y="6" width="15" height="15" rx="2" />
-				<rect x="27" y="6" width="15" height="15" rx="2" />
-				<rect x="6" y="27" width="15" height="15" rx="2" />
-				<rect x="27" y="27" width="15" height="15" rx="2" />
-			</svg>
-			<p className="text-sm text-gray-600">
-				Drag and drop a CSV file here, or{" "}
-				<button
-					onClick={onBrowseClick}
-					className="font-medium text-blue-600 hover:underline"
-				>
-					click to browse
-				</button>
-			</p>
-			<p className="mt-1 text-xs text-gray-400">Maximum of 40MB</p>
-			<input
-				ref={inputRef}
-				type="file"
-				accept=".csv,.xlsx"
-				className="hidden"
-				onChange={onFileChange}
-			/>
-		</div>
-
-		{/* Uploaded file */}
-		{file && (
-			<div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
-				<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
-					<span className="text-xs font-bold text-gray-500">CSV</span>
-				</div>
-				<div className="min-w-0 flex-1">
-					<p className="truncate text-sm font-medium text-gray-800">
-						{file.name}
-					</p>
-					<p className="text-xs text-gray-400">
-						{file.size}{" "}
-						<span className="font-medium text-green-600">• Uploaded</span>
-					</p>
-				</div>
-				<button
-					onClick={onRemoveFile}
-					className="text-gray-400 transition-colors hover:text-gray-600"
-				>
-					<X className="h-4 w-4" />
-				</button>
-			</div>
-		)}
-
-		{/* Template download */}
-		<div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
-			<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-600">
-				<span className="text-xs font-bold text-white">X</span>
-			</div>
-			<div className="min-w-0 flex-1">
-				<p className="text-sm font-semibold text-gray-800">
-					Download CSV or XLSX Template
-				</p>
-				<p className="text-xs text-gray-500">
-					You can download the attached example and use them as a starting
-					point for your file
-				</p>
-			</div>
-			<button className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors hover:bg-gray-50">
-				<Download className="h-3.5 w-3.5" />
-				Download
-			</button>
-		</div>
-
-		{/* Footer */}
-		<div className="flex items-center justify-between pt-1">
-			<button
-				onClick={onCancel}
-				className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
-			>
-				Cancel
-			</button>
-			<button
-				onClick={onContinue}
-				disabled={!file || processing}
-				className={cn(
-					"flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-					file && !processing
-						? "bg-blue-600 text-white hover:bg-blue-700"
-						: "cursor-not-allowed bg-gray-100 text-gray-400",
-				)}
-			>
-				{processing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-				Continue
-			</button>
-		</div>
-	</div>
-);
-
-// ─── Step 2: Confirm ───────────────────────────────────────────────────────────
-const Step2 = ({
-	result,
-	importing,
-	onBack,
-	onImport,
-}: {
-	result: ParseResult;
-	importing: boolean;
-	onBack: () => void;
-	onImport: () => void;
-}) => (
-	<div className="space-y-4">
-		<div className="mb-2 text-center">
-			<h2 className="text-lg font-bold text-gray-900">
-				Confirm Question Upload
-			</h2>
-			<p className="mt-1 text-sm text-gray-500">
-				Review the summary of your upload before completing the import.
-			</p>
-		</div>
-
-		{/* Stats */}
-		<div className="grid grid-cols-3 gap-3">
-			{[
-				{
-					label: "Total Questions",
-					value: result.total,
-					icon: "📋",
-					color: "text-gray-700",
-				},
-				{
-					label: "Valid Questions",
-					value: result.valid,
-					icon: "✅",
-					color: "text-green-700",
-				},
-				{
-					label: "Invalid Questions",
-					value: result.invalid,
-					icon: "⚠️",
-					color: "text-red-700",
-				},
-			].map(({ label, value, icon, color }) => (
-				<div
-					key={label}
-					className="rounded-xl border border-gray-200 bg-white p-4"
-				>
-					<div className="mb-2 flex items-center gap-2">
-						<span className="text-base">{icon}</span>
-						<span className="text-xs text-gray-500">{label}</span>
-					</div>
-					<p className={cn("text-2xl font-bold", color)}>{value}</p>
-				</div>
-			))}
-		</div>
-
-		{/* Warning */}
-		{result.invalid > 0 && (
-			<div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
-				<AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-				<p className="text-sm text-amber-800">
-					Some questions contain errors. They will not be imported unless
-					corrected.
-				</p>
-			</div>
-		)}
-
-		{/* Error breakdown */}
-		{result.errors.length > 0 && (
-			<div className="rounded-xl border border-gray-200 bg-white p-4">
-				<h3 className="mb-3 text-sm font-semibold text-gray-900">
-					Error Breakdown
-				</h3>
-				<ul className="space-y-2">
-					{result.errors.map((err, i) => (
-						<li
-							key={i}
-							className="flex items-center gap-2 text-sm text-gray-700"
-						>
-							<span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
-							{err}
-						</li>
-					))}
-				</ul>
-			</div>
-		)}
-
-		{/* Download error report */}
-		<button className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 py-2.5 text-sm text-gray-600 transition-colors hover:bg-gray-50">
-			<Download className="h-4 w-4" />
-			Download Error Report (CSV)
-		</button>
-
-		{/* Footer */}
-		<div className="flex items-center justify-between pt-1">
-			<button
-				onClick={onBack}
-				className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
-			>
-				Back
-			</button>
-			<button
-				onClick={onImport}
-				disabled={importing}
-				className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
-			>
-				{importing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-				Confirm & Import
-			</button>
-		</div>
-	</div>
-);

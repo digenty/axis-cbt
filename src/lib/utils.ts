@@ -53,6 +53,16 @@ export const generateRandomColor = (text: string) => {
 	return tailwindColors[simpleHash(text)];
 };
 
+export function generateRandomColorRGBA(opacity: number = 1): string {
+	const o = Math.max(0, Math.min(opacity, 1)); // clamp 0–1
+
+	const r = Math.floor(Math.random() * 256);
+	const g = Math.floor(Math.random() * 256);
+	const b = Math.floor(Math.random() * 256);
+
+	return `rgba(${r}, ${g}, ${b}, ${o})`;
+}
+
 export const formatDate = (dateInput: string | number | Date) => {
 	const date = new Date(dateInput);
 	if (isNaN(date.getTime())) return ""; // handle invalid dates safely

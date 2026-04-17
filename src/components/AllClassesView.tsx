@@ -7,11 +7,15 @@ import {
 	SlidersHorizontal,
 	BookOpen,
 	ChevronRight,
+	Building2,
+	CalendarDays,
+	ChevronDown,
 } from "lucide-react";
 import { Class } from "@/types";
 import { cn } from "@/lib/utils";
 import { Input, Skeleton } from "./ui";
 import { useCBTStore } from "@/store";
+import { BackButton } from "./PageHeader";
 
 const LEVELS = ["All", "JSS", "SS"];
 
@@ -36,6 +40,26 @@ export const AllClassesView = () => {
 
 	return (
 		<div>
+			{/* Page header */}
+			<div className="mb-6 flex items-center justify-between">
+				<div className="flex items-center gap-3">
+					<BackButton href="/subjects" />
+					<h1 className="text-lg font-semibold text-zinc-900">All Classes</h1>
+				</div>
+				<div className="flex items-center gap-2">
+					<button className="flex items-center gap-1.5 rounded-lg border border-(--color-border-darker) bg-white px-3 py-1.5 text-sm text-zinc-700 transition-colors hover:bg-zinc-50">
+						<Building2 className="h-3.5 w-3.5 text-zinc-400" />
+						Lawanson
+						<ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+					</button>
+					<button className="flex items-center gap-1.5 rounded-lg border border-(--color-border-darker) bg-white px-3 py-1.5 text-sm text-zinc-700 transition-colors hover:bg-zinc-50">
+						<CalendarDays className="h-3.5 w-3.5 text-zinc-400" />
+						24/25 Third Term
+						<ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+					</button>
+				</div>
+			</div>
+
 			{/* Stats */}
 			<div className="mb-6 grid grid-cols-2 gap-4">
 				<StatCard

@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
 	DndContext,
 	closestCenter,
@@ -17,45 +18,66 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-	Search,
-	Plus,
 	ChevronDown,
 	ChevronUp,
-	Trash2,
-	Copy,
+	FolderOpen,
 	GripVertical,
+	Pencil,
+	Plus,
+	Search,
+	Trash2,
 } from "lucide-react";
-import { useCBTStore } from "@/store";
-import { Question } from "@/types";
+import { cn } from "@/lib/utils";
+import { getQuestionTypeBadge, getQuestionTypeLabel } from "@/utils/question";
+import { ConfirmModal } from "@/components/Modal";
+import { toast } from "@/components/Toast";
 import {
-	getQuestionTypeLabel,
-	getQuestionTypeBadgeColor,
-	cn,
-} from "@/lib/utils";
-import { FolderOpen } from "lucide-react";
-import { ConfirmModal } from "./Modal";
+	useDeleteCbtQuestion,
+	useGetQuestions,
+} from "@/hooks/queryHooks/useQuestionBank";
+import type {
+	ApiQuestion,
+	QuestionType,
+	ResponseTypeSpecificData,
+} from "@/types/question";
+import { reorderByGroup } from "./reorder";
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface QuestionListViewProps {
-	topicId: string;
+	classId: number;
+	subjectId: number;
+	topicId: number;
 	topicName: string;
 	onAddQuestion: () => void;
-	onEditQuestion: (question: Question) => void;
+	onEditQuestion: (question: ApiQuestion) => void;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export const QuestionListView = ({
+	classId,
+	subjectId,
 	topicId,
 	topicName,
 	onAddQuestion,
 	onEditQuestion,
 }: QuestionListViewProps) => {
-	const { getQuestionsByTopic, reorderQuestions } = useCBTStore();
 	const [search, setSearch] = useState("");
-	const [expandedId, setExpandedId] = useState<string | null>(null);
+	const [expandedId, setExpandedId] = useState<number | null>(null);
 
-	const questions = getQuestionsByTopic(topicId);
+	const { data: response, isLoading } = useGetQuestions({
+		classId,
+		subjectId,
+		topicId,
+	});
+	const questions: ApiQuestion[] = (response?.data ?? []).filter(
+		(q) => q.topicId === topicId,
+	);
+
 	const filtered = search
 		? questions.filter((q) =>
-				q.text.toLowerCase().includes(search.toLowerCase()),
+				q?.questionText?.toLowerCase().includes(search.toLowerCase()),
 			)
 		: questions;
 
@@ -63,16 +85,24 @@ export const QuestionListView = ({
 		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
 	);
 
-	const handleDragEnd = (event: DragEndEvent) => {
-		const { active, over } = event;
-		if (!over || active.id === over.id) return;
-		const oldIdx = questions.findIndex((q) => q.id === active.id);
-		const newIdx = questions.findIndex((q) => q.id === over.id);
-		const reordered = arrayMove(questions, oldIdx, newIdx);
-		reorderQuestions(
-			topicId,
-			reordered.map((q) => q.id),
-		);
+	const handleDragEnd = (_event: DragEndEvent) => {
+		const { active, over } = _event;
+
+		if (!over || active.id === over.id || !filtered) return;
+
+		const oldIdx = filtered.findIndex((q) => q.id === active.id);
+		const newIdx = filtered.findIndex((q) => q.id === over.id);
+
+		if (oldIdx === -1 || newIdx === -1) return;
+
+		const reordered = arrayMove(filtered, oldIdx, newIdx);
+		const orderedIds = reordered.map((q) => q.id); // ✅ FIX
+
+		console.log({ orderedIds });
+
+		// setQuestions((prev) =>
+		// 	reorderByGroup(prev, "topicId", topicId, orderedIds),
+		// );
 	};
 
 	return (
@@ -93,6 +123,7 @@ export const QuestionListView = ({
 						/>
 					</div>
 					<button
+						type="button"
 						onClick={onAddQuestion}
 						className="flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
 					>
@@ -102,95 +133,113 @@ export const QuestionListView = ({
 				</div>
 			</div>
 
-			{/* Questions */}
+			{/* Body */}
 			<div className="flex-1 overflow-y-auto px-6 py-4">
-				{filtered.length === 0 ? (
-					<div className="flex flex-col items-center justify-center py-20 text-center">
-						<FolderOpen className="mb-3 h-12 w-12 text-gray-200" />
-						<p className="mb-1 text-sm font-medium text-gray-500">
-							{search
-								? `No questions matching "${search}"`
-								: "No questions yet"}
-						</p>
-						<p className="mb-5 text-xs text-gray-400">
-							{search
-								? "Try a different search term"
-								: "Questions added under this topic will appear here"}
-						</p>
-						{!search && (
-							<button
-								onClick={onAddQuestion}
-								className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium transition-colors hover:bg-gray-50"
-							>
-								<Plus className="h-3.5 w-3.5" />
-								Add Question
-							</button>
-						)}
+				{isLoading ? (
+					<div className="flex items-center justify-center py-20">
+						<span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
 					</div>
+				) : filtered?.length === 0 ? (
+					<EmptyQuestions search={search} onAdd={onAddQuestion} />
 				) : (
-					<DndContext
-						sensors={sensors}
-						collisionDetection={closestCenter}
-						onDragEnd={handleDragEnd}
-					>
-						<SortableContext
-							items={filtered.map((q) => q.id)}
-							strategy={verticalListSortingStrategy}
+					<>
+						<DndContext
+							sensors={sensors}
+							collisionDetection={closestCenter}
+							onDragEnd={handleDragEnd}
 						>
-							<div className="space-y-2">
-								{filtered.map((question, idx) => (
-									<SortableQuestionCard
-										key={question.id}
-										question={question}
-										index={idx + 1}
-										isExpanded={expandedId === question.id}
-										onToggle={() =>
-											setExpandedId(
-												expandedId === question.id
-													? null
-													: question.id,
-											)
-										}
-										onEdit={() => onEditQuestion(question)}
-									/>
-								))}
-							</div>
-						</SortableContext>
-					</DndContext>
-				)}
+							<SortableContext
+								items={filtered?.map((q) => q.id)}
+								strategy={verticalListSortingStrategy}
+							>
+								<div className="space-y-2">
+									{filtered?.map((q, idx) => (
+										<SortableQuestionCard
+											key={q.id}
+											question={q}
+											index={idx + 1}
+											classId={classId}
+											subjectId={subjectId}
+											isExpanded={expandedId === q.id}
+											onToggle={() =>
+												setExpandedId(
+													expandedId === q.id ? null : q.id,
+												)
+											}
+											onEdit={() => onEditQuestion(q)}
+										/>
+									))}
+								</div>
+							</SortableContext>
+						</DndContext>
 
-				{filtered.length > 0 && (
-					<button
-						onClick={onAddQuestion}
-						className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-3 text-xs text-gray-400 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-500"
-					>
-						<Plus className="h-3.5 w-3.5" />
-						Add Question
-					</button>
+						<button
+							type="button"
+							onClick={onAddQuestion}
+							className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-3 text-xs text-gray-400 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-500"
+						>
+							<Plus className="h-3.5 w-3.5" />
+							Add Question
+						</button>
+					</>
 				)}
 			</div>
 		</div>
 	);
 };
 
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+const EmptyQuestions = ({
+	search,
+	onAdd,
+}: {
+	search: string;
+	onAdd: () => void;
+}) => (
+	<div className="flex flex-col items-center justify-center py-20 text-center">
+		<FolderOpen className="mb-3 h-12 w-12 text-gray-200" />
+		<p className="mb-1 text-sm font-medium text-gray-500">
+			{search ? `No questions matching "${search}"` : "No questions yet"}
+		</p>
+		<p className="mb-5 text-xs text-gray-400">
+			{search
+				? "Try a different search term"
+				: "Questions added under this topic will appear here"}
+		</p>
+		{!search && (
+			<button
+				type="button"
+				onClick={onAdd}
+				className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium transition-colors hover:bg-gray-50"
+			>
+				<Plus className="h-3.5 w-3.5" />
+				Add Question
+			</button>
+		)}
+	</div>
+);
+
 // ─── Sortable Question Card ───────────────────────────────────────────────────
-interface SortableQuestionCardProps {
-	question: Question;
-	index: number;
-	isExpanded: boolean;
-	onToggle: () => void;
-	onEdit: () => void;
-}
 
 const SortableQuestionCard = ({
 	question,
+	// classId,
+	// subjectId,
 	isExpanded,
 	onToggle,
 	onEdit,
-}: SortableQuestionCardProps) => {
-	const { deleteQuestion, duplicateQuestion } = useCBTStore();
+}: {
+	question: ApiQuestion;
+	index: number;
+	classId: number;
+	subjectId: number;
+	isExpanded: boolean;
+	onToggle: () => void;
+	onEdit: () => void;
+}) => {
 	const [deleteOpen, setDeleteOpen] = useState(false);
-	const [deleting, setDeleting] = useState(false);
+	const { mutate: deleteQ, isPending: isDeleting } = useDeleteCbtQuestion();
 
 	const {
 		attributes,
@@ -209,12 +258,22 @@ const SortableQuestionCard = ({
 		position: isDragging ? ("relative" as const) : undefined,
 	};
 
-	const handleDelete = async () => {
-		setDeleting(true);
-		await new Promise((r) => setTimeout(r, 300));
-		deleteQuestion(question.id);
-		setDeleting(false);
-		setDeleteOpen(false);
+	const qType = question.questionType as QuestionType;
+
+	const handleDelete = () => {
+		deleteQ(question.id, {
+			onSuccess: () => {
+				toast({ title: "Question deleted", type: "success" });
+				setDeleteOpen(false);
+			},
+			onError: (e: unknown) => {
+				const msg =
+					e && typeof e === "object" && "message" in e
+						? String((e as { message: string })?.message)
+						: "Error deleting";
+				toast({ title: msg, type: "error" });
+			},
+		});
 	};
 
 	return (
@@ -230,70 +289,83 @@ const SortableQuestionCard = ({
 			>
 				{/* Card header */}
 				<div className="group flex items-center gap-2 px-4 py-3">
-					{/* Drag handle */}
 					<button
 						{...attributes}
 						{...listeners}
-						className="shrink-0 cursor-grab text-gray-300 opacity-0 transition-colors group-hover:opacity-100 hover:text-gray-500 focus:opacity-100 active:cursor-grabbing"
+						type="button"
+						className="shrink-0 cursor-grab text-gray-300 opacity-0 transition-colors group-hover:opacity-100 hover:text-gray-500 active:cursor-grabbing"
 						onClick={(e) => e.stopPropagation()}
-						aria-label="Drag to reorder"
 					>
 						<GripVertical className="h-4 w-4" />
 					</button>
 
-					{/* Question text + meta — clicks to expand */}
+					{/* Text + meta */}
 					<div
 						className="min-w-0 flex-1 cursor-pointer"
 						onClick={onToggle}
 					>
-						<p
-							className="text-sm leading-snug font-medium text-gray-800"
-							dangerouslySetInnerHTML={{ __html: question.text }}
-						/>
-						<div className="mt-1 flex items-center gap-2">
+						<p className="text-sm font-medium leading-snug text-gray-800">
+							{question?.questionText}
+						</p>
+						<div className="mt-1 flex flex-wrap items-center gap-2">
 							<span
 								className={cn(
 									"rounded-md border px-2 py-0.5 text-xs font-medium",
-									getQuestionTypeBadgeColor(question.type),
+									getQuestionTypeBadge(qType),
 								)}
 							>
-								{getQuestionTypeLabel(question.type)}
+								{getQuestionTypeLabel(qType)}
 							</span>
 							<span className="text-xs text-gray-400">
-								• {question.marks} mark{question.marks !== 1 ? "s" : ""}
+								• {question?.marks} mark
+								{question?.marks !== 1 ? "s" : ""}
 							</span>
-							{question.type === "question-group" &&
-								question.subQuestions && (
-									<span className="text-xs text-gray-400">
-										• {question.subQuestions.length} questions
-									</span>
-								)}
+							{question?.difficultyLevel && (
+								<span className="text-xs text-gray-400">
+									• {question?.difficultyLevel}
+								</span>
+							)}
+							{(qType === "QUESTION_GROUP" ||
+								qType === "COMPREHENSION") &&
+								(() => {
+									const tsd = question?.typeSpecificData as Extract<
+										ResponseTypeSpecificData,
+										| { questionType: "QUESTION_GROUP" }
+										| { questionType: "COMPREHENSION" }
+									>;
+									return tsd?.subQuestions?.length ? (
+										<span className="text-xs text-gray-400">
+											• {tsd?.subQuestions.length} sub-question
+											{tsd?.subQuestions.length !== 1 ? "s" : ""}
+										</span>
+									) : null;
+								})()}
 						</div>
 					</div>
 
 					{/* Actions */}
 					<div
-						className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+						className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
 						onClick={(e) => e.stopPropagation()}
 					>
 						<button
-							onClick={() => duplicateQuestion(question.id)}
-							className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-							title="Duplicate"
+							type="button"
+							onClick={onEdit}
+							className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
 						>
-							<Copy className="h-3.5 w-3.5" />
+							<Pencil className="h-3.5 w-3.5" />
 						</button>
 						<button
+							type="button"
 							onClick={() => setDeleteOpen(true)}
 							className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
-							title="Delete"
 						>
 							<Trash2 className="h-3.5 w-3.5" />
 						</button>
 					</div>
 
-					{/* Expand chevron */}
 					<button
+						type="button"
 						onClick={onToggle}
 						className="flex h-6 w-6 shrink-0 items-center justify-center text-gray-400 transition-colors hover:text-gray-600"
 					>
@@ -305,10 +377,10 @@ const SortableQuestionCard = ({
 					</button>
 				</div>
 
-				{/* Expanded body - inline editor */}
+				{/* Expanded preview */}
 				{isExpanded && (
 					<div className="border-t border-gray-100">
-						<InlineQuestionEditor question={question} onEdit={onEdit} />
+						<QuestionDetail question={question} onEdit={onEdit} />
 					</div>
 				)}
 			</div>
@@ -318,214 +390,198 @@ const SortableQuestionCard = ({
 				onClose={() => setDeleteOpen(false)}
 				onConfirm={handleDelete}
 				title="Delete Question"
-				description="Are you sure you want to delete this question? This action cannot be undone."
+				description="Are you sure you want to delete this question? This cannot be undone."
 				confirmLabel="Delete"
 				confirmVariant="danger"
-				loading={deleting}
+				loading={isDeleting}
 			/>
 		</>
 	);
 };
 
-// ─── Inline Question Editor (expanded view) ───────────────────────────────────
-const InlineQuestionEditor = ({
+// ─── Question Detail (expanded) ───────────────────────────────────────────────
+
+const QuestionDetail = ({
 	question,
 	onEdit,
 }: {
-	question: Question;
+	question: ApiQuestion;
 	onEdit: () => void;
 }) => {
-	const { updateQuestion } = useCBTStore();
+	const tsd = question?.typeSpecificData;
+	const options = question?.options;
+	console.log({ tsd, question, options });
 
 	return (
-		<div className="space-y-3 bg-gray-50/40 px-4 py-3">
-			{/* Question type selector dropdown */}
-			<div className="flex flex-wrap items-center gap-3">
-				<QuestionTypeDropdown question={question} />
-				<div className="ml-auto flex items-center gap-2">
-					<button
-						onClick={onEdit}
-						className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50"
-					>
-						Edit Full Question
-					</button>
-					<div className="flex items-center gap-1.5">
-						<span className="text-xs text-gray-500">Marks:</span>
-						<input
-							type="number"
-							min={1}
-							value={question.marks}
-							onChange={(e) =>
-								updateQuestion(question.id, {
-									marks: Number(e.target.value),
-								})
-							}
-							className="h-7 w-14 rounded-lg border border-gray-200 text-center text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-						/>
-					</div>
-				</div>
-			</div>
-
-			{/* Options preview */}
-			{(question.type === "multiple-choice" ||
-				question.type === "multiple-answers") && (
-				<OptionsPreview question={question} />
-			)}
-			{question.type === "true-false" && (
-				<TrueFalsePreview question={question} />
-			)}
-			{question.correctAnswer && (
-				<p className="text-xs text-gray-600">
-					<span className="font-medium text-gray-700">
-						Expected Answer:{" "}
-					</span>
-					{Array.isArray(question.correctAnswer)
-						? question.correctAnswer.join(", ")
-						: question.correctAnswer}
-				</p>
-			)}
-			{question.type === "essay" && (
-				<p className="text-xs text-gray-400 italic">
-					Open-ended essay question
-				</p>
-			)}
-
-			{/* Duplicate / Delete footer */}
-			<div className="flex justify-end gap-2 border-t border-gray-100 pt-1">
-				<button
-					onClick={() =>
-						useCBTStore.getState().duplicateQuestion(question.id)
-					}
-					className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:bg-gray-100"
-				>
-					<Copy className="h-3 w-3" />
-					Duplicate
-				</button>
-				<button
-					onClick={() => {
-						if (confirm("Delete this question?"))
-							useCBTStore.getState().deleteQuestion(question.id);
-					}}
-					className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-50"
-				>
-					<Trash2 className="h-3 w-3" />
-					Delete
-				</button>
-			</div>
-		</div>
-	);
-};
-
-// ─── Question Type Dropdown ───────────────────────────────────────────────────
-const SINGLE_TYPES: { type: Question["type"]; label: string }[] = [
-	{ type: "multiple-choice", label: "Multiple Choice" },
-	{ type: "true-false", label: "True/False" },
-	{ type: "essay", label: "Essay" },
-	{ type: "fill-in-blank", label: "Fill-in-the-Blank" },
-	{ type: "short-answer", label: "Short Answer" },
-	{ type: "multiple-answers", label: "Multiple Answers" },
-	{ type: "numerical", label: "Numeric Answers" },
-];
-
-const QuestionTypeDropdown = ({ question }: { question: Question }) => {
-	const { updateQuestion } = useCBTStore();
-	const [open, setOpen] = useState(false);
-	const [isGroupType] = useState(
-		question.type === "question-group" ||
-			question.type === "multiple-blanks" ||
-			question.type === "matching",
-	);
-
-	if (isGroupType) return null;
-
-	return (
-		<div className="relative">
-			<button
-				onClick={() => setOpen((v) => !v)}
-				className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-gray-100"
-			>
-				{getQuestionTypeLabel(question.type)}
-				<ChevronDown className="h-3.5 w-3.5 text-gray-400" />
-			</button>
-			{open && (
-				<div className="absolute top-full left-0 z-30 mt-1 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-					{SINGLE_TYPES.map(({ type, label }) => (
-						<button
-							key={type}
-							onClick={() => {
-								updateQuestion(question.id, { type });
-								setOpen(false);
-							}}
-							className={cn(
-								"w-full px-3 py-2 text-left text-xs transition-colors hover:bg-gray-50",
-								question.type === type
-									? "font-semibold text-blue-700"
-									: "text-gray-700",
-							)}
+		<div className="space-y-3 bg-gray-50/60 px-4 py-4">
+			{/* ── MCQ / Multiple Answers: show option list ── */}
+			{(question?.questionType === "MULTIPLE_CHOICE" ||
+				question?.questionType === "MULTIPLE_ANSWERS") && (
+				<div className="space-y-1.5">
+					{question?.options?.map((opt) => (
+						<div
+							key={opt?.optionLabel}
+							className="flex items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700"
 						>
-							{label}
-						</button>
+							<span className="w-5 shrink-0 font-mono uppercase text-gray-400">
+								{opt?.optionLabel}.
+							</span>
+							<span className="flex-1">
+								{opt?.optionText || (
+									<em className="text-gray-300">No text</em>
+								)}
+							</span>
+						</div>
 					))}
 				</div>
 			)}
+
+			{/* ── True / False ── */}
+			{question?.questionType === "TRUE_FALSE" && (
+				<div className="flex gap-2">
+					{["True", "False"].map((label) => (
+						<span
+							key={label}
+							className="rounded-full border border-gray-200 bg-white px-5 py-1.5 text-xs font-medium text-gray-600"
+						>
+							{label}
+						</span>
+					))}
+				</div>
+			)}
+
+			{/* ── Short Answer ── */}
+			{question?.questionType === "SHORT_ANSWER" && (
+				<p className="text-xs italic text-gray-400">
+					Students will type a short text response.
+				</p>
+			)}
+
+			{/* ── Fill-in-the-blank: show blank labels ── */}
+			{question?.questionType === "FILL_IN_THE_BLANK" && (
+				<div className="space-y-1.5">
+					{question?.blanks && question?.blanks.length > 0 ? (
+						question?.blanks.map((blank, i) => (
+							<div key={i} className="flex items-center gap-3">
+								<span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600">
+									{i + 1}
+								</span>
+								<span className="text-xs text-gray-700">
+									{blank.blankLabel || `Blank ${i + 1}`}
+								</span>
+								{blank.marks && (
+									<span className="text-xs text-gray-400">
+										— {blank.marks} mark{blank.marks !== 1 ? "s" : ""}
+									</span>
+								)}
+							</div>
+						))
+					) : (
+						<p className="text-xs italic text-gray-400">
+							No blanks defined
+						</p>
+					)}
+				</div>
+			)}
+
+			{/* ── Numeric ── */}
+			{question?.questionType === "NUMERIC_ANSWER" && (
+				<p className="text-xs italic text-gray-400">
+					Students will enter a numeric answer.
+				</p>
+			)}
+
+			{/* ── Essay ── */}
+			{question?.questionType === "ESSAY" && (
+				<p className="text-xs italic text-gray-400">
+					Open-ended essay — students write a long-form response.
+				</p>
+			)}
+
+			{/* ── Match: show pairs ── */}
+			{question?.questionType === "MATCH" && (
+				<div className="space-y-1.5">
+					{question?.pairs && question?.pairs?.length > 0 ? (
+						question?.pairs?.map((pair, i) => (
+							<div
+								key={i}
+								className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
+							>
+								<span className="flex-1 text-gray-700">
+									{pair.itemText || "—"}
+								</span>
+								<span className="shrink-0 text-gray-400">↔</span>
+								<span className="flex-1 text-right text-gray-700">
+									{pair.matchText || "—"}
+								</span>
+							</div>
+						))
+					) : (
+						<p className="text-xs italic text-gray-400">
+							No pairs defined
+						</p>
+					)}
+				</div>
+			)}
+
+			{/* ── Question Group / Comprehension ── */}
+			{(question?.questionType === "QUESTION_GROUP" ||
+				question?.questionType === "COMPREHENSION") && (
+				<div className="space-y-2">
+					{(question as any).stimulusContent && (
+						<div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+							<p className="mb-1 text-xs font-medium text-gray-500">
+								{question?.questionType === "COMPREHENSION"
+									? "Comprehension Passage"
+									: ((question as any)?.stimulusType ?? "Stimulus")}
+							</p>
+							<p className="line-clamp-4 text-xs text-gray-700">
+								{(question as any)?.stimulusContent}
+							</p>
+						</div>
+					)}
+					{(question as any)?.subQuestions?.length > 0 && (
+						<div className="space-y-1">
+							<p className="text-xs font-medium text-gray-500">
+								{(question as any)?.subQuestions?.length} Sub-question
+								{(question as any)?.subQuestions?.length !== 1
+									? "s"
+									: ""}
+							</p>
+							{(question as any)?.subQuestions?.map(
+								(sq: any, i: number) => (
+									<div
+										key={i}
+										className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
+									>
+										<span className="shrink-0 font-semibold text-gray-400">
+											{i + 1}.
+										</span>
+										<span className="flex-1 text-gray-700">
+											{sq?.questionText}
+										</span>
+										<span className="shrink-0 text-gray-400">
+											{sq?.marks} mk
+										</span>
+									</div>
+								),
+							)}
+						</div>
+					)}
+				</div>
+			)}
+
+			{/* Edit button */}
+			<div className="flex justify-end border-t border-gray-100 pt-2">
+				<button
+					type="button"
+					onClick={onEdit}
+					className="flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50"
+				>
+					<Pencil className="h-3 w-3" />
+					Edit Question
+				</button>
+			</div>
 		</div>
 	);
 };
-
-// ─── Options Preview ──────────────────────────────────────────────────────────
-const OptionsPreview = ({ question }: { question: Question }) => (
-	<div className="space-y-1.5">
-		{question.options?.map((opt) => (
-			<div
-				key={opt.id}
-				className={cn(
-					"flex items-center gap-2.5 rounded-lg border px-3 py-2 text-xs",
-					opt.isCorrect
-						? "border-green-200 bg-green-50 text-green-800"
-						: "border-gray-200 bg-white text-gray-700",
-				)}
-			>
-				<div
-					className={cn(
-						"flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
-						opt.isCorrect
-							? "border-green-500 bg-green-500"
-							: "border-gray-300",
-					)}
-				>
-					{opt.isCorrect && (
-						<div className="h-1.5 w-1.5 rounded-full bg-white" />
-					)}
-				</div>
-				<span className="w-4 font-mono text-gray-400 uppercase">
-					{opt.id}.
-				</span>
-				<span>{opt.text || <em className="text-gray-300">Empty</em>}</span>
-				{opt.isCorrect && (
-					<span className="ml-auto text-xs font-medium text-green-600">
-						✓ Correct
-					</span>
-				)}
-			</div>
-		))}
-	</div>
-);
-
-const TrueFalsePreview = ({ question }: { question: Question }) => (
-	<div className="flex gap-2">
-		{question.options?.map((opt) => (
-			<span
-				key={opt.id}
-				className={cn(
-					"rounded-full border px-4 py-1.5 text-xs font-medium",
-					opt.isCorrect
-						? "border-green-300 bg-green-50 text-green-700"
-						: "border-gray-200 bg-white text-gray-500",
-				)}
-			>
-				{opt.text}
-				{opt.isCorrect && " ✓"}
-			</span>
-		))}
-	</div>
-);

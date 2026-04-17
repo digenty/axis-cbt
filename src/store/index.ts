@@ -1,11 +1,20 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { Class, Subject, Topic, Question, Test } from "@/types";
+import {
+	Class,
+	Subject,
+	Topic,
+	Question,
+	Test,
+	StudentAttempt,
+	StudentAnswer,
+} from "@/types";
 import {
 	mockClasses,
 	mockSubjects,
 	mockTopics,
 	mockQuestions,
+	mockAttempts,
 } from "@/lib/mock-data";
 
 interface CBTStore {
@@ -14,6 +23,7 @@ interface CBTStore {
 	topics: Topic[];
 	questions: Question[];
 	tests: Test[];
+	attempts: StudentAttempt[];
 	isLoading: boolean;
 
 	addTopic: (topic: Topic) => void;
@@ -32,6 +42,15 @@ interface CBTStore {
 	deleteTest: (id: string) => void;
 	getTestsBySubject: (subjectId: string) => Test[];
 
+	getAttemptsByTest: (testId: string) => StudentAttempt[];
+	updateAttempt: (id: string, data: Partial<StudentAttempt>) => void;
+	gradeAttempt: (
+		id: string,
+		score: number,
+		feedback: string,
+		answers: StudentAnswer[],
+	) => void;
+
 	getSubjectsByClass: (classId: string) => Subject[];
 	getTopicsBySubject: (subjectId: string) => Topic[];
 	getQuestionsByTopic: (topicId: string) => Question[];
@@ -48,6 +67,7 @@ export const useCBTStore = create<CBTStore>()(
 			topics: mockTopics,
 			questions: mockQuestions,
 			tests: [],
+			attempts: mockAttempts,
 			isLoading: false,
 
 			setLoading: (val) => set({ isLoading: val }),
@@ -67,16 +87,12 @@ export const useCBTStore = create<CBTStore>()(
 				})),
 			reorderTopics: (subjectId, orderedIds) =>
 				set((s) => {
-					const subjectTopics = s.topics.filter(
-						(t) => t.subjectId === subjectId,
-					);
-					const otherTopics = s.topics.filter(
-						(t) => t.subjectId !== subjectId,
-					);
+					const sub = s.topics.filter((t) => t.subjectId === subjectId);
+					const rest = s.topics.filter((t) => t.subjectId !== subjectId);
 					const reordered = orderedIds
-						.map((id) => subjectTopics.find((t) => t.id === id))
+						.map((id) => sub.find((t) => t.id === id))
 						.filter(Boolean) as Topic[];
-					return { topics: [...otherTopics, ...reordered] };
+					return { topics: [...rest, ...reordered] };
 				}),
 
 			addQuestion: (question) =>
@@ -112,12 +128,12 @@ export const useCBTStore = create<CBTStore>()(
 			},
 			reorderQuestions: (topicId, orderedIds) =>
 				set((s) => {
-					const topicQs = s.questions.filter((q) => q.topicId === topicId);
-					const otherQs = s.questions.filter((q) => q.topicId !== topicId);
+					const tqs = s.questions.filter((q) => q.topicId === topicId);
+					const rest = s.questions.filter((q) => q.topicId !== topicId);
 					const reordered = orderedIds
-						.map((id) => topicQs.find((q) => q.id === id))
+						.map((id) => tqs.find((q) => q.id === id))
 						.filter(Boolean) as Question[];
-					return { questions: [...otherQs, ...reordered] };
+					return { questions: [...rest, ...reordered] };
 				}),
 
 			addTest: (test) => set((s) => ({ tests: [...s.tests, test] })),
@@ -132,7 +148,42 @@ export const useCBTStore = create<CBTStore>()(
 			deleteTest: (id) =>
 				set((s) => ({ tests: s.tests.filter((t) => t.id !== id) })),
 			getTestsBySubject: (subjectId) =>
-				get().tests.filter((t) => t.subjectId === subjectId),
+				get().tests.filter((t) => String(t.subjectId) === subjectId),
+
+			getAttemptsByTest: (testId) =>
+				get().attempts.filter((a) => a.testId === testId),
+			updateAttempt: (id, data) =>
+				set((s) => ({
+					attempts: s.attempts.map((a) =>
+						a.id === id ? { ...a, ...data } : a,
+					),
+				})),
+			gradeAttempt: (id, score, feedback, answers) =>
+				set((s) => {
+					const attempt = s.attempts.find((a) => a.id === id);
+					if (!attempt) return s;
+					const totalMarks = attempt.totalMarks || 100;
+					const percentage = Math.round((score / totalMarks) * 1000) / 10;
+					const weightedScore =
+						Math.round((percentage / 100) * 20 * 10) / 10; // example 20% weight
+					return {
+						attempts: s.attempts.map((a) =>
+							a.id === id
+								? {
+										...a,
+										status: "graded" as const,
+										score,
+										totalMarks,
+										percentage,
+										weightedScore,
+										feedback,
+										answers,
+										gradedAt: new Date().toISOString(),
+									}
+								: a,
+						),
+					};
+				}),
 
 			getSubjectsByClass: (classId) =>
 				get().subjects.filter((s) => s.classId === classId),

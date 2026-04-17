@@ -1,12 +1,11 @@
-import Results from "@/components/Results";
-import React from "react";
+import ResultsPage from "@/components/ResultsPage";
 
-const ResultsPage = ({
+const ResultsViewPage = ({
 	params,
 }: Readonly<{
 	params: Promise<{ classId: string; subjectId: string }>;
 }>) => {
-	return <Results params={params} />;
+	return <ResultsPage params={params} />;
 };
 
-export default ResultsPage;
+export default ResultsViewPage;
