@@ -2,12 +2,12 @@
 
 import { use, useEffect } from "react";
 import { QuestionBankView } from "./QuestionBankView";
-import Layout from "./Layout";
+import Layout from "@/components/Layout";
 import {
   useGetClassDetails,
   useGetTeacherSubjects,
 } from "@/hooks/queryHooks/useSubjects";
-import { ApiSubject } from "@/api/subjects";
+import { ApiSubject } from "@/types/subjects";
 import { Loader2 } from "lucide-react";
 
 export default function QuestionBank({

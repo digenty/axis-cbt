@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { BookOpen, ChevronRight, AlertCircle, RefreshCw } from "lucide-react";
 import { useGetTeacherSubjects } from "@/hooks/queryHooks/useSubjects";
-import { ApiSubject, ClassArmReportDtos } from "@/api/subjects";
+import { ApiSubject, ClassArmReportDtos } from "@/types/subjects";
 import { cn } from "@/lib/utils";
-import Layout from "./Layout";
+import Layout from "@/components/Layout";
 import { useEffect } from "react";
 
 const Skeleton = ({ className }: { className?: string }) => (

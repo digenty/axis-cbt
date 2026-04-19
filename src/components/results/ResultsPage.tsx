@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import { ResultsView } from "./ResultsView";
-import Layout from "./Layout";
+import Layout from "@/components/Layout";
 import { useGetClassDetails } from "@/hooks/queryHooks/useSubjects";
 import { useGetTeacherSubjects } from "@/hooks/queryHooks/useSubjects";
 

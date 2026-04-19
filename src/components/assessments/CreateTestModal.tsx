@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Modal } from "./Modal";
+import { Modal } from "@/components/Modal";
 import { useCreateAssessment } from "@/hooks/queryHooks/useAssessment";
 import type {
   ApiTerm,

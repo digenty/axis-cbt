@@ -3,8 +3,8 @@
 import { use } from "react";
 import { ClipboardList } from "lucide-react";
 // import { BackButton } from "@/components/PageHeader";
-import { Button } from "./ui";
-import { BackButton } from "./PageHeader";
+import { Button } from "@/components/ui";
+import { BackButton } from "@/components/PageHeader";
 
 export default function Assessments({
   params,

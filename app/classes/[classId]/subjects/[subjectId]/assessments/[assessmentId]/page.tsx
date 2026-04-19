@@ -1,7 +1,7 @@
 "use client";
 
 import { use } from "react";
-import { TestEditor } from "@/components/TestEditor";
+import { TestEditor } from "@/components/assessments/TestEditor";
 import Layout from "@/components/Layout";
 import { useGetClassDetails } from "@/hooks/queryHooks/useSubjects";
 import { useGetTeacherSubjects } from "@/hooks/queryHooks/useSubjects";

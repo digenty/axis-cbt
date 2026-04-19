@@ -8,7 +8,7 @@ import { AddQuestionForm } from "./AddQuestionForm";
 import { FillInBlanksForm } from "./FillInBlanksForm";
 import { QuestionGroupForm } from "./QuestionGroupForm";
 import { QuestionListView } from "./QuestionListView";
-import { AddAssessmentItemModal } from "./AddAssessmentItemModal";
+import { AddAssessmentItemModal } from "@/components/assessments/AddAssessmentItemModal";
 import { useGetTopics } from "@/hooks/queryHooks/useQuestionBank";
 import type { ApiQuestion, ApiTopic, QuestionType } from "@/types/question";
 import { ImportQuestionsModal } from "./ImportQuestionModal";

@@ -1,7 +1,6 @@
 "use client";
 
-import { GradeAttemptView } from "@/components/GradeAttemptView";
-// import GradeAttemptView from "@/components/GradeAttemptView";
+import { GradeAttemptView } from "@/components/results/GradeAttemptView";
 import { use } from "react";
 
 export default function GradeAttemptPage({

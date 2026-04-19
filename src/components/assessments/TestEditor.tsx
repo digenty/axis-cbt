@@ -55,7 +55,7 @@ import {
 	Trash2,
 	AlertCircle,
 } from "lucide-react";
-import { SelectFromQuestionBankModal } from "./QuestionBankModal";
+import { SelectFromQuestionBankModal } from "@/components/question-bank/QuestionBankModal";
 import { toast } from "sonner";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { AllClassesView } from "@/components/AllClassesView";
+import { AllClassesView } from "@/components/classes/AllClassesView";
 import Layout from "@/components/Layout";
 
 export default function ClassesPage() {

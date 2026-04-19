@@ -2,7 +2,7 @@
 
 import { use, useEffect } from "react";
 import { ClassSubjectsView } from "./ClassSubjectsView";
-import Layout from "./Layout";
+import Layout from "@/components/Layout";
 import { useGetClassDetails } from "@/hooks/queryHooks/useSubjects";
 import { useGetSchools } from "@/hooks/queryHooks/useSchool";
 import { ApiSchoolResponse } from "@/types/subjects";

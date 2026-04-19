@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { ApiClass, ClassLevelType } from "@/types/classes";
 import { cn } from "@/lib/utils";
-import { Input, Skeleton } from "./ui";
+import { Input, Skeleton } from "@/components/ui";
 import { useGetAllClasses } from "@/hooks/queryHooks/useClasses";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import { BarChart3 } from "lucide-react";
-import { BackButton } from "./PageHeader";
+import { BackButton } from "@/components/PageHeader";
 
 export default function Results({
   params,

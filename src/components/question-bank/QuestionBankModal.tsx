@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Search, Eye } from "lucide-react";
-import { Modal } from "./Modal";
+import { Modal } from "@/components/Modal";
 import {
   useGetTopics,
   useGetQuestions,

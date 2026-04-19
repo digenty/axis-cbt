@@ -1,4 +1,4 @@
-import ClassDetails from "@/components/ClassDetails";
+import ClassDetails from "@/components/classes/ClassDetails";
 
 export default function ClassDetailsPage({
 	params,

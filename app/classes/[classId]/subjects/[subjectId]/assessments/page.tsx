@@ -1,7 +1,7 @@
 "use client";
 
 import { use } from "react";
-import { TestListView } from "@/components/TestListView";
+import { TestListView } from "@/components/assessments/TestListView";
 import Layout from "@/components/Layout";
 import { useGetTeacherSubjects } from "@/hooks/queryHooks/useSubjects";
 

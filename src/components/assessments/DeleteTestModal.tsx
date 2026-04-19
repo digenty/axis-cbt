@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Modal } from "./Modal";
+import { Modal } from "@/components/Modal";
 
 interface DeleteTestModalProps {
   open: boolean;

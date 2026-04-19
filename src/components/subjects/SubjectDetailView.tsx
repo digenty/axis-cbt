@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { BookOpen, ClipboardList, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ApiSubject } from "@/api/subjects";
+import { ApiSubject } from "@/types/subjects";
 import {
   useGetClassDetails,
   useGetTeacherSubjects,

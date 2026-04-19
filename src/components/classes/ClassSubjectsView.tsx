@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { User, UserX, Eye, Bell } from "lucide-react";
 import { useGetSubjectsByClassId } from "@/hooks/queryHooks/useSubjects";
-import { Badge, Button, Skeleton } from "./ui";
+import { Badge, Button, Skeleton } from "@/components/ui";
 import {
 	Table,
 	TableHeader,
@@ -12,7 +12,7 @@ import {
 	TableHead,
 	TableRow,
 	TableCell,
-} from "./ui/table";
+} from "@/components/ui/table";
 import { ApiClassSubject } from "@/types/subjects";
 
 const COLUMNS = ["Subject", "Teacher", "Questions in Bank", "Tests", ""];
