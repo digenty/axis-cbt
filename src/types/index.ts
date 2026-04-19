@@ -117,9 +117,32 @@ export type JWTPayload = JwtPayload & User;
 // 	options?: Option[];
 // }
 
+import { JwtPayload } from "jwt-decode";
+
+interface JWTUser {
+  id: string;
+  branchId: number;
+  schoolId: number;
+  permissions: string[];
+}
+
+export type JWTPayload = JwtPayload & JWTUser;
+
+export type LevelType =
+  | "CRECHE"
+  | "KINDERGARTEN"
+  | "NURSERY"
+  | "PRIMARY"
+  | "JUNIOR_SECONDARY"
+  | "SENIOR_SECONDARY";
+
 export interface Question {
   id: string;
+<<<<<<< HEAD
   topicId: string;
+=======
+  topicId: number;
+>>>>>>> new-cbt
   type: QuestionType;
   text: string;
   marks: number;
@@ -140,7 +163,11 @@ export interface Question {
 export interface Topic {
   id: string;
   name: string;
+<<<<<<< HEAD
   subjectId: string;
+=======
+  subjectId: number;
+>>>>>>> new-cbt
   questions: Question[];
   createdAt: string;
 }
@@ -292,6 +319,24 @@ export type QuestionType =
   | "multiple-answers"
   | "comprehension-passage"
   | "multiple-blanks";
+<<<<<<< HEAD
+=======
+
+// Re-export types from results.ts so "@/types" resolves everything
+export type {
+  Test,
+  TestSection,
+  TestStatus,
+  TestType,
+  TermType,
+  AssessmentMapping,
+  StudentAttempt,
+  StudentAnswer,
+  AttemptStatus,
+  Assessment,
+  Result,
+} from "./results";
+>>>>>>> new-cbt
 
 // export interface Option {
 // 	id: string;

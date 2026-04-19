@@ -3,8 +3,13 @@
  * Mirrors the pattern from the main app's subjects.ts
  */
 import api from "@/lib/axios-auth";
+import {
+	ClassSubjectsResponse,
+	TeacherSubjectsResponse,
+} from "@/types/subjects";
 import { isAxiosError } from "axios";
 
+<<<<<<< HEAD
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface ClassArmReportDtos {
@@ -67,6 +72,8 @@ export interface ApiSchoolResponse {
   version: number;
 }
 
+=======
+>>>>>>> new-cbt
 // ── API calls ──────────────────────────────────────────────────────────────────
 
 export const getTeacherSubjects = async () => {
@@ -117,4 +124,18 @@ export const getSubjectsByClass = async (
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
   }
+};
+
+export const getSubjectsByClassId = async (
+	classId: number,
+): Promise<ClassSubjectsResponse> => {
+	try {
+		const { data } = await api.get<ClassSubjectsResponse>(
+			`/subjects/class/${classId}`,
+		);
+		return data;
+	} catch (error: unknown) {
+		if (isAxiosError(error)) throw error.response?.data;
+		throw error;
+	}
 };

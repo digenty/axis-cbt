@@ -1,5 +1,2 @@
-import animate from "tailwindcss-animate";
-
-export default {
-	plugins: [animate],
-};
+const config = {};
+export default config;

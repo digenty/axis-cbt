@@ -1,7 +1,11 @@
 "use client";
 
+<<<<<<< HEAD
 import { GradeAttemptView } from "@/components/GradeAttemptView";
 import { useCBTStore } from "@/store";
+=======
+import { GradeAttemptView } from "@/components/results/GradeAttemptView";
+>>>>>>> new-cbt
 import { use } from "react";
 
 export default function GradeAttemptPage({

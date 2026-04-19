@@ -1,4 +1,10 @@
-import { Class, Subject, Topic, Question } from "@/types";
+import type {
+  Class,
+  Subject,
+  Topic,
+  Question,
+  StudentAttempt,
+} from "@/types/results";
 
 // ─── Shared subject name lists per level ──────────────────────────────────────
 
@@ -400,8 +406,6 @@ export const mockQuestions: Question[] = [
     updatedAt: "2024-01-01",
   },
 ];
-import { StudentAttempt } from "@/types";
-
 // ─── Mock Tests (for demo results page) ──────────────────────────────────────
 // These reference the "algebra" topic questions above. In production, tests
 // would be created via the Test Editor and stored in the tests[] slice.
@@ -412,6 +416,7 @@ export const DEMO_CLASS_ID = "jss2a";
 
 // ─── Mock Student Attempts ─────────────────────────────────────────────────────
 
+<<<<<<< HEAD
 const STUDENTS = [
   { id: "s1", name: "Damilare John", cls: "JSS 2 A" },
   { id: "s2", name: "Amaka Okonkwo", cls: "JSS 2 A" },
@@ -422,6 +427,8 @@ const STUDENTS = [
   { id: "s7", name: "Ibrahim Lawal", cls: "JSS 2 A" },
 ];
 
+=======
+>>>>>>> new-cbt
 export const mockAttempts: StudentAttempt[] = [
   {
     id: "attempt-s1",

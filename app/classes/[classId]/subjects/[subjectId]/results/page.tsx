@@ -1,4 +1,4 @@
-import ResultsPage from "@/components/ResultsPage";
+import ResultsPage from "@/components/results/ResultsPage";
 
 const ResultsViewPage = ({
 	params,
