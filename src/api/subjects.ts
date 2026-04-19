@@ -4,76 +4,11 @@
  */
 import api from "@/lib/axios-auth";
 import {
-	ClassSubjectsResponse,
-	TeacherSubjectsResponse,
+  ClassSubjectsResponse,
+  TeacherSubjectsResponse,
 } from "@/types/subjects";
 import { isAxiosError } from "axios";
 
-<<<<<<< HEAD
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-export interface ClassArmReportDtos {
-  armId: number;
-  classArmName: string;
-  classId: number;
-  reportStatus: string;
-}
-export interface ApiSubject {
-  classArmReportDtos: ClassArmReportDtos[];
-  subjectId: number;
-  subjectName: string;
-}
-
-export interface TeacherSubjectsResponse {
-  data: ApiSubject[];
-  message: string;
-  status: string;
-}
-
-export interface ApiClassSubject {
-  id: number;
-  uuid: string;
-  active: boolean;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-  name: string;
-  branchId: number;
-  schoolId: number;
-
-  teacherName: string;
-  questionsInBank: number;
-  assessmentCount: number;
-}
-
-export interface ClassSubjectsResponse {
-  data: ApiClassSubject[];
-  message: string;
-  status: string;
-}
-
-export interface ApiSchoolResponse {
-  active: boolean;
-  address: string;
-  adminId: number;
-  country: string;
-  createdAt: string;
-  currency: string;
-  email: string;
-  id: number;
-  logo: string;
-  motto: string;
-  name: string;
-  phoneNumber: string;
-  studentPopulation: number;
-  timezone: string;
-  updatedAt: string;
-  uuid: string;
-  version: number;
-}
-
-=======
->>>>>>> new-cbt
 // ── API calls ──────────────────────────────────────────────────────────────────
 
 export const getTeacherSubjects = async () => {
@@ -89,20 +24,6 @@ export const getTeacherSubjects = async () => {
 export const getClassDetails = async (id: number) => {
   try {
     const { data } = await api.get(`/classes/${id}`);
-    return data;
-  } catch (error: unknown) {
-    if (isAxiosError(error)) throw error.response?.data;
-    throw error;
-  }
-};
-
-export const getSubjectsByClassId = async (
-  classId: number,
-): Promise<ClassSubjectsResponse> => {
-  try {
-    const { data } = await api.get<ClassSubjectsResponse>(
-      `/subjects/class/${classId}`,
-    );
     return data;
   } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
@@ -127,15 +48,15 @@ export const getSubjectsByClass = async (
 };
 
 export const getSubjectsByClassId = async (
-	classId: number,
+  classId: number,
 ): Promise<ClassSubjectsResponse> => {
-	try {
-		const { data } = await api.get<ClassSubjectsResponse>(
-			`/subjects/class/${classId}`,
-		);
-		return data;
-	} catch (error: unknown) {
-		if (isAxiosError(error)) throw error.response?.data;
-		throw error;
-	}
+  try {
+    const { data } = await api.get<ClassSubjectsResponse>(
+      `/subjects/class/${classId}`,
+    );
+    return data;
+  } catch (error: unknown) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
 };

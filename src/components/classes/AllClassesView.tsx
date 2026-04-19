@@ -7,90 +7,58 @@ import {
   SlidersHorizontal,
   BookOpen,
   ChevronRight,
-  Building2,
-  CalendarDays,
-  ChevronDown,
 } from "lucide-react";
 import { ApiClass, ClassLevelType } from "@/types/classes";
 import { cn } from "@/lib/utils";
-<<<<<<< HEAD:src/components/AllClassesView.tsx
-import { Input, Skeleton } from "./ui";
-import { useCBTStore } from "@/store";
-import { BackButton } from "./PageHeader";
-=======
 import { Input, Skeleton } from "@/components/ui";
 import { useGetAllClasses } from "@/hooks/queryHooks/useClasses";
->>>>>>> new-cbt:src/components/classes/AllClassesView.tsx
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const LEVELS = ["All", "JSS", "SS"] as const;
 
 const LEVEL_DISPLAY_MAP: Partial<Record<ClassLevelType, string>> = {
-	JUNIOR_SECONDARY: "JSS",
-	SENIOR_SECONDARY: "SS",
+  JUNIOR_SECONDARY: "JSS",
+  SENIOR_SECONDARY: "SS",
 };
 
 const getLevelDisplay = (levelType: ClassLevelType) =>
-	LEVEL_DISPLAY_MAP[levelType] ?? levelType;
+  LEVEL_DISPLAY_MAP[levelType] ?? levelType;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const AllClassesView = () => {
-<<<<<<< HEAD:src/components/AllClassesView.tsx
-  const { classes } = useCBTStore();
-  const [loading, setLoading] = useState(true);
+  const { data: classesRes, isLoading } = useGetAllClasses();
   const [search, setSearch] = useState("");
   const [level, setLevel] = useState("All");
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 700);
-    return () => clearTimeout(t);
-  }, []);
+  const classesData = classesRes?.data;
+  const classes = classesData?.content ?? [];
+  console.log({ classesRes, classes });
 
-  const filtered = classes.filter((c) => {
-    const matchSearch = c.name.toLowerCase().includes(search.toLowerCase());
-    const matchLevel = level === "All" || c.level === level;
+  const filtered = classes?.filter((c) => {
+    const matchSearch = c?.name?.toLowerCase().includes(search.toLowerCase());
+    // const levelDisplay = getLevelDisplay(c?.level?.levelType);
+    // const matchLevel = level === "All" || levelDisplay === level;
+    const matchLevel = level === "All";
     return matchSearch && matchLevel;
   });
 
-  const totalSubjects = classes.reduce((sum, c) => sum + c.totalSubjects, 0);
-
   return (
     <div>
-      {/* Page header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <BackButton href="/subjects" />
-          <h1 className="text-lg font-semibold text-zinc-900">All Classes</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 rounded-lg border border-(--color-border-darker) bg-white px-3 py-1.5 text-sm text-zinc-700 transition-colors hover:bg-zinc-50">
-            <Building2 className="h-3.5 w-3.5 text-zinc-400" />
-            Lawanson
-            <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
-          </button>
-          <button className="flex items-center gap-1.5 rounded-lg border border-(--color-border-darker) bg-white px-3 py-1.5 text-sm text-zinc-700 transition-colors hover:bg-zinc-50">
-            <CalendarDays className="h-3.5 w-3.5 text-zinc-400" />
-            24/25 Third Term
-            <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
-          </button>
-        </div>
-      </div>
-
       {/* Stats */}
       <div className="mb-6 grid grid-cols-2 gap-4">
         <StatCard
           label="Total Classes"
-          value={classes.length}
+          value={classesData?.totalElements ?? 0}
           color="green"
-          loading={loading}
+          loading={isLoading}
         />
         <StatCard
-          label="Total Subjects"
-          value={totalSubjects}
+          label="Total Arms"
+          value={classes?.reduce((sum, c) => sum + (c?.arms?.length ?? 0), 0)}
           color="amber"
-          loading={loading}
+          loading={isLoading}
         />
       </div>
 
@@ -105,7 +73,7 @@ export const AllClassesView = () => {
         />
         <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
           <SlidersHorizontal className="ml-1 h-3.5 w-3.5 text-gray-400" />
-          {LEVELS.map((l) => (
+          {LEVELS?.map((l) => (
             <button
               key={l}
               onClick={() => setLevel(l)}
@@ -123,7 +91,7 @@ export const AllClassesView = () => {
       </div>
 
       {/* Classes grid */}
-      {loading ? (
+      {isLoading ? (
         <div className="grid grid-cols-3 gap-4">
           {Array.from({ length: 9 }).map((_, i) => (
             <div key={i} className="rounded-xl border border-gray-200 p-4">
@@ -133,16 +101,18 @@ export const AllClassesView = () => {
             </div>
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : filtered?.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16">
           <p className="text-sm text-gray-400">
-            No classes found for &quot;{search}&quot;
+            {search
+              ? `No classes found for "${search}"`
+              : "No classes available"}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-4">
-          {filtered.map((cls) => (
-            <ClassCard key={cls.id} cls={cls} />
+          {filtered?.map((cls) => (
+            <ClassCard key={cls?.id} cls={cls} />
           ))}
         </div>
       )}
@@ -150,144 +120,27 @@ export const AllClassesView = () => {
   );
 };
 
-const ClassCard = ({ cls }: { cls: Class }) => (
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+const ClassCard = ({ cls }: { cls: ApiClass }) => (
   <div className="group rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-gray-300 hover:shadow-md">
     <div className="mb-2 flex items-start justify-between">
-      <h3 className="text-sm font-semibold text-gray-900">{cls.name}</h3>
+      <h3 className="text-sm font-semibold text-gray-900">{cls?.name}</h3>
       <span className="flex items-center gap-1 text-xs text-gray-500">
         <BookOpen className="h-3 w-3 text-gray-400" />
-        {cls.totalSubjects} Subjects
+        {cls?.arms?.length ?? 0} Arms
       </span>
     </div>
-    <p className="mb-4 text-xs text-gray-400">{cls.school}</p>
-    <Link href={`/classes/${cls.id}`}>
+    <p className="mb-4 text-xs text-gray-400">
+      {getLevelDisplay(cls?.level?.levelType)}
+    </p>
+    <Link href={`/classes/${cls?.id}`}>
       <button className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-1.5 text-sm text-gray-700 transition-all group-hover:border-blue-200 group-hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
         Open
         <ChevronRight className="h-3.5 w-3.5" />
       </button>
     </Link>
   </div>
-=======
-	const { data: classesRes, isLoading } = useGetAllClasses();
-	const [search, setSearch] = useState("");
-	const [level, setLevel] = useState("All");
-
-	const classesData = classesRes?.data;
-	const classes = classesData?.content ?? [];
-	console.log({ classesRes, classes });
-
-	const filtered = classes?.filter((c) => {
-		const matchSearch = c?.name?.toLowerCase().includes(search.toLowerCase());
-		// const levelDisplay = getLevelDisplay(c?.level?.levelType);
-		// const matchLevel = level === "All" || levelDisplay === level;
-		const matchLevel = level === "All";
-		return matchSearch && matchLevel;
-	});
-
-	return (
-		<div>
-			{/* Stats */}
-			<div className="mb-6 grid grid-cols-2 gap-4">
-				<StatCard
-					label="Total Classes"
-					value={classesData?.totalElements ?? 0}
-					color="green"
-					loading={isLoading}
-				/>
-				<StatCard
-					label="Total Arms"
-					value={classes?.reduce(
-						(sum, c) => sum + (c?.arms?.length ?? 0),
-						0,
-					)}
-					color="amber"
-					loading={isLoading}
-				/>
-			</div>
-
-			{/* Filters */}
-			<div className="mb-5 flex items-center gap-3">
-				<Input
-					leftAddon={<Search className="h-3.5 w-3.5" />}
-					placeholder="Search classes..."
-					value={search}
-					onChange={(e) => setSearch(e.target.value)}
-					className="max-w-xs"
-				/>
-				<div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
-					<SlidersHorizontal className="ml-1 h-3.5 w-3.5 text-gray-400" />
-					{LEVELS?.map((l) => (
-						<button
-							key={l}
-							onClick={() => setLevel(l)}
-							className={cn(
-								"rounded-md px-2.5 py-1 text-xs transition-colors",
-								level === l
-									? "bg-blue-600 font-medium text-white"
-									: "text-gray-500 hover:bg-gray-100",
-							)}
-						>
-							{l}
-						</button>
-					))}
-				</div>
-			</div>
-
-			{/* Classes grid */}
-			{isLoading ? (
-				<div className="grid grid-cols-3 gap-4">
-					{Array.from({ length: 9 }).map((_, i) => (
-						<div
-							key={i}
-							className="rounded-xl border border-gray-200 p-4"
-						>
-							<Skeleton className="mb-2 h-4 w-20" />
-							<Skeleton className="mb-4 h-3 w-16" />
-							<Skeleton className="h-8 w-full rounded-lg" />
-						</div>
-					))}
-				</div>
-			) : filtered?.length === 0 ? (
-				<div className="flex flex-col items-center justify-center py-16">
-					<p className="text-sm text-gray-400">
-						{search
-							? `No classes found for "${search}"`
-							: "No classes available"}
-					</p>
-				</div>
-			) : (
-				<div className="grid grid-cols-3 gap-4">
-					{filtered?.map((cls) => (
-						<ClassCard key={cls?.id} cls={cls} />
-					))}
-				</div>
-			)}
-		</div>
-	);
-};
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-const ClassCard = ({ cls }: { cls: ApiClass }) => (
-	<div className="group rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-gray-300 hover:shadow-md">
-		<div className="mb-2 flex items-start justify-between">
-			<h3 className="text-sm font-semibold text-gray-900">{cls?.name}</h3>
-			<span className="flex items-center gap-1 text-xs text-gray-500">
-				<BookOpen className="h-3 w-3 text-gray-400" />
-				{cls?.arms?.length ?? 0} Arms
-			</span>
-		</div>
-		<p className="mb-4 text-xs text-gray-400">
-			{getLevelDisplay(cls?.level?.levelType)}
-		</p>
-		<Link href={`/classes/${cls?.id}`}>
-			<button className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-1.5 text-sm text-gray-700 transition-all group-hover:border-blue-200 group-hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
-				Open
-				<ChevronRight className="h-3.5 w-3.5" />
-			</button>
-		</Link>
-	</div>
->>>>>>> new-cbt:src/components/classes/AllClassesView.tsx
 );
 
 const StatCard = ({

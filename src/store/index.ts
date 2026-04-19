@@ -29,11 +29,7 @@ interface CBTStore {
   addTopic: (topic: Topic) => void;
   updateTopic: (id: string, name: string) => void;
   deleteTopic: (id: string) => void;
-<<<<<<< HEAD
-  reorderTopics: (subjectId: string, orderedIds: string[]) => void;
-=======
   reorderTopics: (subjectId: number, orderedIds: string[]) => void;
->>>>>>> new-cbt
 
   addQuestion: (question: Question) => void;
   updateQuestion: (id: string, question: Partial<Question>) => void;
@@ -44,11 +40,7 @@ interface CBTStore {
   addTest: (test: Test) => void;
   updateTest: (id: string, data: Partial<Test>) => void;
   deleteTest: (id: string) => void;
-<<<<<<< HEAD
-  getTestsBySubject: (subjectId: string) => Test[];
-=======
   getTestsBySubject: (subjectId: number) => Test[];
->>>>>>> new-cbt
 
   getAttemptsByTest: (testId: string) => StudentAttempt[];
   updateAttempt: (id: string, data: Partial<StudentAttempt>) => void;
@@ -60,11 +52,7 @@ interface CBTStore {
   ) => void;
 
   getSubjectsByClass: (classId: string) => Subject[];
-<<<<<<< HEAD
-  getTopicsBySubject: (subjectId: string) => Topic[];
-=======
   getTopicsBySubject: (subjectId: number) => Topic[];
->>>>>>> new-cbt
   getQuestionsByTopic: (topicId: string) => Question[];
   setLoading: (val: boolean) => void;
   addClass: (cls: Class) => void;
@@ -74,21 +62,12 @@ interface CBTStore {
 export const useCBTStore = create<CBTStore>()(
   persist(
     (set, get) => ({
-<<<<<<< HEAD
-      classes: mockClasses,
-      subjects: mockSubjects,
-      topics: mockTopics,
-      questions: mockQuestions,
-      tests: [],
-      attempts: mockAttempts,
-=======
       classes: mockClasses as unknown as Class[],
       subjects: mockSubjects as unknown as Subject[],
       topics: mockTopics as unknown as Topic[],
       questions: mockQuestions as unknown as Question[],
       tests: [],
       attempts: mockAttempts as unknown as StudentAttempt[],
->>>>>>> new-cbt
       isLoading: false,
 
       setLoading: (val) => set({ isLoading: val }),
@@ -104,11 +83,7 @@ export const useCBTStore = create<CBTStore>()(
       deleteTopic: (id) =>
         set((s) => ({
           topics: s.topics.filter((t) => t.id !== id),
-<<<<<<< HEAD
-          questions: s.questions.filter((q) => q.topicId !== id),
-=======
           questions: s.questions.filter((q) => q.topicId !== Number(id)),
->>>>>>> new-cbt
         })),
       reorderTopics: (subjectId, orderedIds) =>
         set((s) => {
@@ -152,13 +127,8 @@ export const useCBTStore = create<CBTStore>()(
       },
       reorderQuestions: (topicId, orderedIds) =>
         set((s) => {
-<<<<<<< HEAD
-          const tqs = s.questions.filter((q) => q.topicId === topicId);
-          const rest = s.questions.filter((q) => q.topicId !== topicId);
-=======
           const tqs = s.questions.filter((q) => q.topicId === Number(topicId));
           const rest = s.questions.filter((q) => q.topicId !== Number(topicId));
->>>>>>> new-cbt
           const reordered = orderedIds
             .map((id) => tqs.find((q) => q.id === id))
             .filter(Boolean) as Question[];
@@ -177,11 +147,7 @@ export const useCBTStore = create<CBTStore>()(
       deleteTest: (id) =>
         set((s) => ({ tests: s.tests.filter((t) => t.id !== id) })),
       getTestsBySubject: (subjectId) =>
-<<<<<<< HEAD
-        get().tests.filter((t) => String(t.subjectId) === subjectId),
-=======
         get().tests.filter((t) => t.subjectId === String(subjectId)),
->>>>>>> new-cbt
 
       getAttemptsByTest: (testId) =>
         get().attempts.filter((a) => a.testId === testId),
@@ -222,11 +188,7 @@ export const useCBTStore = create<CBTStore>()(
       getTopicsBySubject: (subjectId) =>
         get().topics.filter((t) => t.subjectId === subjectId),
       getQuestionsByTopic: (topicId) =>
-<<<<<<< HEAD
-        get().questions.filter((q) => q.topicId === topicId),
-=======
         get().questions.filter((q) => q.topicId === Number(topicId)),
->>>>>>> new-cbt
     }),
     { name: "cbt-store" },
   ),

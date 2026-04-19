@@ -416,19 +416,6 @@ export const DEMO_CLASS_ID = "jss2a";
 
 // ─── Mock Student Attempts ─────────────────────────────────────────────────────
 
-<<<<<<< HEAD
-const STUDENTS = [
-  { id: "s1", name: "Damilare John", cls: "JSS 2 A" },
-  { id: "s2", name: "Amaka Okonkwo", cls: "JSS 2 A" },
-  { id: "s3", name: "Tunde Adeyemi", cls: "JSS 2 A" },
-  { id: "s4", name: "Fatima Bello", cls: "JSS 2 A" },
-  { id: "s5", name: "Chukwuemeka Eze", cls: "JSS 2 A" },
-  { id: "s6", name: "Ngozi Uchenna", cls: "JSS 2 A" },
-  { id: "s7", name: "Ibrahim Lawal", cls: "JSS 2 A" },
-];
-
-=======
->>>>>>> new-cbt
 export const mockAttempts: StudentAttempt[] = [
   {
     id: "attempt-s1",

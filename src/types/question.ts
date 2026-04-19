@@ -338,8 +338,6 @@ export type StimulusType =
   | "Table"
   | "Chart"
   | "Multiple Blanks";
-<<<<<<< HEAD
-=======
 
 // ─── Assessment API types ─────────────────────────────────────────────────────
 
@@ -497,4 +495,3 @@ export interface SectionResponse {
   message: string;
   status: string;
 }
->>>>>>> new-cbt
