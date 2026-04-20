@@ -1,50 +1,47 @@
 import api from "@/lib/axios-auth";
 import { isAxiosError } from "axios";
 import type {
+  AssessmentListResponse,
   AssessmentResponse,
-  AssessmentsListResponse,
+  AssessmentResultsResponse,
+  AssessmentStatsResponse,
   CreateAssessmentPayload,
   CreateSectionPayload,
+  GradeManuallyPayload,
   SectionResponse,
-  SectionsListResponse,
+  SectionsResponse,
   UpdateAssessmentPayload,
-} from "@/types/assessment";
+} from "@/types/question";
 
-// ─── List ─────────────────────────────────────────────────────────────────────
+// ─── Assessments ──────────────────────────────────────────────────────────────
 
-export const getAssessments = async (params: {
+export const getAssessments = async (payload: {
   branchId: number;
-  classId?: number;
-  subjectId?: number;
-}): Promise<AssessmentsListResponse> => {
+  classId: number;
+  subjectId: number;
+}): Promise<AssessmentListResponse> => {
   try {
-    const query = new URLSearchParams();
-    query.set("branchId", String(params.branchId));
-    if (params.classId) query.set("classId", String(params.classId));
-    if (params.subjectId) query.set("subjectId", String(params.subjectId));
-    const { data } = await api.get(`/api/cbt/assessments?${query.toString()}`);
+    const { data } = await api.get(
+      `/api/cbt/assessments?classId=${payload.classId}&subjectId=${payload.subjectId}&branchId=${payload.branchId}`,
+    );
     return data;
-  } catch (error) {
+  } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
   }
 };
-
-// ─── Single ───────────────────────────────────────────────────────────────────
 
 export const getAssessment = async (
-  id: number,
+  assessmentId: number,
 ): Promise<AssessmentResponse> => {
   try {
-    const { data } = await api.get(`/api/cbt/assessments/${id}`);
+    const { data } = await api.get(`/api/cbt/assessments/${assessmentId}`);
     return data;
-  } catch (error) {
+  } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
   }
 };
-
-// ─── Create ───────────────────────────────────────────────────────────────────
 
 export const createAssessment = async (
   payload: CreateAssessmentPayload,
@@ -52,50 +49,37 @@ export const createAssessment = async (
   try {
     const { data } = await api.post("/api/cbt/assessments", payload);
     return data;
-  } catch (error) {
+  } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
   }
 };
 
-// ─── Update ───────────────────────────────────────────────────────────────────
-
 export const updateAssessment = async (
-  id: number,
+  assessmentId: number,
   payload: UpdateAssessmentPayload,
 ): Promise<AssessmentResponse> => {
   try {
-    const { data } = await api.put(`/api/cbt/assessments/${id}`, payload);
+    const { data } = await api.put(
+      `/api/cbt/assessments/${assessmentId}`,
+      payload,
+    );
     return data;
-  } catch (error) {
+  } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
   }
 };
-
-// ─── Publish ──────────────────────────────────────────────────────────────────
 
 export const publishAssessment = async (
-  id: number,
+  assessmentId: number,
 ): Promise<AssessmentResponse> => {
   try {
-    const { data } = await api.post(`/api/cbt/assessments/${id}/publish`);
+    const { data } = await api.post(
+      `/api/cbt/assessments/${assessmentId}/publish`,
+    );
     return data;
-  } catch (error) {
-    if (isAxiosError(error)) throw error.response?.data;
-    throw error;
-  }
-};
-
-// ─── Delete ───────────────────────────────────────────────────────────────────
-
-export const deleteAssessment = async (
-  id: number,
-): Promise<{ message: string; status: string }> => {
-  try {
-    const { data } = await api.delete(`/api/cbt/assessments/${id}`);
-    return data;
-  } catch (error) {
+  } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
   }
@@ -103,21 +87,21 @@ export const deleteAssessment = async (
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
-export const getSections = async (
+export const getAssessmentSections = async (
   assessmentId: number,
-): Promise<SectionsListResponse> => {
+): Promise<SectionsResponse> => {
   try {
     const { data } = await api.get(
       `/api/cbt/assessments/${assessmentId}/sections`,
     );
     return data;
-  } catch (error) {
+  } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
   }
 };
 
-export const createSection = async (
+export const addSection = async (
   assessmentId: number,
   payload: CreateSectionPayload,
 ): Promise<SectionResponse> => {
@@ -127,50 +111,99 @@ export const createSection = async (
       payload,
     );
     return data;
-  } catch (error) {
+  } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
   }
 };
 
 export const deleteSection = async (
+  assessmentId: number,
   sectionId: number,
 ): Promise<{ message: string; status: string }> => {
   try {
     const { data } = await api.delete(
-      `/api/cbt/assessments/sections/${sectionId}`,
+      `/api/cbt/assessments/${assessmentId}/sections/${sectionId}`,
     );
     return data;
-  } catch (error) {
+  } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
   }
 };
+
+// ─── Section questions ────────────────────────────────────────────────────────
 
 export const addQuestionsToSection = async (
   sectionId: number,
   questionIds: number[],
-): Promise<void> => {
+): Promise<{ message: string; status: string }> => {
   try {
-    await api.post(
+    const { data } = await api.post(
       `/api/cbt/assessments/sections/${sectionId}/questions`,
       questionIds,
     );
-  } catch (error) {
+    return data;
+  } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
   }
 };
 
-export const deleteAssessmentQuestion = async (
-  aqId: number,
+export const removeQuestionFromSection = async (
+  assessmentQuestionId: number,
 ): Promise<{ message: string; status: string }> => {
   try {
     const { data } = await api.delete(
-      `/api/cbt/assessments/assessment-questions/${aqId}`,
+      `/api/cbt/assessments/assessment-questions/${assessmentQuestionId}`,
     );
     return data;
-  } catch (error) {
+  } catch (error: unknown) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
+
+// ─── Results & grading ────────────────────────────────────────────────────────
+
+export const getAssessmentResults = async (
+  assessmentId: number,
+): Promise<AssessmentResultsResponse> => {
+  try {
+    const { data } = await api.get(
+      `/api/cbt/assessments/${assessmentId}/results`,
+    );
+    return data;
+  } catch (error: unknown) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
+
+export const getAssessmentStats = async (
+  assessmentId: number,
+): Promise<AssessmentStatsResponse> => {
+  try {
+    const { data } = await api.get(
+      `/api/cbt/assessments/${assessmentId}/stats`,
+    );
+    return data;
+  } catch (error: unknown) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
+
+export const gradeManually = async (
+  payload: GradeManuallyPayload,
+): Promise<{ message: string; status: string }> => {
+  try {
+    const { data } = await api.post(
+      "/api/cbt/assessments/grade-manually",
+      payload,
+    );
+    return data;
+  } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
   }

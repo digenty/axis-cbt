@@ -1,7 +1,6 @@
 "use client";
 
-import { GradeAttemptView } from "@/components/GradeAttemptView";
-import { useCBTStore } from "@/store";
+import { GradeAttemptView } from "@/components/results/GradeAttemptView";
 import { use } from "react";
 
 export default function GradeAttemptPage({
@@ -9,15 +8,11 @@ export default function GradeAttemptPage({
 }: {
 	params: Promise<{ classId: string; subjectId: string; attemptId: string }>;
 }) {
-	const { classId, subjectId, attemptId } = use(params);
-	const attempts = useCBTStore((s) => s.attempts);
-	const attempt = attempts.find((a) => a.id === attemptId);
-
-	if (!attempt) return null;
+	const { classId, subjectId } = use(params);
 
 	return (
 		<GradeAttemptView
-			attempt={attempt}
+			// attempt={attempt}
 			classId={classId}
 			subjectId={subjectId}
 		/>

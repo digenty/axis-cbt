@@ -3,69 +3,11 @@
  * Mirrors the pattern from the main app's subjects.ts
  */
 import api from "@/lib/axios-auth";
+import {
+  ClassSubjectsResponse,
+  TeacherSubjectsResponse,
+} from "@/types/subjects";
 import { isAxiosError } from "axios";
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-export interface ClassArmReportDtos {
-  armId: number;
-  classArmName: string;
-  classId: number;
-  reportStatus: string;
-}
-export interface ApiSubject {
-  classArmReportDtos: ClassArmReportDtos[];
-  subjectId: number;
-  subjectName: string;
-}
-
-export interface TeacherSubjectsResponse {
-  data: ApiSubject[];
-  message: string;
-  status: string;
-}
-
-export interface ApiClassSubject {
-  id: number;
-  uuid: string;
-  active: boolean;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-  name: string;
-  branchId: number;
-  schoolId: number;
-
-  teacherName: string;
-  questionsInBank: number;
-  assessmentCount: number;
-}
-
-export interface ClassSubjectsResponse {
-  data: ApiClassSubject[];
-  message: string;
-  status: string;
-}
-
-export interface ApiSchoolResponse {
-  active: boolean;
-  address: string;
-  adminId: number;
-  country: string;
-  createdAt: string;
-  currency: string;
-  email: string;
-  id: number;
-  logo: string;
-  motto: string;
-  name: string;
-  phoneNumber: string;
-  studentPopulation: number;
-  timezone: string;
-  updatedAt: string;
-  uuid: string;
-  version: number;
-}
 
 // ── API calls ──────────────────────────────────────────────────────────────────
 
@@ -89,20 +31,6 @@ export const getClassDetails = async (id: number) => {
   }
 };
 
-export const getSubjectsByClassId = async (
-  classId: number,
-): Promise<ClassSubjectsResponse> => {
-  try {
-    const { data } = await api.get<ClassSubjectsResponse>(
-      `/subjects/class/${classId}`,
-    );
-    return data;
-  } catch (error: unknown) {
-    if (isAxiosError(error)) throw error.response?.data;
-    throw error;
-  }
-};
-
 export const getSubjectsByClass = async (
   className?: string,
   levelType?: string,
@@ -111,6 +39,20 @@ export const getSubjectsByClass = async (
   try {
     const { data } = await api.get<TeacherSubjectsResponse>(
       `/subjects/class?className=${className}&levelType=${levelType}${branchId ? `&branchId=${branchId}` : ""}`,
+    );
+    return data;
+  } catch (error: unknown) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
+
+export const getSubjectsByClassId = async (
+  classId: number,
+): Promise<ClassSubjectsResponse> => {
+  try {
+    const { data } = await api.get<ClassSubjectsResponse>(
+      `/subjects/class/${classId}`,
     );
     return data;
   } catch (error: unknown) {

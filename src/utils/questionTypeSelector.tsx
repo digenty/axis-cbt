@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { getQuestionTypeLabel } from "@/utils/question";
+import { cn, getQuestionTypeLabel } from "@/lib/utils";
 import type { QuestionType, SubQuestionType } from "@/types/question";
 
 // ─── Types available inside single-question form ──────────────────────────────

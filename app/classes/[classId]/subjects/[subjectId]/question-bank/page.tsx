@@ -1,4 +1,4 @@
-import QuestionBank from "@/components/QuestionBank";
+import QuestionBank from "@/components/question-bank/QuestionBank";
 import React from "react";
 
 const QuestionBankPage = ({

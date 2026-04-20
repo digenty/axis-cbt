@@ -7,15 +7,9 @@ import { Spinner } from "./ui";
 export default function Layout({
   children,
   href,
-  title,
-  subtitle,
-  controls,
 }: Readonly<{
   children: React.ReactNode;
   href?: string;
-  title?: string;
-  subtitle?: string;
-  controls?: React.ReactNode;
 }>) {
   return (
     <Suspense
@@ -27,12 +21,7 @@ export default function Layout({
     >
       <div className="bg-bg-default fixed inset-0 flex overflow-hidden leading-5">
         <div className="flex min-h-0 flex-1 flex-col">
-          <Header
-            href={href}
-            title={title}
-            subtitle={subtitle}
-            controls={controls}
-          />
+          <Header href={href} />
           <div className="flex-1 overflow-y-auto p-8">{children}</div>
         </div>
       </div>

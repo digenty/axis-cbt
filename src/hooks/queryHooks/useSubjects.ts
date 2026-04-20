@@ -25,7 +25,7 @@ export const useGetClassDetails = (id: number) => {
 
 export const useGetSubjectsByClassId = (classId: number) => {
   return useQuery({
-    queryKey: ["subjects-by-class", classId],
+    queryKey: ["subjects-by-class-id", classId],
     queryFn: () => getSubjectsByClassId(classId),
     retry: 1,
     staleTime: 1000 * 60 * 5, // 5 minutes

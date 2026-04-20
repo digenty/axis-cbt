@@ -1,4 +1,4 @@
-import SubjectDetails from "@/components/SubjectDetails";
+import SubjectDetails from "@/components/subjects/SubjectDetails";
 
 export default function SubjectDetailsPage({
 	params,
