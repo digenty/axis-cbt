@@ -99,9 +99,10 @@ const ActionButton = ({ card }: { card: StudentAssessmentCard }) => {
     "flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors";
 
   if (card.status === "in-progress") {
+    const sid = card.studentAssessmentId;
     return (
       <Link
-        href={`/students/${card.id}/take`}
+        href={`/students/${card.id}/take${sid ? `?sid=${sid}` : ""}`}
         className={cn(
           base,
           "border border-gray-200 text-gray-700 hover:bg-gray-50",

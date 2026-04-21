@@ -12,6 +12,7 @@ export type StudentAssessmentStatus =
 
 export interface StudentAssessmentCard {
   id: string;
+  studentAssessmentId?: string;
   subject: string;
   subjectColor: "blue" | "green" | "purple" | "amber" | "indigo";
   title: string;

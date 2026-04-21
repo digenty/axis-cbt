@@ -12,6 +12,7 @@ import {
   GraduationCap,
   Bell,
   ChevronRight,
+  ArrowLeft,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -68,6 +69,19 @@ export const Sidebar = () => {
           );
         })}
       </nav>
+
+      {/* Back to main app */}
+      {process.env.NEXT_PUBLIC_MAIN_APP_URL && (
+        <div className="border-t border-gray-100 px-3 py-2">
+          <a
+            href={process.env.NEXT_PUBLIC_MAIN_APP_URL}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Digenty
+          </a>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="border-t border-gray-100 px-3 py-3">
