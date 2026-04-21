@@ -40,7 +40,8 @@ const NAV_ITEMS = [
 export const Sidebar = () => {
   const { isSidebarOpen, setIsSidebarOpen } = useSidebarStore();
   const [showLogo, setShowLogo] = useState(true);
-  const mainAppUrl = process.env.NEXT_PUBLIC_MAIN_APP_URL?.replace(/\/$/, "") ?? "";
+  const mainAppUrl =
+    process.env.NEXT_PUBLIC_MAIN_APP_URL?.replace(/\/$/, "") ?? "";
 
   const handleLogout = () => {
     deleteSession();
@@ -93,10 +94,7 @@ export const Sidebar = () => {
                   alt="Axis logo"
                 />
               ) : (
-                <LeadIcon
-                  fill={ICON_COLOR}
-                  className="size-5 rotate-180"
-                />
+                <LeadIcon fill={ICON_COLOR} className="size-5 rotate-180" />
               )}
             </button>
           )}
@@ -119,9 +117,7 @@ export const Sidebar = () => {
                 className={cn(
                   "flex cursor-pointer items-center gap-[11px] rounded-md px-2 py-2 transition-colors",
                   !isSidebarOpen && "justify-center px-0",
-                  isActive
-                    ? "bg-bg-state-soft"
-                    : "hover:bg-bg-state-soft",
+                  isActive ? "bg-bg-state-soft" : "hover:bg-bg-state-soft",
                 )}
               >
                 <item.icon fill={ICON_COLOR} />
