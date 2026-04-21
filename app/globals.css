@@ -688,7 +688,7 @@
 	--text-2xs: 10px;
 }
 
-@media (prefers-color-scheme: light) {
+@media (prefers-color-scheme: dark) {
 	:root {
 		/* Dark theme */
 		--color-text-default: var(--zinc-00);

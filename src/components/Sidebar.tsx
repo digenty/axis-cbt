@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useSidebarStore } from "@/store/sidebar-store";
 import { deleteSession } from "@/lib/cookies";
@@ -40,6 +41,8 @@ const NAV_ITEMS = [
 export const Sidebar = () => {
   const { isSidebarOpen, setIsSidebarOpen } = useSidebarStore();
   const [showLogo, setShowLogo] = useState(true);
+  const pathname = usePathname();
+  const router = useRouter();
   const mainAppUrl =
     process.env.NEXT_PUBLIC_MAIN_APP_URL?.replace(/\/$/, "") ?? "";
 
@@ -52,24 +55,26 @@ export const Sidebar = () => {
     <aside className="h-screen shrink-0">
       <div
         className={cn(
-          "border-border-default bg-bg-sidebar-subtle relative hidden h-screen overflow-y-auto overflow-x-hidden border-r p-4 md:flex md:flex-col md:space-y-8",
-          isSidebarOpen ? "w-[276px]" : "w-16",
+          "border-border-default bg-bg-sidebar-subtle hide-scrollbar relative hidden h-screen w-69 space-y-4 overflow-y-auto border-r p-4 md:block md:space-y-8",
+          !isSidebarOpen && "w-16",
         )}
       >
         {/* Logo + toggle */}
         <div
           className={cn(
-            "flex shrink-0",
+            "flex",
             isSidebarOpen ? "justify-between" : "justify-center",
           )}
         >
           {isSidebarOpen && (
-            <Image
-              src="/icons/Logomark.svg"
-              width={65}
-              height={27}
-              alt="Axis logo"
-            />
+            <div className="flex items-center gap-2">
+              <Image
+                src="/icons/Logomark.svg"
+                width={65}
+                height={27}
+                alt="Axis logo"
+              />
+            </div>
           )}
 
           {isSidebarOpen ? (
@@ -89,8 +94,8 @@ export const Sidebar = () => {
               {showLogo ? (
                 <Image
                   src="/icons/Logomark.svg"
-                  width={32}
-                  height={14}
+                  width={49}
+                  height={20}
                   alt="Axis logo"
                 />
               ) : (
@@ -101,52 +106,60 @@ export const Sidebar = () => {
         </div>
 
         {/* Nav */}
-        <nav className="flex flex-1 flex-col gap-0.5">
-          {NAV_ITEMS.map((item) => {
-            const isActive = item.cbt;
-            return (
-              <a
-                key={item.key}
-                href={
-                  item.cbt
-                    ? "/dashboard"
-                    : item.key === "dashboard"
-                      ? `${mainAppUrl}/staff`
-                      : `${mainAppUrl}/staff/${item.key}`
-                }
-                className={cn(
-                  "flex cursor-pointer items-center gap-[11px] rounded-md px-2 py-2 transition-colors",
-                  !isSidebarOpen && "justify-center px-0",
-                  isActive ? "bg-bg-state-soft" : "hover:bg-bg-state-soft",
-                )}
-              >
-                <item.icon fill={ICON_COLOR} />
-                {isSidebarOpen && (
-                  <span className="text-text-subtle truncate text-sm font-medium leading-5">
-                    {item.title}
-                  </span>
-                )}
-              </a>
-            );
-          })}
-        </nav>
+        <div className="space-y-5 md:space-y-6">
+          <div>
+            {NAV_ITEMS.map((item) => {
+              const isActive =
+                item.cbt ||
+                (!item.cbt &&
+                  item.key !== "dashboard" &&
+                  pathname.includes(item.key));
+              return (
+                <nav
+                  key={item.key}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-[11px] px-2 py-2",
+                    !isSidebarOpen && "justify-center px-0",
+                    isActive && "bg-bg-state-soft rounded-md",
+                  )}
+                  onClick={() =>
+                    item.cbt
+                      ? router.push("/subjects")
+                      : item.key === "dashboard"
+                        ? (window.location.href = `${mainAppUrl}/staff`)
+                        : (window.location.href = `${mainAppUrl}/staff/${item.key}`)
+                  }
+                >
+                  <item.icon fill={ICON_COLOR} />
+                  {isSidebarOpen && (
+                    <p className="text-text-subtle text-sm leading-5 font-medium">
+                      {item.title}
+                    </p>
+                  )}
+                </nav>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Footer — sign out */}
-        <div className="shrink-0">
-          <button
-            onClick={handleLogout}
-            className={cn(
-              "flex w-full cursor-pointer items-center gap-[11px] py-2",
-              !isSidebarOpen && "justify-center",
-            )}
-          >
-            <Logout fill={ICON_COLOR} />
-            {isSidebarOpen && (
-              <span className="text-text-subtle text-sm font-medium leading-5">
-                Sign out
-              </span>
-            )}
-          </button>
+        <div className="absolute right-4 bottom-4 left-4">
+          <div>
+            <nav
+              onClick={handleLogout}
+              className={cn(
+                "flex cursor-pointer items-center gap-[11px] py-2",
+                !isSidebarOpen && "justify-center",
+              )}
+            >
+              <Logout fill={ICON_COLOR} />
+              {isSidebarOpen && (
+                <p className="text-text-subtle text-sm leading-5 font-medium">
+                  Sign out
+                </p>
+              )}
+            </nav>
+          </div>
         </div>
       </div>
     </aside>
