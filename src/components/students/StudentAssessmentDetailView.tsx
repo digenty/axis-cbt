@@ -87,9 +87,7 @@ const PreTestView = ({
       { assessmentId },
       {
         onSuccess: (result) => {
-          router.push(
-            `/students/${assessmentId}/take?sid=${result.id}`,
-          );
+          router.push(`/students/${assessmentId}/take?sid=${result.id}`);
         },
         onError: () => {
           setError("Failed to start assessment. Please try again.");
@@ -340,7 +338,9 @@ export const StudentAssessmentDetailView = ({
               <h1 className="mb-1 text-lg font-bold text-gray-900">
                 {preview.name}
               </h1>
-              <p className="mb-3 text-sm text-gray-400">{preview.subjectName}</p>
+              <p className="mb-3 text-sm text-gray-400">
+                {preview.subjectName}
+              </p>
               {statusLabel && (
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClass}`}

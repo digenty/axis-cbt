@@ -9,7 +9,10 @@ import type {
   ApiStudentAssessmentItem,
   AttemptStatus,
 } from "@/types/student-api";
-import type { StudentAssessmentCard, StudentAssessmentStatus } from "@/types/students";
+import type {
+  StudentAssessmentCard,
+  StudentAssessmentStatus,
+} from "@/types/students";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

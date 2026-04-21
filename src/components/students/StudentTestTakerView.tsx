@@ -27,7 +27,9 @@ import type {
 
 // ─── Mapping helpers ──────────────────────────────────────────────────────────
 
-function mapOptions(opts: ApiStudentOption[]): { label: string; text: string }[] {
+function mapOptions(
+  opts: ApiStudentOption[],
+): { label: string; text: string }[] {
   return opts
     .sort((a, b) => a.optionOrder - b.optionOrder)
     .map((o) => ({ label: o.optionLabel, text: o.optionText }));
@@ -42,11 +44,23 @@ function mapQuestion(q: ApiStudentQuestion): TakerQuestion {
   switch (q.questionType) {
     case "MULTIPLE_CHOICE": {
       const opts = (td?.options as ApiStudentOption[] | undefined) ?? [];
-      return { id, text, marks, type: "multiple-choice", options: mapOptions(opts) };
+      return {
+        id,
+        text,
+        marks,
+        type: "multiple-choice",
+        options: mapOptions(opts),
+      };
     }
     case "MULTIPLE_ANSWERS": {
       const opts = (td?.options as ApiStudentOption[] | undefined) ?? [];
-      return { id, text, marks, type: "multiple-answers", options: mapOptions(opts) };
+      return {
+        id,
+        text,
+        marks,
+        type: "multiple-answers",
+        options: mapOptions(opts),
+      };
     }
     case "TRUE_FALSE":
       return { id, text, marks, type: "true-false" };

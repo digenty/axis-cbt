@@ -16,10 +16,7 @@ import type { TeacherAssessmentListItem } from "@/types/student-api";
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; className: string }
-> = {
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   DRAFT: { label: "Draft", className: "bg-gray-100 text-gray-600" },
   PUBLISHED: { label: "Published", className: "bg-green-50 text-green-700" },
   ONGOING: { label: "Ongoing", className: "bg-blue-50 text-blue-700" },
@@ -122,8 +119,7 @@ export const GlobalResultsView = () => {
       a.name.toLowerCase().includes(search.toLowerCase()) ||
       a.subjectName.toLowerCase().includes(search.toLowerCase()) ||
       a.className.toLowerCase().includes(search.toLowerCase());
-    const matchStatus =
-      statusFilter === "ALL" || a.status === statusFilter;
+    const matchStatus = statusFilter === "ALL" || a.status === statusFilter;
     return matchSearch && matchStatus;
   });
 

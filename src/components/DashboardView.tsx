@@ -117,9 +117,7 @@ export const DashboardView = () => {
 
       {/* Class arms grid */}
       <div className="mb-6">
-        <h2 className="mb-3 text-sm font-semibold text-gray-700">
-          Class Arms
-        </h2>
+        <h2 className="mb-3 text-sm font-semibold text-gray-700">Class Arms</h2>
         {loadingOverview ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
