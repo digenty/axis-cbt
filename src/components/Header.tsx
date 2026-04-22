@@ -16,7 +16,7 @@ export const Header = ({ href }: { href?: string }) => {
   const pathname = usePathname();
 
   return (
-    <header className="border-border-default sticky flex h-16 w-full items-center justify-between border-b px-4 py-4 text-zinc-950 md:px-8">
+    <header className="border-border-default bg-bg-default sticky flex h-16 w-full items-center justify-between border-b px-4 py-4 text-text-default md:px-8">
       {pathname !== "/subjects" && <BackButton href={href} />}
 
       <Breadcrumb className="hidden md:block" />

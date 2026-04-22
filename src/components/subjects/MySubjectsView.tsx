@@ -9,7 +9,7 @@ import Layout from "@/components/Layout";
 import { useEffect } from "react";
 
 const Skeleton = ({ className }: { className?: string }) => (
-  <div className={cn("animate-pulse rounded-md bg-gray-100", className)} />
+  <div className={cn("animate-pulse rounded-md bg-bg-subtle", className)} />
 );
 
 const SubjectsLoadingSkeleton = () => (
@@ -19,15 +19,15 @@ const SubjectsLoadingSkeleton = () => (
       {[1, 2].map((i) => (
         <div
           key={i}
-          className="overflow-hidden rounded-xl border border-gray-200"
+          className="overflow-hidden rounded-xl border border-border-default"
         >
-          <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
+          <div className="border-b border-border-default bg-bg-subtle px-4 py-3">
             <Skeleton className="h-4 w-24" />
           </div>
           {[1, 2, 3].map((j) => (
             <div
               key={j}
-              className="flex items-center justify-between border-b border-gray-50 px-4 py-3"
+              className="flex items-center justify-between border-b border-border-default px-4 py-3"
             >
               <div className="flex items-center gap-3">
                 <Skeleton className="h-8 w-8 rounded-lg" />
@@ -64,17 +64,17 @@ export const MySubjectsView = () => {
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50">
-            <AlertCircle className="h-6 w-6 text-red-400" />
+          <div className="bg-bg-basic-red-subtle mb-4 flex h-12 w-12 items-center justify-center rounded-2xl">
+            <AlertCircle className="text-text-destructive h-6 w-6" />
           </div>
-          <p className="mb-1 text-sm font-medium text-gray-700">
+          <p className="text-text-subtle mb-1 text-sm font-medium">
             Could not load subjects
           </p>
-          <p className="mb-5 max-w-xs text-xs text-gray-400">{message}</p>
+          <p className="text-text-muted mb-5 max-w-xs text-xs">{message}</p>
           <button
             onClick={() => refetch()}
             disabled={isFetching}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            className="border-border-default text-text-subtle hover:bg-bg-subtle flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm transition-colors disabled:opacity-50"
           >
             <RefreshCw
               className={cn("h-3.5 w-3.5", isFetching && "animate-spin")}
@@ -92,11 +92,11 @@ export const MySubjectsView = () => {
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <BookOpen className="mb-4 h-12 w-12 text-gray-200" />
-          <p className="text-sm font-medium text-gray-500">
+          <BookOpen className="text-text-hint mb-4 h-12 w-12" />
+          <p className="text-text-muted text-sm font-medium">
             No subjects assigned
           </p>
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="text-text-muted mt-1 text-xs">
             Subjects assigned to you will appear here
           </p>
         </div>
@@ -107,7 +107,7 @@ export const MySubjectsView = () => {
   return (
     <Layout>
       <div className="space-y-5">
-        <h2 className="text-base font-semibold text-gray-900">My Subjects</h2>
+        <h2 className="text-text-default text-base font-semibold">My Subjects</h2>
         {subjects.map((subject) => (
           <SubjectGroup key={subject?.subjectId} subject={subject} />
         ))}
@@ -119,13 +119,13 @@ export const MySubjectsView = () => {
 const SubjectGroup = ({ subject }: { subject: ApiSubject }) => {
   console.log({ subject });
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
-      <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
-        <h3 className="text-sm font-semibold text-gray-800">
+    <div className="overflow-hidden rounded-xl border border-border-default shadow-sm">
+      <div className="border-b border-border-default bg-bg-subtle px-4 py-3">
+        <h3 className="text-text-default text-sm font-semibold">
           {subject?.subjectName}
         </h3>
       </div>
-      <div className="divide-y divide-gray-50">
+      <div className="divide-y divide-border-default">
         {subject?.classArmReportDtos?.map((classArm) => (
           <SubjectRow
             key={classArm.armId}
@@ -146,13 +146,13 @@ const SubjectRow = ({
   subjectId: number;
 }) => {
   return (
-    <div className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-gray-50/60">
+    <div className="hover:bg-bg-subtle/60 flex items-center justify-between px-4 py-3 transition-colors">
       <div className="flex items-center gap-3">
         {/* <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
 					<BookOpen className="h-4 w-4 text-blue-500" />
 				</div> */}
         <div>
-          <p className="text-sm font-medium text-gray-800">
+          <p className="text-text-default text-sm font-medium">
             {classArm.classArmName ?? "-"}
           </p>
         </div>

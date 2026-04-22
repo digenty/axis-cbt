@@ -30,8 +30,8 @@ export const ClassSubjectsView = ({ classId }: ClassSubjectsViewProps) => {
 
   if (isLoading) {
     return (
-      <div className="overflow-hidden rounded-xl border border-border-default bg-white">
-        <div className="grid grid-cols-5 border-b border-border-default bg-gray-50 px-5 py-3">
+      <div className="overflow-hidden rounded-xl border border-border-default bg-bg-default">
+        <div className="grid grid-cols-5 border-b border-border-default bg-bg-subtle px-5 py-3">
           {COLUMNS.map((_, i) => (
             <Skeleton key={i} className="h-3 w-20" />
           ))}
@@ -53,7 +53,7 @@ export const ClassSubjectsView = ({ classId }: ClassSubjectsViewProps) => {
   if (!subjects?.length) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
-        <p className="text-sm text-gray-400">
+        <p className="text-text-muted text-sm">
           No subjects found for this class
         </p>
       </div>
@@ -61,14 +61,14 @@ export const ClassSubjectsView = ({ classId }: ClassSubjectsViewProps) => {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border-default bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-border-default bg-bg-default shadow-sm">
       <Table>
         <TableHeader className="[&_tr]:border-border-default">
-          <TableRow className="bg-gray-50 hover:bg-gray-50 border-border-default">
+          <TableRow className="bg-bg-subtle hover:bg-bg-subtle border-border-default">
             {COLUMNS.map((col, i) => (
               <TableHead
                 key={i}
-                className="px-5 py-3 text-xs font-medium text-gray-500"
+                className="px-5 py-3 text-xs font-medium text-text-muted"
               >
                 {col}
               </TableHead>
@@ -102,26 +102,26 @@ const SubjectRow = ({
 
   const cells: (() => React.ReactNode)[] = [
     () => (
-      <span className="text-sm font-medium text-gray-800">{subject?.name}</span>
+      <span className="text-text-default text-sm font-medium">{subject?.name}</span>
     ),
 
     () => (
       <div className="flex items-center gap-2">
         {subject?.teacherName ? (
           <>
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100">
-              <User className="h-3 w-3 text-blue-600" />
+            <div className="bg-bg-basic-blue-subtle flex h-6 w-6 items-center justify-center rounded-full">
+              <User className="text-icon-informative h-3 w-3" />
             </div>
-            <span className="text-sm text-gray-700">
+            <span className="text-text-subtle text-sm">
               {subject?.teacherName ?? "-"}
             </span>
           </>
         ) : (
           <>
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100">
-              <UserX className="h-3 w-3 text-gray-400" />
+            <div className="bg-bg-subtle flex h-6 w-6 items-center justify-center rounded-full">
+              <UserX className="text-text-muted h-3 w-3" />
             </div>
-            <Badge className="border-amber-200 bg-amber-50 text-amber-600">
+            <Badge className="border-border-warning bg-bg-basic-amber-subtle text-text-warning">
               Unassigned
             </Badge>
           </>
@@ -130,13 +130,13 @@ const SubjectRow = ({
     ),
 
     () => (
-      <span className="text-sm text-gray-700">
+      <span className="text-text-subtle text-sm">
         {subject?.questionsInBank ?? 0}
       </span>
     ),
 
     () => (
-      <span className="text-sm text-gray-700">
+      <span className="text-text-subtle text-sm">
         {subject?.assessmentCount ?? 0}
       </span>
     ),
@@ -166,7 +166,7 @@ const SubjectRow = ({
   ];
 
   return (
-    <TableRow className="hover:bg-gray-50/70 border-border-default">
+    <TableRow className="hover:bg-bg-subtle/70 border-border-default">
       {cells.map((renderCell, i) => (
         <TableCell key={i} className="px-5 py-3.5">
           {renderCell()}
