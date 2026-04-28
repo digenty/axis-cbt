@@ -686,6 +686,48 @@
 	--shadow-xlight: 0 -1px 0 0 rgba(0, 0, 0, 0.08);
 	--radius-2xs: 2px;
 	--text-2xs: 10px;
+
+	--radius: 0.5rem;
+	--radius-sm: calc(var(--radius) - 4px);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) + 4px);
+}
+
+/* Shadcn light theme — wired to existing semantic tokens */
+:root {
+	--background: var(--color-bg-default);
+	--foreground: var(--color-text-default);
+	--card: var(--color-bg-card);
+	--card-foreground: var(--color-text-default);
+	--popover: var(--color-bg-card);
+	--popover-foreground: var(--color-text-default);
+	--primary: var(--color-bg-state-primary);
+	--primary-foreground: var(--zinc-00);
+	--secondary: var(--color-bg-state-secondary);
+	--secondary-foreground: var(--color-text-default);
+	--muted: var(--color-bg-muted);
+	--muted-foreground: var(--color-text-muted);
+	--accent: var(--color-bg-subtle);
+	--accent-foreground: var(--color-text-default);
+	--destructive: var(--color-bg-state-destructive);
+	--destructive-foreground: var(--zinc-00);
+	--border: var(--color-border-default);
+	--input: var(--color-border-default);
+	--ring: var(--color-border-input-highlight);
+	--chart-1: var(--blue-500);
+	--chart-2: var(--green-500);
+	--chart-3: var(--orange-500);
+	--chart-4: var(--violet-500);
+	--chart-5: var(--rose-500);
+	--sidebar: var(--color-bg-sidebar);
+	--sidebar-foreground: var(--color-text-default);
+	--sidebar-primary: var(--color-bg-state-primary);
+	--sidebar-primary-foreground: var(--zinc-00);
+	--sidebar-accent: var(--color-bg-subtle);
+	--sidebar-accent-foreground: var(--color-text-default);
+	--sidebar-border: var(--color-border-default);
+	--sidebar-ring: var(--color-border-input-highlight);
 }
 
 @media (prefers-color-scheme: dark) {

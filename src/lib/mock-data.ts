@@ -4,6 +4,7 @@ import type {
   Topic,
   Question,
   StudentAttempt,
+  Test,
 } from "@/types/results";
 
 // ─── Shared subject name lists per level ──────────────────────────────────────
@@ -413,6 +414,76 @@ export const mockQuestions: Question[] = [
 export const DEMO_TEST_ID = "demo-mid-term-math";
 export const DEMO_SUBJECT_ID = "jss2a-mathematics";
 export const DEMO_CLASS_ID = "jss2a";
+
+export const mockTests: Test[] = [
+  {
+    id: DEMO_TEST_ID,
+    title: "Mid-Term Mathematics Test",
+    subjectId: DEMO_SUBJECT_ID,
+    classId: DEMO_CLASS_ID,
+    term: "First Term",
+    testType: "Continuous Assessment",
+    assessmentMapping: "Continuous Assessment 1 (20%)",
+    mappingLabel: "CA 1",
+    testDate: "2025-01-10",
+    startTime: "09:00",
+    amPm: "AM",
+    duration: 60,
+    studentResultAccess: true,
+    status: "published",
+    sections: [
+      {
+        id: "sec-a",
+        title: "Section A",
+        instruction: "",
+        questionIds: ["q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8"],
+      },
+    ],
+    totalMarks: 20,
+    createdAt: "2024-12-15",
+    updatedAt: "2024-12-20",
+  },
+  {
+    id: "test-draft-ca",
+    title: "First CA Test",
+    subjectId: DEMO_SUBJECT_ID,
+    classId: DEMO_CLASS_ID,
+    term: "First Term",
+    testType: "Continuous Assessment",
+    assessmentMapping: "Continuous Assessment 1 (20%)",
+    mappingLabel: "CA 1",
+    testDate: "2025-01-10",
+    startTime: "09:00",
+    amPm: "AM",
+    duration: 45,
+    studentResultAccess: false,
+    status: "draft",
+    sections: [],
+    totalMarks: 20,
+    createdAt: "2024-12-10",
+    updatedAt: "2024-12-10",
+  },
+  {
+    id: "test-completed-ca",
+    title: "First CA Test",
+    subjectId: DEMO_SUBJECT_ID,
+    classId: DEMO_CLASS_ID,
+    term: "First Term",
+    testType: "Continuous Assessment",
+    assessmentMapping: "Continuous Assessment 1 (20%)",
+    mappingLabel: "CA 1",
+    testDate: "2025-01-10",
+    startTime: "09:00",
+    amPm: "AM",
+    duration: 45,
+    studentResultAccess: true,
+    status: "completed",
+    sections: [],
+    totalMarks: 20,
+    createdAt: "2024-11-20",
+    updatedAt: "2025-01-12",
+  },
+];
 
 // ─── Mock Student Attempts ─────────────────────────────────────────────────────
 

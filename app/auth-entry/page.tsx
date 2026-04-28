@@ -1,4 +1,4 @@
-import { AuthRedirect } from "@/src/components/AuthRedirect";
+import { AuthRedirect } from "@/components/AuthRedirect";
 import { Suspense } from "react";
 
 export default function AuthEntryPage() {

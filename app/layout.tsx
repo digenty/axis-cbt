@@ -24,7 +24,7 @@ export default function RootLayout({
 			</head>
 			<body className={`${inter.className} antialiased`}>
 				<TanstackProvider>
-					<div className="p-8">{children}</div>
+					{children}
 					<Toaster position="bottom-right" richColors closeButton />
 				</TanstackProvider>
 			</body>
