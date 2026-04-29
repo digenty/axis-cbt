@@ -4,7 +4,7 @@ import { Menu } from "lucide-react";
 import Notification2 from "@/Icons/Notification2";
 import QuestionFill from "@/Icons/QuestionFill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useSidebarStore } from "@/store/sidebar-store";
+import { useSidebarStore } from "@/store/sidebar";
 import { cn } from "@/lib/utils";
 
 interface TopbarProps {

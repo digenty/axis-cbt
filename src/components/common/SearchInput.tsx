@@ -38,7 +38,7 @@ export const SearchInput = ({
   return (
     <div
       className={cn(
-        "flex h-9 w-full items-center gap-2 rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-input-soft)] px-3",
+        "flex h-9 w-full items-center gap-2 rounded-lg border border-[var(--color-border-default)]  px-3",
         className,
       )}
     >

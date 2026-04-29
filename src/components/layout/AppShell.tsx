@@ -3,7 +3,7 @@
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { useSidebarStore } from "@/store/sidebar-store";
+import { useSidebarStore } from "@/store/sidebar";
 
 interface AppShellProps {
   children: React.ReactNode;

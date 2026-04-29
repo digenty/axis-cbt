@@ -7,6 +7,8 @@ import { useCBTStore } from "@/store";
 import { generateId } from "@/lib/utils";
 import { QuestionBankSidebar } from "./QuestionBankSidebar";
 import { QuestionListPanel } from "./QuestionListPanel";
+import { TopicFormDialog } from "./TopicFormDialog";
+import { DeleteTopicDialog } from "./DeleteTopicDialog";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
 import type { Topic } from "@/types";
@@ -50,6 +52,9 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   const [activeTopicId, setActiveTopicId] = useState<string | null>(
     subjectTopics[0]?.id ?? null,
   );
+  const [addTopicOpen, setAddTopicOpen] = useState(false);
+  const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
+  const [deletingTopic, setDeletingTopic] = useState<Topic | null>(null);
 
   const resolvedActiveId =
     activeTopicId && subjectTopics.some((t) => t.id === activeTopicId)
@@ -117,9 +122,9 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
         topics={subjectTopics}
         activeTopicId={resolvedActiveId}
         onSelectTopic={setActiveTopicId}
-        onAddTopic={handleAddTopic}
-        onRenameTopic={updateTopic}
-        onDeleteTopic={handleDeleteTopic}
+        onRequestAddTopic={() => setAddTopicOpen(true)}
+        onRequestRenameTopic={setEditingTopic}
+        onRequestDeleteTopic={setDeletingTopic}
         onReorderTopics={handleReorderTopics}
         importHref={`${baseUrl}/question-bank/import`}
         backHref={baseUrl}
@@ -135,10 +140,7 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  const name = window.prompt("Topic name");
-                  if (name?.trim()) handleAddTopic(name.trim());
-                }}
+                onClick={() => setAddTopicOpen(true)}
               >
                 <Plus className="mr-1 h-3.5 w-3.5" />
                 Add Topic
@@ -165,6 +167,44 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
           }}
         />
       )}
+
+      <TopicFormDialog
+        open={addTopicOpen}
+        setOpen={setAddTopicOpen}
+        mode="add"
+        onSubmit={handleAddTopic}
+      />
+
+      <TopicFormDialog
+        key={`edit-${editingTopic?.id ?? "none"}`}
+        open={editingTopic !== null}
+        setOpen={(o) => {
+          if (!o) setEditingTopic(null);
+        }}
+        mode="edit"
+        initialName={editingTopic?.name}
+        onSubmit={(name) => {
+          if (editingTopic) {
+            updateTopic(editingTopic.id, name);
+            toast.success("Topic updated");
+          }
+          setEditingTopic(null);
+        }}
+      />
+
+      <DeleteTopicDialog
+        key={`delete-${deletingTopic?.id ?? "none"}`}
+        open={deletingTopic !== null}
+        setOpen={(o) => {
+          if (!o) setDeletingTopic(null);
+        }}
+        onConfirm={() => {
+          if (deletingTopic) {
+            handleDeleteTopic(deletingTopic.id);
+          }
+          setDeletingTopic(null);
+        }}
+      />
     </div>
   );
 };

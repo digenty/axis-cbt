@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { use, useMemo } from "react";
-import { BookOpenCheck, ClipboardList, BarChart3 } from "lucide-react";
+import { HardDrive, ClipboardList, BarChart3 } from "lucide-react";
 import { useCBTStore } from "@/store";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -17,25 +17,22 @@ const HUB_CARDS = [
     key: "question-bank",
     title: "Question Bank",
     description: "Create and manage reusable questions",
-    icon: BookOpenCheck,
-    bg: "bg-[var(--color-bg-badge-green)]",
-    iconColor: "text-[var(--green-600)]",
+    icon: HardDrive,
+    accent: "bg-[var(--color-bg-basic-lime-accent)]",
   },
   {
     key: "assessments",
     title: "Assessments",
     description: "Create, manage and assign assessments",
     icon: ClipboardList,
-    bg: "bg-[var(--color-bg-badge-teal)]",
-    iconColor: "text-[var(--teal-600)]",
+    accent: "bg-[var(--color-bg-basic-teal-accent)]",
   },
   {
     key: "results",
     title: "Results",
     description: "View test results and analytics",
     icon: BarChart3,
-    bg: "bg-[var(--color-bg-badge-blue)]",
-    iconColor: "text-[var(--blue-600)]",
+    accent: "bg-[var(--color-bg-basic-cyan-accent)]",
   },
 ] as const;
 
@@ -72,21 +69,21 @@ export const SubjectDetailView = ({ params }: SubjectDetailViewProps) => {
           <Link
             key={card.key}
             href={`/classes/${cls.id}/subjects/${subject.id}/${card.key}`}
-            className="group rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-5 transition-colors hover:border-[var(--color-border-darker)] hover:bg-[var(--color-bg-card-subtle)]"
+            className="group rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-5 transition-colors hover:border-[var(--color-border-darker)] hover:bg-[var(--color-bg-card-subtle)]"
           >
             <div
               className={cn(
-                "flex h-10 w-10 items-center justify-center rounded-lg",
-                card.bg,
+                "flex size-8 items-center justify-center rounded-lg border-2 border-white/20 shadow-[0_1px_3px_0_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.08)]",
+                card.accent,
               )}
             >
-              <card.icon className={cn("h-5 w-5", card.iconColor)} />
+              <card.icon className="h-5 w-5 text-white" />
             </div>
             <div className="mt-4">
-              <div className="text-base font-semibold text-[var(--color-text-default)]">
+              <div className="text-base font-medium text-[var(--color-text-default)]">
                 {card.title}
               </div>
-              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+              <p className="mt-1 text-sm text-[var(--color-text-subtle)]">
                 {card.description}
               </p>
             </div>
