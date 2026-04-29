@@ -9,9 +9,10 @@ import { QuestionBankSidebar } from "./QuestionBankSidebar";
 import { QuestionListPanel } from "./QuestionListPanel";
 import { TopicFormDialog } from "./TopicFormDialog";
 import { DeleteTopicDialog } from "./DeleteTopicDialog";
+import { AddAssessmentItemModal } from "./AddAssessmentItemModal";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
-import type { Topic } from "@/types";
+import type { Topic, QuestionType } from "@/types";
 import { toast } from "sonner";
 
 interface QuestionBankViewProps {
@@ -53,6 +54,7 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
     subjectTopics[0]?.id ?? null,
   );
   const [addTopicOpen, setAddTopicOpen] = useState(false);
+  const [addQuestionOpen, setAddQuestionOpen] = useState(false);
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
   const [deletingTopic, setDeletingTopic] = useState<Topic | null>(null);
 
@@ -111,7 +113,13 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
       toast.error("Add a topic first");
       return;
     }
-    router.push(`${baseUrl}/question-bank/new?topicId=${activeTopic.id}`);
+    setAddQuestionOpen(true);
+  };
+
+  const handleSelectQuestionType = (type: QuestionType) => {
+    router.push(
+      `${baseUrl}/question-bank/new?topicId=${activeTopic!.id}&type=${type}`,
+    );
   };
 
   return (
@@ -167,6 +175,12 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
           }}
         />
       )}
+
+      <AddAssessmentItemModal
+        open={addQuestionOpen}
+        setOpen={setAddQuestionOpen}
+        onSelectType={handleSelectQuestionType}
+      />
 
       <TopicFormDialog
         open={addTopicOpen}

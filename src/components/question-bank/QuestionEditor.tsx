@@ -51,6 +51,7 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
   const router = useRouter();
   const search = useSearchParams();
   const topicIdParam = search.get("topicId") ?? "";
+  const typeParam = search.get("type") as QuestionType | null;
   const baseUrl = `/classes/${classId}/subjects/${subjectId}`;
 
   const { topics, questions, addQuestion, updateQuestion } = useCBTStore();
@@ -61,7 +62,7 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
       : null;
 
   const [type, setType] = useState<QuestionType>(
-    existing?.type ?? "multiple-choice",
+    existing?.type ?? typeParam ?? "multiple-choice",
   );
   const [text, setText] = useState(existing?.text ?? "");
   const [marks, setMarks] = useState<number>(existing?.marks ?? 1);
