@@ -12,7 +12,8 @@ import { DeleteTopicDialog } from "./DeleteTopicDialog";
 import { AddAssessmentItemModal } from "./AddAssessmentItemModal";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
-import type { Topic, QuestionType } from "@/types";
+import type { MaterialKind } from "./answer-editors/QuestionGroupEditor";
+import type { Question, Topic, QuestionType } from "@/types";
 import { toast } from "sonner";
 
 interface QuestionBankViewProps {
@@ -28,6 +29,8 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
     topics,
     questions,
     addTopic,
+    addQuestion,
+    updateQuestion,
     updateTopic,
     deleteTopic,
     reorderTopics,
@@ -55,6 +58,12 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   );
   const [addTopicOpen, setAddTopicOpen] = useState(false);
   const [addQuestionOpen, setAddQuestionOpen] = useState(false);
+  const [newQuestionType, setNewQuestionType] = useState<QuestionType | null>(
+    null,
+  );
+  const [newMaterialKind, setNewMaterialKind] = useState<MaterialKind | null>(
+    null,
+  );
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
   const [deletingTopic, setDeletingTopic] = useState<Topic | null>(null);
 
@@ -116,10 +125,25 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
     setAddQuestionOpen(true);
   };
 
-  const handleSelectQuestionType = (type: QuestionType) => {
-    router.push(
-      `${baseUrl}/question-bank/new?topicId=${activeTopic!.id}&type=${type}`,
-    );
+  const handleSelectQuestionType = (
+    type: QuestionType,
+    materialKind?: string,
+  ) => {
+    setNewQuestionType(type);
+    setNewMaterialKind((materialKind as MaterialKind) ?? null);
+  };
+
+  const handleSaveNewQuestion = (q: Question) => {
+    addQuestion(q);
+    toast.success("Question created");
+    setNewQuestionType(null);
+    setNewMaterialKind(null);
+  };
+
+  const handleSelectTopic = (id: string) => {
+    setNewQuestionType(null);
+    setNewMaterialKind(null);
+    setActiveTopicId(id);
   };
 
   return (
@@ -129,7 +153,7 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
         subtitle={subtitle}
         topics={subjectTopics}
         activeTopicId={resolvedActiveId}
-        onSelectTopic={setActiveTopicId}
+        onSelectTopic={handleSelectTopic}
         onRequestAddTopic={() => setAddTopicOpen(true)}
         onRequestRenameTopic={setEditingTopic}
         onRequestDeleteTopic={setDeletingTopic}
@@ -173,6 +197,14 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
           onReorder={(orderedIds) => {
             if (activeTopic) reorderQuestions(activeTopic.id, orderedIds);
           }}
+          newQuestionType={newQuestionType}
+          newMaterialKind={newMaterialKind}
+          onSaveNew={handleSaveNewQuestion}
+          onCancelNew={() => {
+            setNewQuestionType(null);
+            setNewMaterialKind(null);
+          }}
+          onUpdateQuestion={(q) => updateQuestion(q.id, q)}
         />
       )}
 

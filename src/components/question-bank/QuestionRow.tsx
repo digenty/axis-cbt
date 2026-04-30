@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { QuestionTypeBadge } from "@/components/common/QuestionTypeBadge";
+import { QuestionEditForm } from "./QuestionEditForm";
 import type { Question } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +27,7 @@ interface QuestionRowProps {
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  previewBody?: React.ReactNode;
+  onUpdate?: (q: Question) => void;
 }
 
 export const QuestionRow = ({
@@ -35,7 +36,7 @@ export const QuestionRow = ({
   onEdit,
   onDuplicate,
   onDelete,
-  previewBody,
+  onUpdate,
 }: QuestionRowProps) => {
   const [open, setOpen] = useState(false);
 
@@ -58,7 +59,14 @@ export const QuestionRow = ({
   );
 
   return (
-    <div className="rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)]">
+    <div
+      className={cn(
+        "rounded-lg bg-[var(--color-bg-card)] transition-colors",
+        open
+          ? "border-2 border-blue-500"
+          : "border border-[var(--color-border-default)]",
+      )}
+    >
       <div className="flex items-center gap-2 px-3 py-2.5">
         <button
           type="button"
@@ -70,7 +78,7 @@ export const QuestionRow = ({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex flex-1 items-start text-left"
+          className="flex flex-1 items-center text-left"
         >
           <div className="flex-1">
             <div className="text-sm text-[var(--color-text-default)]">
@@ -85,7 +93,7 @@ export const QuestionRow = ({
             )}
           />
         </button>
-        <DropdownMenu>
+        {/* <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
@@ -98,7 +106,7 @@ export const QuestionRow = ({
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={onEdit}>
               <Pencil className="mr-2 h-3.5 w-3.5" />
-              Edit
+              Open in editor
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onDuplicate}>
               <Copy className="mr-2 h-3.5 w-3.5" />
@@ -112,12 +120,16 @@ export const QuestionRow = ({
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu> */}
       </div>
-      {open && previewBody && (
-        <div className="border-t border-[var(--color-border-default)] px-3 py-3 text-sm text-[var(--color-text-subtle)]">
-          {previewBody}
-        </div>
+
+      {open && onUpdate && (
+        <QuestionEditForm
+          question={question}
+          onUpdate={onUpdate}
+          onDuplicate={onDuplicate}
+          onDelete={onDelete}
+        />
       )}
     </div>
   );

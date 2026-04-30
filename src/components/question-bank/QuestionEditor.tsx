@@ -19,6 +19,7 @@ import { MatchingEditor } from "./answer-editors/MatchingEditor";
 import { ComprehensionPassageEditor } from "./answer-editors/ComprehensionPassageEditor";
 import { MultipleBlanksEditor } from "./answer-editors/MultipleBlanksEditor";
 import { QuestionGroupEditor } from "./answer-editors/QuestionGroupEditor";
+import type { MaterialKind } from "./answer-editors/QuestionGroupEditor";
 import type { Question, QuestionType, Option, Blank } from "@/types";
 import { toast } from "sonner";
 
@@ -108,9 +109,7 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
   );
   const [blanks, setBlanks] = useState<Blank[]>(existing?.blanks ?? []);
   const [groupName, setGroupName] = useState(existing?.text ?? "");
-  const [materialKind, setMaterialKind] = useState<
-    "comprehension-passage" | "diagram" | "table" | "chart"
-  >("comprehension-passage");
+  const [materialKind, setMaterialKind] = useState<MaterialKind>("diagram");
 
   const handleSave = () => {
     if (!topicId) {
@@ -251,27 +250,24 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
           )}
 
           {isGrouped && (
-            <>
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium text-[var(--color-text-default)]">
-                  Question Material
-                </Label>
-                <QuestionTypeSelector
-                  value={type}
-                  onChange={setType}
-                  options={ALL_TYPES}
-                />
-              </div>
-              <RichTextEditor
-                value={passage}
-                onChange={setPassage}
-                placeholder={
-                  type === "comprehension-passage"
-                    ? "Type or paste your comprehension passage"
-                    : "Add descriptive text for your question material"
-                }
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium text-[var(--color-text-default)]">
+                Question Material
+              </Label>
+              <QuestionTypeSelector
+                value={type}
+                onChange={setType}
+                options={ALL_TYPES}
               />
-            </>
+            </div>
+          )}
+
+          {type === "comprehension-passage" && (
+            <RichTextEditor
+              value={passage}
+              onChange={setPassage}
+              placeholder="Type or paste your comprehension passage"
+            />
           )}
 
           {type === "multiple-choice" && (
@@ -321,6 +317,8 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
             <QuestionGroupEditor
               materialKind={materialKind}
               onChangeMaterialKind={setMaterialKind}
+              passage={passage}
+              onChangePassage={setPassage}
               instruction={instruction}
               onChangeInstruction={setInstruction}
               subQuestions={subQuestions}

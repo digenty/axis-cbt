@@ -11,7 +11,7 @@ import type { QuestionType } from "@/types";
 interface Props {
   open: boolean;
   setOpen: (v: boolean) => void;
-  onSelectType: (type: QuestionType) => void;
+  onSelectType: (type: QuestionType, materialKind?: string) => void;
 }
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -26,11 +26,15 @@ const SINGLE_TYPES: { label: string; type: QuestionType }[] = [
   { label: "Numeric Answers", type: "numerical" },
 ];
 
-const GROUP_TYPES: { label: string; type: QuestionType }[] = [
+const GROUP_TYPES: {
+  label: string;
+  type: QuestionType;
+  materialKind?: string;
+}[] = [
   { label: "Comprehension Passage", type: "comprehension-passage" },
-  { label: "Diagram", type: "question-group" },
-  { label: "Table", type: "question-group" },
-  { label: "Chart", type: "question-group" },
+  { label: "Diagram", type: "question-group", materialKind: "diagram" },
+  { label: "Table", type: "question-group", materialKind: "table" },
+  { label: "Chart", type: "question-group", materialKind: "chart" },
 ];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -47,6 +51,7 @@ const TypeButton = ({
 }: {
   label: string;
   onClick: () => void;
+  materialKind?: string;
 }) => (
   <button
     type="button"
@@ -65,8 +70,8 @@ interface CollapsibleCardProps {
   title: string;
   description: string;
   tags: string[];
-  types: { label: string; type: QuestionType }[];
-  onSelectType: (type: QuestionType) => void;
+  types: { label: string; type: QuestionType; materialKind?: string }[];
+  onSelectType: (type: QuestionType, materialKind?: string) => void;
 }
 
 const CollapsibleCard = ({
@@ -126,7 +131,7 @@ const CollapsibleCard = ({
             <TypeButton
               key={t.label}
               label={t.label}
-              onClick={() => onSelectType(t.type)}
+              onClick={() => onSelectType(t.type, t.materialKind)}
             />
           ))}
         </div>
@@ -188,8 +193,8 @@ export const AddAssessmentItemModal = ({
     setOpen(false);
   };
 
-  const handleSelect = (type: QuestionType) => {
-    onSelectType(type);
+  const handleSelect = (type: QuestionType, materialKind?: string) => {
+    onSelectType(type, materialKind);
     handleClose();
   };
 
