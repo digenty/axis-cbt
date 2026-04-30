@@ -453,7 +453,7 @@ export const QuestionEditForm = ({
       </div>
 
       {/* ─── Footer ─── */}
-      <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border-default)] px-4 py-3">
+      <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border-default)] bg-bg-state-soft px-4 py-3">
         <Button
           variant="outline"
           size="sm"

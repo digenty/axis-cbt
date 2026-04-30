@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/common/BackButton";
 import type { Topic } from "@/types";
 import { cn } from "@/lib/utils";
-import Import from "../Icons/Import";
+import { Import } from "@digenty/icons";
 import { useRouter } from "next/navigation";
 
 interface QuestionBankSidebarProps {

@@ -53,9 +53,13 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
   const search = useSearchParams();
   const topicIdParam = search.get("topicId") ?? "";
   const typeParam = search.get("type") as QuestionType | null;
+  const returnTo = search.get("returnTo");
+  const sectionId = search.get("sectionId");
+  const assessmentIdParam = search.get("assessmentId");
   const baseUrl = `/classes/${classId}/subjects/${subjectId}`;
 
-  const { topics, questions, addQuestion, updateQuestion } = useCBTStore();
+  const { topics, questions, tests, addQuestion, updateQuestion, updateTest } =
+    useCBTStore();
 
   const existing =
     mode === "edit" && questionId
@@ -189,9 +193,21 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
       toast.success("Question updated");
     } else {
       addQuestion(payload);
+      if (sectionId && assessmentIdParam) {
+        const test = tests.find((t) => t.id === assessmentIdParam);
+        if (test) {
+          updateTest(assessmentIdParam, {
+            sections: test.sections.map((s) =>
+              s.id === sectionId
+                ? { ...s, questionIds: [...s.questionIds, payload.id] }
+                : s,
+            ),
+          });
+        }
+      }
       toast.success("Question created");
     }
-    router.push(`${baseUrl}/question-bank`);
+    router.push(returnTo ?? `${baseUrl}/question-bank`);
   };
 
   const isGrouped = GROUPED_TYPES.includes(type);
@@ -213,7 +229,7 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => router.push(`${baseUrl}/question-bank`)}
+          onClick={() => router.push(returnTo ?? `${baseUrl}/question-bank`)}
         >
           Cancel
         </Button>

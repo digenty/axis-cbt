@@ -16,13 +16,7 @@
 //   Globe,
 //   Monitor,
 // } from "lucide-react";
-// import Home2 from "@/Icons/Home2";
-// import Group from "@/Icons/Group";
-// import GraduationCap from "@/Icons/GraduationCap";
-// import CBTIcon from "@/Icons/CBTIcon";
-// import CalendarCheck from "@/Icons/CalendarCheck";
-// import ListCheck3 from "@/Icons/ListCheck3";
-// import Logout from "@/Icons/Logout";
+// import { Home2, Group, GraduationCap, CalendarCheck, ListCheck3, Logout } from "@digenty/icons";
 // import { AxisLogo } from "./AxisLogo";
 // import { useSidebarStore } from "@/store/sidebar-store";
 // import { cn } from "@/lib/utils";
@@ -45,10 +39,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import LeadIcon from "../Icons/LeadIcon";
-import Line from "../Icons/Line";
-import { ListCheck3 } from "../Icons/ListCheck3";
-import Logout from "../Icons/Logout";
+import { LeadIcon, Line, ListCheck3, Logout } from "@digenty/icons";
 import User from "../Icons/User";
 import { Tooltip } from "../Tooltip";
 import { Button } from "../ui/button";

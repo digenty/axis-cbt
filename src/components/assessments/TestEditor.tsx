@@ -9,12 +9,12 @@ import {
   GripVertical,
   Pencil,
   Plus,
-  Save,
   Star,
   Tag,
   Timer,
   Trash2,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCBTStore } from "@/store";
 import { generateId } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,18 +23,14 @@ import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/common/PageHeader";
 import { QuestionTypeBadge } from "@/components/common/QuestionTypeBadge";
 import { EmptyState } from "@/components/common/EmptyState";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import type { Question, Test, TestSection } from "@/types";
+import { QuestionBankModal } from "@/components/assessments/QuestionBankModal";
+import { AddAssessmentItemModal } from "@/components/question-bank/AddAssessmentItemModal";
+import { QuestionEditForm } from "@/components/question-bank/QuestionEditForm";
+import type { Question, QuestionType, Test, TestSection, Topic } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Draft } from "@digenty/icons";
 
 interface TestEditorProps {
   params: Promise<{
@@ -49,19 +45,32 @@ const SectionPanel = ({
   onUpdate,
   onDelete,
   onAddFromBank,
+  onAddQuestion,
   allQuestions,
   subjectName,
+  subjectTopics,
 }: {
   section: TestSection;
   onUpdate: (s: TestSection) => void;
   onDelete: () => void;
   onAddFromBank: (questionIds: string[]) => void;
+  onAddQuestion: (type: QuestionType, materialKind?: string) => void;
   allQuestions: Question[];
   subjectName: string;
+  subjectTopics: Topic[];
 }) => {
+  const { updateQuestion, duplicateQuestion } = useCBTStore();
   const [open, setOpen] = useState(true);
-  const [showBankDialog, setShowBankDialog] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string) =>
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const questions = section.questionIds
     .map((id) => allQuestions.find((q) => q.id === id))
@@ -75,12 +84,12 @@ const SectionPanel = ({
         className="flex w-full items-center justify-between gap-3 px-4 py-3"
       >
         <div className="flex flex-col items-start text-left">
-          <span className="text-sm font-semibold text-[var(--color-text-default)]">
+          <span className="text-lg font-semibold text-[var(--color-text-default)]">
             {section.title}
           </span>
-          <span className="text-xs text-[var(--color-text-muted)]">
+          <span className="text-sm text-[var(--color-text-muted)]">
             Instructions{" "}
-            <span className="text-[var(--color-text-hint)]">(optional)</span>
+            <span className="text-[var(--color-text-muted)]">(optional)</span>
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -117,22 +126,14 @@ const SectionPanel = ({
       {open && (
         <div className="border-t border-[var(--color-border-default)] px-4 py-3">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              onClick={() => {
-                toast.info("Inline question creation", {
-                  description:
-                    "Open the Question Bank to author and reuse questions.",
-                });
-              }}
-            >
+            <Button size="sm" onClick={() => setShowAddItemModal(true)}>
               <Plus className="mr-1 h-3.5 w-3.5" />
               Add Question
             </Button>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowBankDialog(true)}
+              onClick={() => setShowBankModal(true)}
             >
               <BookOpen className="mr-1 h-3.5 w-3.5" />
               Add from Question Bank
@@ -148,7 +149,7 @@ const SectionPanel = ({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowBankDialog(true)}
+                  onClick={() => setShowAddItemModal(true)}
                 >
                   <Plus className="mr-1 h-3.5 w-3.5" />
                   Add Question
@@ -157,131 +158,97 @@ const SectionPanel = ({
             />
           ) : (
             <div className="flex flex-col gap-2">
-              {questions.map((q, i) => (
-                <div
-                  key={q.id}
-                  className="flex items-center gap-2 rounded-lg border border-[var(--color-border-default)] px-3 py-2"
-                >
-                  <GripVertical className="h-3.5 w-3.5 shrink-0 text-[var(--color-icon-default-muted)]" />
-                  <span className="w-10 shrink-0 text-xs font-medium text-[var(--color-text-subtle)]">
-                    Q{i + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-[var(--color-text-default)]">
-                      {q.text}
-                    </div>
-                    <div className="mt-1 flex items-center gap-2">
-                      <QuestionTypeBadge type={q.type} />
-                      <span className="text-[11px] text-[var(--color-text-muted)]">
-                        • {q.marks} mark{q.marks === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onUpdate({
-                        ...section,
-                        questionIds: section.questionIds.filter(
-                          (id) => id !== q.id,
-                        ),
-                      })
-                    }
-                    className="text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-destructive)]"
+              {questions.map((q, i) => {
+                const isExpanded = expandedIds.has(q.id);
+                return (
+                  <div
+                    key={q.id}
+                    className={cn(
+                      "rounded-lg border transition-colors hover:bg-[var(--color-bg-state-soft)]",
+                      isExpanded
+                        ? "border-blue-500 ring-1 ring-blue-500/20"
+                        : "border-[var(--color-border-default)]",
+                    )}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <Dialog
-        open={showBankDialog}
-        onOpenChange={(o) => {
-          setShowBankDialog(o);
-          if (!o) setSelectedIds([]);
-        }}
-      >
-        <DialogContent className="max-h-[80vh] max-w-2xl overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>Add from Question Bank</DialogTitle>
-          </DialogHeader>
-          <div className="max-h-[55vh] overflow-y-auto">
-            {allQuestions.length === 0 ? (
-              <EmptyState
-                title="Question bank is empty"
-                description={`Add questions for ${subjectName} first.`}
-              />
-            ) : (
-              <div className="flex flex-col gap-1.5 py-2">
-                {allQuestions.map((q) => {
-                  const checked = selectedIds.includes(q.id);
-                  const alreadyAdded = section.questionIds.includes(q.id);
-                  return (
-                    <label
-                      key={q.id}
-                      className={cn(
-                        "flex items-start gap-3 rounded-lg border px-3 py-2",
-                        alreadyAdded
-                          ? "border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] opacity-60"
-                          : "border-[var(--color-border-default)] hover:bg-[var(--color-bg-state-soft-hover)]",
-                      )}
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(q.id)}
+                      className="flex w-full items-center gap-2 px-3 py-4.5 text-left"
                     >
-                      <Checkbox
-                        checked={checked || alreadyAdded}
-                        disabled={alreadyAdded}
-                        onCheckedChange={(v) =>
-                          setSelectedIds((s) =>
-                            v ? [...s, q.id] : s.filter((id) => id !== q.id),
-                          )
-                        }
-                        className="mt-0.5"
-                      />
-                      <div className="flex-1">
-                        <div className="text-sm text-[var(--color-text-default)]">
+                      <GripVertical className="h-3.5 w-3.5 shrink-0 text-[var(--color-icon-default-muted)]" />
+                      <span className="shrink-0 rounded bg-[var(--color-bg-badge-gray)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-subtle)]">
+                        Q{i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm text-[var(--color-text-default)]">
                           {q.text || "(untitled)"}
                         </div>
                         <div className="mt-1 flex items-center gap-2">
                           <QuestionTypeBadge type={q.type} />
                           <span className="text-[11px] text-[var(--color-text-muted)]">
-                            • {q.marks} mark
-                            {q.marks === 1 ? "" : "s"}
+                            • {q.marks} mark{q.marks === 1 ? "" : "s"}
                           </span>
                         </div>
                       </div>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBankDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={selectedIds.length === 0}
-              onClick={() => {
-                onAddFromBank(selectedIds);
-                setSelectedIds([]);
-                setShowBankDialog(false);
-              }}
-            >
-              Add ({selectedIds.length})
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                      <ChevronDown
+                        className={cn(
+                          "h-4 w-4 shrink-0 text-[var(--color-icon-default-muted)] transition-transform",
+                          isExpanded && "rotate-180",
+                        )}
+                      />
+                    </button>
+
+                    {isExpanded && (
+                      <QuestionEditForm
+                        question={q}
+                        onUpdate={(updated) =>
+                          updateQuestion(updated.id, updated)
+                        }
+                        onDuplicate={() => duplicateQuestion(q.id)}
+                        onDelete={() =>
+                          onUpdate({
+                            ...section,
+                            questionIds: section.questionIds.filter(
+                              (id) => id !== q.id,
+                            ),
+                          })
+                        }
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <QuestionBankModal
+        open={showBankModal}
+        setOpen={setShowBankModal}
+        questions={allQuestions}
+        alreadyAddedIds={section.questionIds}
+        topics={subjectTopics}
+        onAdd={(ids) => onAddFromBank(ids)}
+      />
+
+      <AddAssessmentItemModal
+        open={showAddItemModal}
+        setOpen={setShowAddItemModal}
+        onSelectType={(type, materialKind) => {
+          setShowAddItemModal(false);
+          onAddQuestion(type, materialKind);
+        }}
+      />
     </div>
   );
 };
 
 export const TestEditor = ({ params }: TestEditorProps) => {
   const { classId, subjectId, assessmentId } = use(params);
-  const { tests, subjects, classes, questions, updateTest } = useCBTStore();
+  const router = useRouter();
+  const { tests, subjects, classes, questions, topics, updateTest } =
+    useCBTStore();
 
   const test = useMemo(
     () => tests.find((t) => t.id === assessmentId),
@@ -303,6 +270,11 @@ export const TestEditor = ({ params }: TestEditorProps) => {
       }),
     [questions, subject],
   );
+  const subjectTopics = useMemo(
+    () => topics.filter((t) => String(t.subjectId) === String(subjectId)),
+    [topics, subjectId],
+  );
+
   // Fall back to all questions tied to topics that belong to this subject id
   const subjectQuestionsFinal = useMemo(
     () =>
@@ -375,9 +347,17 @@ export const TestEditor = ({ params }: TestEditorProps) => {
     toast.success("Test published");
   };
 
-  const handleSaveDraft = () => {
-    updateTest(test.id, { status: "draft" });
-    toast.success("Saved as draft");
+  const handleAddQuestion = (
+    type: QuestionType,
+    materialKind?: string,
+    sectionId?: string,
+  ) => {
+    const searchParams = new URLSearchParams({ type });
+    if (materialKind) searchParams.set("materialKind", materialKind);
+    searchParams.set("returnTo", `${baseUrl}/assessments/${assessmentId}`);
+    searchParams.set("assessmentId", assessmentId);
+    if (sectionId) searchParams.set("sectionId", sectionId);
+    router.push(`${baseUrl}/question-bank/new?${searchParams}`);
   };
 
   return (
@@ -402,12 +382,17 @@ export const TestEditor = ({ params }: TestEditorProps) => {
               <Pencil className="mr-1 h-3.5 w-3.5" />
               Edit Details
             </Button>
-            {test.status !== "published" && (
-              <Button variant="outline" size="sm" onClick={handleSaveDraft}>
-                <Save className="mr-1 h-3.5 w-3.5" />
-                Save as Draft
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditingDetails((v) => !v)}
+            >
+              <Draft
+                fill="var(--color-icon-default-muted)"
+                className="mr-1 h-3.5 w-3.5"
+              />
+              Save as Draft
+            </Button>
             <Button size="sm" onClick={handlePublish}>
               <Cloud className="mr-1 h-3.5 w-3.5" />
               Publish Test
@@ -417,25 +402,25 @@ export const TestEditor = ({ params }: TestEditorProps) => {
       />
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-blue)] px-2 py-1 text-[11px] text-[var(--blue-700)]">
-          <BookOpen className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-blue)] px-2 py-1 text-[11px] h-7 border border-bg-basic-blue-accent text-[var(--blue-700)]">
+          <BookOpen className="h-3 w-3 text-bg-basic-blue-accent" />
           {cls.name.replace(" ", "")} • {subject.name}
         </span>
-        <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-gray)] px-2 py-1 text-[11px] text-[var(--color-text-subtle)]">
+        <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-gray)] px-2 py-1 h-7 border border-bg-basic-gray-accent text-[11px] text-[var(--color-text-subtle)]">
           <FileText className="h-3 w-3" />
           {test.sections.reduce((n, s) => n + s.questionIds.length, 0)}{" "}
           questions
         </span>
-        <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-amber)] px-2 py-1 text-[11px] text-[var(--amber-700)]">
+        <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-amber)] px-2 py-1 h-7 border border-bg-basic-amber-accent text-[11px] text-[var(--amber-700)]">
           <Star className="h-3 w-3" />
           {totalMarks} marks
         </span>
-        <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-purple)] px-2 py-1 text-[11px] text-[var(--purple-700)]">
+        <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-purple)] px-2 py-1 h-7 border border-bg-basic-purple-accent text-[11px] text-[var(--purple-700)]">
           <Timer className="h-3 w-3" />
           {test.duration} minutes
         </span>
         {test.mappingLabel && (
-          <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-green)] px-2 py-1 text-[11px] text-[var(--green-700)]">
+          <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-green)] px-2 py-1 h-7 border border-bg-basic-green-accent text-[11px] text-[var(--green-700)]">
             <Tag className="h-3 w-3" />
             {test.mappingLabel}
           </span>
@@ -545,6 +530,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
             key={section.id}
             section={section}
             subjectName={subject.name}
+            subjectTopics={subjectTopics}
             allQuestions={subjectQuestionsFinal}
             onUpdate={(s) => updateSection(section.id, s)}
             onDelete={() => deleteSection(section.id)}
@@ -557,20 +543,23 @@ export const TestEditor = ({ params }: TestEditorProps) => {
               };
               updateSection(section.id, next);
             }}
+            onAddQuestion={(type, materialKind) =>
+              handleAddQuestion(type, materialKind, section.id)
+            }
           />
         ))}
 
         <button
           type="button"
           onClick={addSection}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-[var(--color-border-strong)] bg-[var(--color-bg-card)] py-3 text-sm text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)]"
+          className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border-strong)] bg-[var(--color-bg-card)] py-3 text-sm text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)]"
         >
           <Plus className="h-3.5 w-3.5" />
           Add New Section
         </button>
       </div>
 
-      <div className="mt-5 flex items-center gap-3 rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
+      {/* <div className="mt-5 flex items-center gap-3 rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
         <Switch
           id="result-access"
           checked={test.studentResultAccess}
@@ -584,7 +573,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
         >
           Allow students to see their result after submission
         </label>
-      </div>
+      </div> */}
     </div>
   );
 };

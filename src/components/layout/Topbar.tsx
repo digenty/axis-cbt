@@ -1,8 +1,7 @@
 "use client";
 
 import { Menu } from "lucide-react";
-import Notification2 from "@/Icons/Notification2";
-import QuestionFill from "@/Icons/QuestionFill";
+import { Notification2, QuestionFill } from "@digenty/icons";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSidebarStore } from "@/store/sidebar";
 import { cn } from "@/lib/utils";
