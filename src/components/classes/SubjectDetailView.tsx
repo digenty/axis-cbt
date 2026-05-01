@@ -62,7 +62,7 @@ export const SubjectDetailView = ({ params }: SubjectDetailViewProps) => {
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
-      <PageHeader title={title} showBack backHref={`/classes/${cls.id}`} />
+      <PageHeader title={title} showBack backHref="/subjects" />
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {HUB_CARDS.map((card) => (
