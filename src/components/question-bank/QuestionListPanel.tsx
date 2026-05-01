@@ -21,7 +21,9 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
 import { QuestionRow } from "./QuestionRow";
-import type { Question, Topic } from "@/types";
+import { InlineQuestionCard } from "./InlineQuestionCard";
+import type { MaterialKind } from "./answer-editors/QuestionGroupEditor";
+import type { Question, QuestionType, Topic } from "@/types";
 
 interface QuestionListPanelProps {
   topic: Topic | null;
@@ -31,6 +33,11 @@ interface QuestionListPanelProps {
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onReorder: (orderedIds: string[]) => void;
+  newQuestionType?: QuestionType | null;
+  newMaterialKind?: MaterialKind | null;
+  onSaveNew?: (q: Question) => void;
+  onCancelNew?: () => void;
+  onUpdateQuestion?: (q: Question) => void;
 }
 
 const Sortable = ({
@@ -39,12 +46,14 @@ const Sortable = ({
   onEdit,
   onDuplicate,
   onDelete,
+  onUpdate,
 }: {
   question: Question;
   index: number;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onUpdate?: (q: Question) => void;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: question.id });
@@ -63,6 +72,7 @@ const Sortable = ({
         onEdit={onEdit}
         onDuplicate={onDuplicate}
         onDelete={onDelete}
+        onUpdate={onUpdate}
         dragHandleProps={
           {
             ...attributes,
@@ -82,6 +92,11 @@ export const QuestionListPanel = ({
   onDuplicate,
   onDelete,
   onReorder,
+  newQuestionType,
+  newMaterialKind,
+  onSaveNew,
+  onCancelNew,
+  onUpdateQuestion,
 }: QuestionListPanelProps) => {
   const [search, setSearch] = useState("");
 
@@ -140,7 +155,20 @@ export const QuestionListPanel = ({
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        {filtered.length === 0 ? (
+        {newQuestionType && topic && (
+          <div className="mb-4">
+            <InlineQuestionCard
+              key={newQuestionType}
+              initialType={newQuestionType}
+              initialMaterialKind={newMaterialKind ?? undefined}
+              topicId={String(topic.id)}
+              onSave={(q) => onSaveNew?.(q)}
+              onCancel={() => onCancelNew?.()}
+            />
+          </div>
+        )}
+
+        {filtered.length === 0 && !newQuestionType ? (
           <EmptyState
             icon={<Lightbulb className="h-8 w-8" />}
             title="No questions yet"
@@ -152,7 +180,7 @@ export const QuestionListPanel = ({
               </Button>
             }
           />
-        ) : (
+        ) : filtered.length > 0 ? (
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -171,12 +199,13 @@ export const QuestionListPanel = ({
                     onEdit={() => onEditQuestion(q.id)}
                     onDuplicate={() => onDuplicate(q.id)}
                     onDelete={() => onDelete(q.id)}
+                    onUpdate={onUpdateQuestion}
                   />
                 ))}
               </div>
             </SortableContext>
           </DndContext>
-        )}
+        ) : null}
 
         {filtered.length > 0 && (
           <button

@@ -49,22 +49,14 @@ export const MultipleChoiceEditor = ({
           <button
             type="button"
             onClick={() => setCorrect(opt.id)}
-            className={
-              multi
-                ? `flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                    opt.isCorrect
-                      ? "border-[var(--blue-500)] bg-[var(--blue-500)] text-white"
-                      : "border-[var(--color-border-strong)]"
-                  }`
-                : `flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                    opt.isCorrect
-                      ? "border-[var(--blue-500)] bg-[var(--blue-500)]"
-                      : "border-[var(--color-border-strong)]"
-                  }`
-            }
+            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border ${
+              opt.isCorrect
+                ? "border-[var(--blue-500)] bg-[var(--blue-500)] text-white"
+                : "border-[var(--color-border-strong)]"
+            }`}
             aria-label={opt.isCorrect ? "Mark incorrect" : "Mark correct"}
           >
-            {opt.isCorrect && multi && (
+            {opt.isCorrect && (
               <svg
                 className="h-3 w-3"
                 viewBox="0 0 12 12"
@@ -74,9 +66,6 @@ export const MultipleChoiceEditor = ({
               >
                 <path d="M2 6l3 3 5-6" />
               </svg>
-            )}
-            {opt.isCorrect && !multi && (
-              <span className="block h-1.5 w-1.5 rounded-full bg-white" />
             )}
           </button>
           <span className="w-5 text-sm font-medium text-[var(--color-text-default)]">

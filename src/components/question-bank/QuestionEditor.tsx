@@ -19,6 +19,7 @@ import { MatchingEditor } from "./answer-editors/MatchingEditor";
 import { ComprehensionPassageEditor } from "./answer-editors/ComprehensionPassageEditor";
 import { MultipleBlanksEditor } from "./answer-editors/MultipleBlanksEditor";
 import { QuestionGroupEditor } from "./answer-editors/QuestionGroupEditor";
+import type { MaterialKind } from "./answer-editors/QuestionGroupEditor";
 import type { Question, QuestionType, Option, Blank } from "@/types";
 import { toast } from "sonner";
 
@@ -51,9 +52,14 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
   const router = useRouter();
   const search = useSearchParams();
   const topicIdParam = search.get("topicId") ?? "";
+  const typeParam = search.get("type") as QuestionType | null;
+  const returnTo = search.get("returnTo");
+  const sectionId = search.get("sectionId");
+  const assessmentIdParam = search.get("assessmentId");
   const baseUrl = `/classes/${classId}/subjects/${subjectId}`;
 
-  const { topics, questions, addQuestion, updateQuestion } = useCBTStore();
+  const { topics, questions, tests, addQuestion, updateQuestion, updateTest } =
+    useCBTStore();
 
   const existing =
     mode === "edit" && questionId
@@ -61,7 +67,7 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
       : null;
 
   const [type, setType] = useState<QuestionType>(
-    existing?.type ?? "multiple-choice",
+    existing?.type ?? typeParam ?? "multiple-choice",
   );
   const [text, setText] = useState(existing?.text ?? "");
   const [marks, setMarks] = useState<number>(existing?.marks ?? 1);
@@ -107,9 +113,7 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
   );
   const [blanks, setBlanks] = useState<Blank[]>(existing?.blanks ?? []);
   const [groupName, setGroupName] = useState(existing?.text ?? "");
-  const [materialKind, setMaterialKind] = useState<
-    "comprehension-passage" | "diagram" | "table" | "chart"
-  >("comprehension-passage");
+  const [materialKind, setMaterialKind] = useState<MaterialKind>("diagram");
 
   const handleSave = () => {
     if (!topicId) {
@@ -189,9 +193,21 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
       toast.success("Question updated");
     } else {
       addQuestion(payload);
+      if (sectionId && assessmentIdParam) {
+        const test = tests.find((t) => t.id === assessmentIdParam);
+        if (test) {
+          updateTest(assessmentIdParam, {
+            sections: test.sections.map((s) =>
+              s.id === sectionId
+                ? { ...s, questionIds: [...s.questionIds, payload.id] }
+                : s,
+            ),
+          });
+        }
+      }
       toast.success("Question created");
     }
-    router.push(`${baseUrl}/question-bank`);
+    router.push(returnTo ?? `${baseUrl}/question-bank`);
   };
 
   const isGrouped = GROUPED_TYPES.includes(type);
@@ -213,7 +229,7 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => router.push(`${baseUrl}/question-bank`)}
+          onClick={() => router.push(returnTo ?? `${baseUrl}/question-bank`)}
         >
           Cancel
         </Button>
@@ -250,27 +266,24 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
           )}
 
           {isGrouped && (
-            <>
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium text-[var(--color-text-default)]">
-                  Question Material
-                </Label>
-                <QuestionTypeSelector
-                  value={type}
-                  onChange={setType}
-                  options={ALL_TYPES}
-                />
-              </div>
-              <RichTextEditor
-                value={passage}
-                onChange={setPassage}
-                placeholder={
-                  type === "comprehension-passage"
-                    ? "Type or paste your comprehension passage"
-                    : "Add descriptive text for your question material"
-                }
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium text-[var(--color-text-default)]">
+                Question Material
+              </Label>
+              <QuestionTypeSelector
+                value={type}
+                onChange={setType}
+                options={ALL_TYPES}
               />
-            </>
+            </div>
+          )}
+
+          {type === "comprehension-passage" && (
+            <RichTextEditor
+              value={passage}
+              onChange={setPassage}
+              placeholder="Type or paste your comprehension passage"
+            />
           )}
 
           {type === "multiple-choice" && (
@@ -320,6 +333,8 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
             <QuestionGroupEditor
               materialKind={materialKind}
               onChangeMaterialKind={setMaterialKind}
+              passage={passage}
+              onChangePassage={setPassage}
               instruction={instruction}
               onChangeInstruction={setInstruction}
               subQuestions={subQuestions}

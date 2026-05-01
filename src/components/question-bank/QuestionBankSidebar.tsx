@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import {
   DndContext,
@@ -19,12 +18,20 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, Upload, Trash2, Pencil } from "lucide-react";
+import {
+  GripVertical,
+  Plus,
+  Upload,
+  Trash2,
+  Pencil,
+  ArrowLeft,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { BackButton } from "@/components/common/BackButton";
 import type { Topic } from "@/types";
 import { cn } from "@/lib/utils";
+import { Import } from "@digenty/icons";
+import { useRouter } from "next/navigation";
 
 interface QuestionBankSidebarProps {
   subjectTitle: string;
@@ -32,9 +39,9 @@ interface QuestionBankSidebarProps {
   topics: Topic[];
   activeTopicId: string | null;
   onSelectTopic: (id: string) => void;
-  onAddTopic: (name: string) => void;
-  onRenameTopic: (id: string, name: string) => void;
-  onDeleteTopic: (id: string) => void;
+  onRequestAddTopic: () => void;
+  onRequestRenameTopic: (topic: Topic) => void;
+  onRequestDeleteTopic: (topic: Topic) => void;
   onReorderTopics: (orderedIds: string[]) => void;
   importHref: string;
   backHref: string;
@@ -44,25 +51,17 @@ const SortableTopicRow = ({
   topic,
   active,
   onSelect,
-  onRename,
-  onDelete,
+  onRequestRename,
+  onRequestDelete,
 }: {
   topic: Topic;
   active: boolean;
   onSelect: () => void;
-  onRename: (name: string) => void;
-  onDelete: () => void;
+  onRequestRename: () => void;
+  onRequestDelete: () => void;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: topic.id });
-  const [editing, setEditing] = useState(false);
-  const [draftName, setDraftName] = useState(topic.name);
-
-  const commit = () => {
-    const trimmed = draftName.trim();
-    if (trimmed && trimmed !== topic.name) onRename(trimmed);
-    setEditing(false);
-  };
 
   return (
     <div
@@ -72,7 +71,7 @@ const SortableTopicRow = ({
         transition,
       }}
       className={cn(
-        "group flex items-center gap-2 rounded-md px-2 py-2 text-sm",
+        "group flex items-center gap-2 rounded-md px-2 py-2 text-sm h-8",
         active
           ? "bg-[var(--color-bg-state-soft)] text-[var(--color-text-default)]"
           : "text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)] hover:text-[var(--color-text-default)]",
@@ -86,50 +85,31 @@ const SortableTopicRow = ({
       >
         <GripVertical className="h-3.5 w-3.5" />
       </button>
-      {editing ? (
-        <Input
-          autoFocus
-          className="h-7 px-2 text-sm"
-          value={draftName}
-          onChange={(e) => setDraftName(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
-            if (e.key === "Escape") {
-              setDraftName(topic.name);
-              setEditing(false);
-            }
-          }}
-        />
-      ) : (
+      <button
+        type="button"
+        onClick={onSelect}
+        className="flex-1 truncate text-left"
+      >
+        {topic.name}
+      </button>
+      <div className="hidden items-center gap-0.5 group-hover:flex">
         <button
           type="button"
-          onClick={onSelect}
-          className="flex-1 truncate text-left"
+          onClick={onRequestRename}
+          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--color-icon-default-muted)] hover:bg-[var(--color-bg-state-soft-press)]"
+          aria-label="Rename topic"
         >
-          {topic.name}
+          <Pencil className="h-3 w-3" />
         </button>
-      )}
-      {!editing && (
-        <div className="hidden items-center gap-0.5 group-hover:flex">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--color-icon-default-muted)] hover:bg-[var(--color-bg-state-soft-press)]"
-            aria-label="Rename topic"
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--color-icon-destructive)] hover:bg-[var(--color-bg-badge-red)]"
-            aria-label="Delete topic"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
-        </div>
-      )}
+        <button
+          type="button"
+          onClick={onRequestDelete}
+          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--color-icon-destructive)] hover:bg-[var(--color-bg-badge-red)]"
+          aria-label="Delete topic"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
     </div>
   );
 };
@@ -140,16 +120,13 @@ export const QuestionBankSidebar = ({
   topics,
   activeTopicId,
   onSelectTopic,
-  onAddTopic,
-  onRenameTopic,
-  onDeleteTopic,
+  onRequestAddTopic,
+  onRequestRenameTopic,
+  onRequestDeleteTopic,
   onReorderTopics,
   importHref,
   backHref,
 }: QuestionBankSidebarProps) => {
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState("");
-
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, {
@@ -167,86 +144,83 @@ export const QuestionBankSidebar = ({
     onReorderTopics(arrayMove(ids, oldIdx, newIdx));
   };
 
-  const commitNew = () => {
-    const trimmed = draft.trim();
-    if (trimmed) onAddTopic(trimmed);
-    setDraft("");
-    setAdding(false);
-  };
+  const router = useRouter();
 
   return (
     <aside className="flex w-full shrink-0 flex-col border-r border-[var(--color-border-default)] bg-[var(--color-bg-card)] md:w-[280px]">
-      <div className="border-b border-[var(--color-border-default)] p-4">
-        <BackButton href={backHref} />
-        <div className="mt-3">
-          <h2 className="text-sm font-semibold text-[var(--color-text-default)]">
+      <div className="border-b border-[var(--color-border-default)] py-3.5">
+        <div className="px-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.back()}
+            className="h-8 border-none bg-transparent gap-1.5 px-2.5 text-xs font-medium text-[var(--color-text-subtle)]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back
+          </Button>
+        </div>
+        <div className="mt-3 border-b border-border-default pb-3.5">
+          <h2 className="text-base font-medium text-[var(--color-text-default)] px-4">
             {subjectTitle}
           </h2>
-          <p className="text-xs text-[var(--color-text-muted)]">{subtitle}</p>
+          <p className="text-sm font-medium text-[var(--color-text-muted)] px-4">
+            {subtitle}
+          </p>
         </div>
-        <Button
-          asChild
-          variant="outline"
-          className="mt-3 w-full justify-center"
-        >
-          <Link href={importHref}>
-            <Upload className="mr-2 h-3.5 w-3.5" />
-            Import questions
-          </Link>
-        </Button>
+
+        <div className="px-4">
+          <Button
+            asChild
+            variant="outline"
+            className="mt-3.5 w-full justify-center"
+          >
+            <Link href={importHref}>
+              <Import
+                fill="var(--color-icon-default-muted)"
+                className="size-3.5"
+              />
+              Import questions
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={topics.map((t) => t.id)}
-            strategy={verticalListSortingStrategy}
+      <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto py-3.5">
+        <div className="flex flex-col gap-2 px-4">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
           >
-            {topics.map((topic) => (
-              <SortableTopicRow
-                key={topic.id}
-                topic={topic}
-                active={topic.id === activeTopicId}
-                onSelect={() => onSelectTopic(topic.id)}
-                onRename={(name) => onRenameTopic(topic.id, name)}
-                onDelete={() => onDeleteTopic(topic.id)}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
+            <SortableContext
+              items={topics.map((t) => t.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {topics.map((topic) => (
+                <SortableTopicRow
+                  key={topic.id}
+                  topic={topic}
+                  active={topic.id === activeTopicId}
+                  onSelect={() => onSelectTopic(topic.id)}
+                  onRequestRename={() => onRequestRenameTopic(topic)}
+                  onRequestDelete={() => onRequestDeleteTopic(topic)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
 
-        {adding ? (
-          <div className="mt-2 flex items-center gap-2">
-            <Input
-              autoFocus
-              className="h-8"
-              placeholder="Topic name"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commitNew}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitNew();
-                if (e.key === "Escape") {
-                  setDraft("");
-                  setAdding(false);
-                }
-              }}
-            />
-          </div>
-        ) : (
+        <div className="hidden md:block border-b border-border-default px-4 pb-3.5">
           <button
             type="button"
-            onClick={() => setAdding(true)}
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border-strong)] py-2 text-sm text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)]"
+            onClick={onRequestAddTopic}
+            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border-strong)] py-2 text-sm text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)]"
           >
             <Plus className="h-3.5 w-3.5" />
             New Topic
           </button>
-        )}
+        </div>
       </div>
     </aside>
   );

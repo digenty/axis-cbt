@@ -8,8 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev       # Start dev server on port 8005
-npm run build     # Production build
-npm run lint      # ESLint
+npm run build     # Production build (Next.js)
+npm run start     # Run the production build
+npm run lint      # ESLint (next/core-web-vitals + @tanstack/query)
 npm run format    # Prettier (src/**/*.{js,jsx,ts,tsx,css,json})
 ```
 
@@ -17,56 +18,65 @@ No test suite is configured.
 
 ## Architecture
 
-<<<<<<< HEAD
-**Axis-CBT** is a Computer-Based Testing management app for schools. Pure client-side SPA — no backend; all state is seeded from mock data and persisted to `localStorage` via Zustand.
+**Axis-CBT** is a Computer-Based Testing management app for schools, embedded in a larger Digenty platform. It runs as a pure client-side SPA today — all domain state is seeded from mock data and persisted to `localStorage` via Zustand. The React Query + Axios layer is wired up against `NEXT_PUBLIC_API_BASE_URL` for an upcoming backend cutover, but is not the primary data source yet.
 
-### Routing (`/app`)
+### Routing — Next.js 16 (App Router)
 
-Next.js App Router. Pages are thin wrappers rendering a single view component from `src/components/`. The hierarchy mirrors the domain:
-
-```
-/subjects                                                              → MySubjectsView
-/classes                                                               → AllClassesView
-/classes/[classId]                                                     → ClassSubjectsView
-/classes/[classId]/subjects/[subjectId]                                → SubjectDetailView
-/classes/[classId]/subjects/[subjectId]/question-bank                  → QuestionBankView
-/classes/[classId]/subjects/[subjectId]/assessments                    → TestListView
-/classes/[classId]/subjects/[subjectId]/assessments/[assessmentId]     → TestEditor
-/classes/[classId]/subjects/[subjectId]/results                        → Results
-/classes/[classId]/subjects/[subjectId]/results/[attemptId]            → GradeAttemptView
-=======
-**Axis-CBT** is a Computer-Based Testing management app for schools. It is a pure client-side SPA — no backend or database; all state is seeded from mock data and persisted to `localStorage` via Zustand.
-
-### Routing (`/app`)
-
-Next.js App Router. Pages are thin wrappers that render a single view component from `src/components/`. The hierarchy mirrors the domain model:
+Pages are thin wrappers that render a single view component from `src/components/`. They are split across **three top-level role areas** under `app/`:
 
 ```
-/subjects                                                → MySubjectsView
-/classes                                                 → AllClassesView
-/classes/[classId]                                       → ClassSubjectsView
-/classes/[classId]/subjects/[subjectId]                  → SubjectDetailView
-/classes/[classId]/subjects/[subjectId]/question-bank    → QuestionBankView
-/classes/[classId]/subjects/[subjectId]/assessments      → TestListView
-/classes/[classId]/subjects/[subjectId]/assessments/[assessmentId] → TestEditor
-/classes/[classId]/subjects/[subjectId]/results          → Results
->>>>>>> new-cbt
+app/
+├── (teacher)/                              # route group; uses AppShell layout
+│   ├── subjects                            → MySubjectsView
+│   ├── classes                             → AllClassesView
+│   └── classes/[classId]
+│       ├── (page)                          → ClassSubjectsView
+│       └── subjects/[subjectId]
+│           ├── (page)                      → SubjectDetailView
+│           ├── question-bank               → QuestionBankView
+│           ├── question-bank/new           → new-question editor
+│           ├── question-bank/[questionId]  → edit-question editor
+│           ├── question-bank/import        → CSV/bulk import
+│           ├── assessments                 → TestListView
+│           ├── assessments/[assessmentId]  → TestEditor
+│           ├── results                     → Results
+│           └── results/[attemptId]         → GradeAttemptView
+├── student/cbt                             → StudentDashboard (StudentShell)
+├── student/cbt/[testId]                    → student test runner
+├── student/cbt/[testId]/result             → student result view
+└── auth-entry                              → AuthRedirect (re-auth bridge)
 ```
 
-Root `/` redirects to `/subjects`.
+Root `/` redirects to `/subjects`. `/student` redirects to `/student/cbt`.
 
-<<<<<<< HEAD
+**Next.js 16 conventions to follow:**
+- `params` arrives as a `Promise` in pages and layouts. Unwrap with the `use()` hook in client components, or `await` in server components — never destructure directly.
+  ```tsx
+  const { classId, subjectId } = use(params);
+  ```
+- Read `node_modules/next/dist/docs/` before adding new pages or layouts. APIs differ from Next.js 13–15.
+
+### Auth
+
+Auth is enforced by Edge middleware at `app/middleware.ts`. It looks for an httpOnly `token` cookie set by the parent Digenty app. If absent, requests are redirected to `/auth-entry`, which re-routes back to the main login (with `returnTo` preserved). `/auth-entry`, `/_next`, `/favicon`, `/api/`, `/robots`, `/sitemap` are exempted.
+
+Server-side cookie helpers live in `src/lib/cookies.ts` (`"use server"`). The Axios client in `src/lib/axios-auth.ts` reads the same token via `getSessionToken()` and attaches it as `Bearer`; 401/403 responses trigger `deleteSession()`.
+
 ### State (`src/store/`)
 
 Three Zustand stores:
 
-- **`useCBTStore`** (`store/index.ts`) — primary store persisted to `localStorage:"cbt-store"`. Holds `classes`, `subjects`, `topics`, `questions`, `tests`, `attempts`. Seeded from `src/lib/mock-data.ts`. All mutations are synchronous; no async thunks.
-- **`useAuthStore`** (`store/auth-store.ts`) — persisted to `localStorage:"cbt-auth"`. Holds `token: string | null` for Axios Bearer auth.
-- **`useSidebarStore`** (`store/sidebar-store.ts`) — in-memory UI state for mobile nav (`isSidebarOpen`, `activeNav`).
+- **`useCBTStore`** (`store/index.ts`) — primary domain store, persisted to `localStorage:"cbt-store"`. Holds `classes`, `subjects`, `topics`, `questions`, `tests`, `attempts`. Seeded from `src/lib/mock-data.ts`. All mutations are synchronous and immutable; spread the prior state and stamp `updatedAt` on edits.
+  ```ts
+  set(s => ({ questions: s.questions.map(q =>
+    q.id === id ? { ...q, ...data, updatedAt: new Date().toISOString() } : q) }))
+  ```
+- **`useAuthStore`** (`store/auth-store.ts`) — persisted to `localStorage:"cbt-auth"`. Belt-and-suspenders fallback for the cookie token; not currently consumed anywhere but kept for the dev cross-port case.
+- **`useSidebarStore`** (`store/sidebar.ts`) — in-memory UI state for mobile nav (`isSidebarOpen`, `activeNav`).
 
-React Query is wired up (`src/hooks/queryHooks/`, `src/api/`) but Zustand is the primary data source — the app is not yet backend-connected. `NEXT_PUBLIC_API_BASE_URL` env var is required when connecting.
+React Query (`src/api/`, `src/hooks/queryHooks/`, `src/queries/`) is wired up with the @tanstack/eslint-plugin-query rules but not yet the primary data source — the app reads/writes through `useCBTStore` for now. When connecting the backend, `NEXT_PUBLIC_API_BASE_URL` must be set.
 
-### Domain Model (`src/types/index.ts`, `src/types/results.ts`)
+### Domain model (`src/types/index.ts`, `src/types/results.ts`)
 
 ```
 Class → Subjects → Topics → Questions
@@ -74,110 +84,57 @@ Test → Sections → questionIds (ordered string[] of Question IDs)
 StudentAttempt → StudentAnswer[] → awardedMarks (teacher override)
 ```
 
-Key type subtleties:
-- `topicId` is typed as `string` on `Question` but `number` on `Topic.id` in the store — a known mismatch.
-- `Question.type` uses **kebab-case** (e.g. `"multiple-choice"`) in the store/display layer; the API layer in `src/types/question.ts` uses **SCREAMING_SNAKE_CASE** (e.g. `"MULTIPLE_CHOICE"`). Components handle the conversion.
-- `TestSection.questionIds` is an ordered list — position determines display order.
+Canonical `Test` / `Assessment` / `StudentAttempt` types live in `src/types/results.ts` and are re-exported from `@/types`. Always import from `@/types`.
+
+**Type system friction worth knowing:**
+- `topicId` is typed as `string` on `Question` but `Topic.id` is `number` in the store — known mismatch.
+- `Question.type` uses **kebab-case** (`"multiple-choice"`) in the store/display layer; the API layer in `src/types/question.ts` uses **SCREAMING_SNAKE_CASE** (`"MULTIPLE_CHOICE"`). Components map between them at the boundary — see `TestEditor.tsx` for the pattern.
+- `TestSection.questionIds` is order-sensitive — array position is the display order.
+- Route params arrive as strings; coerce with `Number(id)` when matching against `subjectId`/`topicId` in the store.
 
 Supported question types: `multiple-choice`, `true-false`, `essay`, `fill-in-blank`, `matching`, `short-answer`, `numerical`, `question-group`, `multiple-answers`, `comprehension-passage`, `multiple-blanks`.
 
-### Path Alias
-=======
-### Routing — Next.js 16 conventions
+### Path alias
 
-Pages unwrap async params with the `use()` hook (not `await` or destructuring directly):
-
-```typescript
-const { classId, subjectId } = use(params); // params is a Promise in Next.js 16
-```
-
-Read `node_modules/next/dist/docs/` before writing new pages or layouts — APIs differ from Next.js 13–15.
-
-### State (`src/store/index.ts`)
-
-Single Zustand store `useCBTStore` holds all domain data: classes, subjects, topics, questions, tests, and student attempts. It ships with seeded mock data (`src/lib/mock-data.ts`) and persists under the key `"cbt-store"`. A non-persisted `useSidebarStore` in `src/store/sidebar-store.ts` handles UI-only state. React Query is wired up but used for local mutation orchestration, not remote data fetching.
-
-**Store mutation pattern:** All mutations spread immutably and update `updatedAt`:
-```typescript
-set(s => ({ questions: s.questions.map(q => q.id === id ? { ...q, ...data, updatedAt: new Date().toISOString() } : q) }))
-```
-
-Use `generateId()` from `src/lib/utils.ts` for new entity IDs. When passing `topicId`/`subjectId` between route params and store, coerce with `Number(id)` — params arrive as strings but domain types use `number`.
-
-### Domain model
-
-```
-Class → Subjects → Topics → Questions
-Test/Assessment → Sections → Questions (referenced by id)
-Results → Assessment answers
-```
-
-**Type system friction:** Two parallel type conventions exist:
-- Store/display types use kebab-case (`"multiple-choice"`, `"true-false"`)
-- API/query types in `src/types/question.ts` use SCREAMING_SNAKE_CASE (`MULTIPLE_CHOICE`, `TRUE_FALSE`)
-
-Components map between them at the boundary (see `TestEditor.tsx` for the mapping layer). Canonical Test/Assessment types live in `src/types/results.ts` (re-exported from `src/types/index.ts`).
-
-`JWTPayload` and JWT utilities (`src/lib/utils.ts`) exist for future auth but are not wired into any auth flow.
+`@/*` resolves to `src/*`, `app/*`, then the project root (see `tsconfig.json`). Use `@/components/...`, `@/store/...`, `@/lib/...` — never deep relative paths.
 
 ### Code organisation
 
-Use `// ─── SectionName ────` dividers to separate logical sections within files. Define the `Props` interface immediately after imports, before helpers and the component. Mark interactive components with `"use client"` at the top.
-
-### Path alias
->>>>>>> new-cbt
-
-`@/*` resolves to `src/*`, `app/*`, and the project root (see `tsconfig.json`). Use `@/components/...`, `@/store/...`, etc.
+- Mark interactive components with `"use client"` at the top.
+- Define the `Props` interface immediately after imports, before helpers and the component.
+- Use `// ─── SectionName ────` dividers to separate logical sections inside larger files.
+- Use `generateId()` from `src/lib/utils.ts` for new entity IDs.
 
 ### Styling
 
-<<<<<<< HEAD
-Tailwind CSS v4 via `@tailwindcss/postcss`. Custom theme tokens defined as CSS variables in `app/globals.css`. Use `cn()` from `src/lib/utils.ts` (`clsx` + `tailwind-merge`) when combining classes conditionally.
-
-### Key Libraries
-=======
-Tailwind CSS v4 via `@tailwindcss/postcss`. `app/globals.css` defines 700+ CSS variable tokens in a `@theme` block — semantic color, shadow, radius, and breakpoint tokens. Light mode is the default; dark mode inverts semantic tokens via `prefers-color-scheme: light` media query. Use `cn()` from `src/lib/utils.ts` (clsx + tailwind-merge) for conditional class names.
+Tailwind CSS v4 via `@tailwindcss/postcss`. `app/globals.css` defines the full token set (semantic colors, shadows, radii, breakpoints) in a `@theme` block; dark mode is driven through a `prefers-color-scheme` media query, not a class toggle. Use `cn()` from `src/lib/utils.ts` (clsx + tailwind-merge) when combining classes conditionally.
 
 ### Key utilities (`src/lib/utils.ts`)
 
 | Function | Purpose |
 |---|---|
 | `cn(...classes)` | Conditional class names (clsx + tailwind-merge) |
-| `generateId()` | Random + timestamp ID string |
+| `generateId()` | Random + timestamp ID string for new entities |
 | `generateRandomColor(text)` | Deterministic Tailwind color from text hash |
 | `getQuestionTypeLabel(type)` | `"multiple-choice"` → `"Multiple Choice"` |
-| `getQuestionTypeBadgeColor(type)` | Tailwind badge classes for question types |
-| `formatDate(date)` | `DD/MM/YYYY` string |
+| `getQuestionTypeBadgeColor(type)` | Tailwind badge classes per question type |
+| `formatDate(date)` | `DD/MM/YYYY` |
 | `formatRelativeDate(date)` | `"Today"` / `"X days ago"` |
+| `decodeJWT()`, `isTokenExpired()` | JWT helpers (used by `cookies.ts`) |
 
 ### Key libraries
->>>>>>> new-cbt
 
 | Library | Role |
 |---|---|
+| `next@16` / `react@19` | App Router, async params, RSC defaults |
 | `zustand@5` | Global state + localStorage persistence |
-<<<<<<< HEAD
-| `@dnd-kit/*` | Drag-and-drop for question/topic/section reordering |
-| `@tanstack/react-table` | Tables in results and question list views |
-| `@tanstack/react-query` | Server state (wired but not yet primary) |
-| `sonner` | Toast notifications |
-| `lucide-react` | Icons |
-| `date-fns` | Date formatting |
+| `@tanstack/react-query@5` | Server-state layer (wired, not yet primary) |
 | `axios` | HTTP client with Bearer token + 401/403 interceptors |
-
-### Notable Utilities (`src/lib/utils.ts`)
-
-- `cn()` — Tailwind class merging
-- `generateId()` — random ID for new entities
-- `getQuestionTypeLabel(type)` / `getQuestionTypeBadgeColor(type)` — display helpers for question types
-- `formatDate()`, `formatRelativeDate()` — date display
-- `decodeJWT()`, `isTokenExpired()` — JWT helpers (unused, for future auth)
-=======
-| `@tanstack/react-query@5` | Mutation orchestration (not remote fetching) |
-| `@dnd-kit/*` | Drag-and-drop for question/topic reordering |
-| `@tanstack/react-table` | Table rendering in results/question list views |
-| `sonner` | Toast notifications |
+| `@dnd-kit/*` | Drag-and-drop for question/topic/section reordering |
+| `@tanstack/react-table` | Tables in results and question-list views |
+| `radix-ui` + `class-variance-authority` | Headless UI primitives + variant styling |
+| `next-themes` | Theme provider |
+| `react-day-picker`, `date-fns` | Date pickers and formatting |
+| `sonner` | Toast notifications (mounted in root layout) |
 | `lucide-react` | Icons |
-| `date-fns` | Date formatting |
-| `axios` | HTTP client (wired for future backend integration) |
->>>>>>> new-cbt
+| `vaul` | Mobile drawer primitive |

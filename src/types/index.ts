@@ -120,10 +120,18 @@
 import { JwtPayload } from "jwt-decode";
 
 interface JWTUser {
-  id: string;
-  branchId: number;
+  id: number;
   schoolId: number;
   permissions: string[];
+  armIds: number[];
+  branchIds: number[];
+  created: number;
+  email: string;
+  name: string;
+  subjectIds: number[];
+  isMain: boolean;
+  isAdmin: boolean;
+  adminBranchIds: number[];
 }
 
 export type JWTPayload = JwtPayload & JWTUser;
