@@ -1,9 +1,12 @@
 import { AppShell } from "@/components/layout/AppShell";
+import { getSessionData } from "@/lib/cookies";
+import { isAdmin } from "@/lib/permissions";
 
-export default function TeacherLayout({
+export default async function TeacherLayout({
 	children,
 }: {
 	children: React.ReactNode;
 }) {
-	return <AppShell>{children}</AppShell>;
+	const { user } = await getSessionData();
+	return <AppShell isAdmin={isAdmin(user?.permissions ?? [])}>{children}</AppShell>;
 }

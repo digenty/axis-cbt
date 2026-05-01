@@ -8,21 +8,26 @@ import { useSidebarStore } from "@/store/sidebar";
 interface AppShellProps {
   children: React.ReactNode;
   title?: string;
+  isAdmin?: boolean;
 }
 
-export const AppShell = ({ children, title }: AppShellProps) => {
+export const AppShell = ({
+  children,
+  title,
+  isAdmin = false,
+}: AppShellProps) => {
   const { isSidebarOpen, setIsSidebarOpen } = useSidebarStore();
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-bg-default)]">
       <div className="hidden md:block">
-        <Sidebar />
+        <Sidebar isAdmin={isAdmin} />
       </div>
 
       <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
         <SheetContent side="left" className="w-[260px] p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <Sidebar />
+          <Sidebar isAdmin={isAdmin} />
         </SheetContent>
       </Sheet>
 

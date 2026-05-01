@@ -5,9 +5,11 @@ import { useMemo } from "react";
 import { useCBTStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/PageHeader";
+import { useRouter } from "next/navigation";
 
 export const MySubjectsView = () => {
   const { classes, subjects } = useCBTStore();
+  const router = useRouter();
 
   const grouped = useMemo(() => {
     const byName = new Map<
@@ -54,12 +56,16 @@ export const MySubjectsView = () => {
                   <span className="text-base text-[var(--color-text-default)] font-semibold">
                     {row.className}
                   </span>
-                  <Button asChild size="sm" className="h-7 bg-bg-state-primary">
-                    <Link
-                      href={`/classes/${row.classId}/subjects/${row.subjectId}`}
-                    >
-                      View Subject
-                    </Link>
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      router.push(
+                        `/classes/${row.classId}/subjects/${row.subjectId}`,
+                      )
+                    }
+                    className="h-7 bg-bg-state-primary! cursor-pointer"
+                  >
+                    View Subject
                   </Button>
                 </li>
               ))}
