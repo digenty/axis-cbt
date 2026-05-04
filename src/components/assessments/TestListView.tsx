@@ -2,18 +2,19 @@
 
 import { use, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Box, Plus } from "lucide-react";
-import { useCBTStore } from "@/store";
+import { Box, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { TestCard } from "./TestCard";
 import { CreateTestModal } from "./CreateTestModal";
-import { toast } from "sonner";
 import {
   useGetClassDetails,
+  useGetSubjectsByClassId,
   useGetTeacherSubjects,
 } from "@/hooks/queryHooks/useSubjects";
+import { useGetAssessments } from "@/hooks/queryHooks/useAssessment";
+import { apiAssessmentToTest } from "@/types/assessment.mapper";
 
 interface TestListViewProps {
   params: Promise<{ classId: string; subjectId: string }>;
@@ -24,20 +25,32 @@ export const TestListView = ({ params }: TestListViewProps) => {
   const classId = Number(classIdStr);
   const subjectId = Number(subjectIdStr);
   const router = useRouter();
-  const { tests, deleteTest } = useCBTStore();
 
   const [showModal, setShowModal] = useState(false);
 
-  const filtered = useMemo(
-    () =>
-      tests.filter(
-        (t) => t.subjectId === subjectIdStr && t.classId === classIdStr,
-      ),
-    [tests, classIdStr, subjectIdStr],
-  );
-
   const { data: classDetails } = useGetClassDetails(classId);
   const { data: teacherSubjects } = useGetTeacherSubjects();
+  const { data: classSubjects } = useGetSubjectsByClassId(classId);
+
+  const branchId = useMemo(
+    () => classSubjects?.data?.find((s) => s.id === subjectId)?.branchId,
+    [classSubjects, subjectId],
+  );
+
+  const {
+    data: assessmentsRes,
+    isLoading: assessmentsLoading,
+    isError: assessmentsError,
+  } = useGetAssessments({
+    branchId: branchId ?? 0,
+    classId,
+    subjectId,
+  });
+
+  const tests = useMemo(
+    () => (assessmentsRes?.data ?? []).map((a) => apiAssessmentToTest(a)),
+    [assessmentsRes],
+  );
 
   const subjectName = useMemo(
     () =>
@@ -66,14 +79,28 @@ export const TestListView = ({ params }: TestListViewProps) => {
         showBack
         backHref={baseUrl}
         right={
-          <Button onClick={() => setShowModal(true)}>
+          <Button
+            onClick={() => setShowModal(true)}
+            disabled={branchId === undefined}
+          >
             <Plus className="mr-1 h-3.5 w-3.5" />
             Create New Test
           </Button>
         }
       />
 
-      {filtered.length === 0 ? (
+      {assessmentsLoading ? (
+        <div className="mt-12 flex justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-[var(--color-icon-default-muted)]" />
+        </div>
+      ) : assessmentsError ? (
+        <div className="mt-12">
+          <EmptyState
+            title="Failed to load tests"
+            description="Please refresh the page to try again."
+          />
+        </div>
+      ) : tests.length === 0 ? (
         <div className="mt-12">
           <EmptyState
             icon={<Box className="h-10 w-10" />}
@@ -84,6 +111,7 @@ export const TestListView = ({ params }: TestListViewProps) => {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowModal(true)}
+                disabled={branchId === undefined}
               >
                 <Plus className="mr-1 h-3.5 w-3.5" />
                 Create New Test
@@ -93,15 +121,11 @@ export const TestListView = ({ params }: TestListViewProps) => {
         </div>
       ) : (
         <div className="mt-5 flex flex-col gap-3">
-          {filtered.map((t) => (
+          {tests.map((t) => (
             <TestCard
               key={t.id}
               test={t}
               href={`${baseUrl}/assessments/${t.id}`}
-              onDelete={() => {
-                deleteTest(t.id);
-                toast.success("Test deleted");
-              }}
             />
           ))}
         </div>
@@ -112,6 +136,7 @@ export const TestListView = ({ params }: TestListViewProps) => {
         setOpen={setShowModal}
         classId={classIdStr}
         subjectId={subjectIdStr}
+        branchId={branchId}
         className={className}
         subjectName={subjectName}
         onSuccess={(testId) => router.push(`${baseUrl}/assessments/${testId}`)}

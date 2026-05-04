@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,37 +12,26 @@ import {
   RotateCcw,
   Eye,
   Award,
+  Loader2,
 } from "lucide-react";
-import { useCBTStore } from "@/store";
+import { useGetStudentDashboard } from "@/hooks/queryHooks/useStudentCBT";
+import { EmptyState } from "@/components/common/EmptyState";
 import { formatDate, cn } from "@/lib/utils";
-import type { Test, StudentAttempt } from "@/types";
+import type { ApiStudentAssessmentItem } from "@/types/student-api";
 
-const STUDENT_INFO = {
-  name: "Damilare John",
-  studentId: "GFA/2023/01045",
-  classLabel: "JSS 1 A",
-  year: "2024/2025",
-  term: "Second Term",
-};
-
-interface AssessmentRow {
-  test: Test;
-  attempt?: StudentAttempt;
-}
-
-const TestMeta = ({ test }: { test: Test }) => (
+const ItemMeta = ({ item }: { item: ApiStudentAssessmentItem }) => (
   <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-muted)]">
     <span className="inline-flex items-center gap-1">
       <Clock className="h-3 w-3" />
-      {test.duration} mins
+      {item.durationMinutes} mins
     </span>
     <span className="inline-flex items-center gap-1">
       <FileText className="h-3 w-3" />
-      {test.sections.reduce((n, s) => n + s.questionIds.length, 0)} Questions
+      {item.questionCount} Questions
     </span>
     <span className="inline-flex items-center gap-1">
       <Calendar className="h-3 w-3" />
-      {formatDate(test.testDate)}
+      {formatDate(item.startDateTime)}
     </span>
   </div>
 );
@@ -74,40 +62,30 @@ const Section = ({
 );
 
 export const StudentDashboard = () => {
-  const { tests, attempts, subjects } = useCBTStore();
+  const { data, isLoading, isError } = useGetStudentDashboard();
 
-  const myAttempts = useMemo(
-    () => attempts.filter((a) => a.studentName === STUDENT_INFO.name),
-    [attempts],
-  );
+  if (isLoading) {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-4 py-10 flex justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-[var(--color-icon-default-muted)]" />
+      </div>
+    );
+  }
 
-  const visibleTests = useMemo<AssessmentRow[]>(
-    () =>
-      tests.map((t) => ({
-        test: t,
-        attempt: myAttempts.find((a) => a.testId === t.id),
-      })),
-    [tests, myAttempts],
-  );
+  if (isError || !data) {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8">
+        <EmptyState
+          title="Failed to load dashboard"
+          description="Please refresh the page to try again."
+        />
+      </div>
+    );
+  }
 
-  const subjectName = (id: string) =>
-    subjects.find((s) => s.id === id)?.name ?? id;
-
-  const active = visibleTests.filter(
-    (r) =>
-      r.test.status === "published" &&
-      (!r.attempt ||
-        r.attempt.status === "in-progress" ||
-        r.attempt.status === "submitted"),
-  );
-  const upcoming = visibleTests.filter((r) => r.test.status === "draft");
-  const completed = visibleTests.filter(
-    (r) =>
-      r.attempt?.status === "graded" ||
-      r.attempt?.status === "submitted" ||
-      r.attempt?.status === "missed" ||
-      r.test.status === "completed",
-  );
+  const active = data.activeAssessments ?? [];
+  const upcoming = data.upcomingAssessments ?? [];
+  const completed = data.completedAssessments ?? [];
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8">
@@ -115,18 +93,17 @@ export const StudentDashboard = () => {
         <div className="flex flex-wrap items-center gap-3">
           <Avatar className="h-9 w-9">
             <AvatarFallback className="bg-[var(--blue-700)] text-xs text-white">
-              {STUDENT_INFO.name[0]}
+              {data.studentName?.[0] ?? "S"}
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-semibold">{STUDENT_INFO.name}</span>
-            <span className="opacity-50">•</span>
-            <span>{STUDENT_INFO.studentId}</span>
-            <span className="opacity-50">•</span>
-            <span>{STUDENT_INFO.classLabel}</span>
-            <span className="opacity-50">•</span>
-            <span>{STUDENT_INFO.year}</span>
-            <span className="opacity-60">{STUDENT_INFO.term}</span>
+            <span className="font-semibold">{data.studentName}</span>
+            {data.armDisplay && (
+              <>
+                <span className="opacity-50">•</span>
+                <span>{data.armDisplay}</span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -137,39 +114,39 @@ export const StudentDashboard = () => {
           dotColor="bg-[var(--blue-500)]"
           count={active.length}
         >
-          {active.map(({ test, attempt }) => (
+          {active.map((item) => (
             <div
-              key={test.id}
+              key={item.assessmentId}
               className="rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-[var(--blue-600)]">
-                  {subjectName(test.subjectId)}
+                  {item.subjectName}
                 </span>
                 <span className="rounded-full bg-[var(--color-bg-badge-orange)] px-2 py-0.5 text-[10px] font-medium text-[var(--orange-700)]">
-                  {attempt?.status === "in-progress"
+                  {item.attemptStatus === "IN_PROGRESS"
                     ? "In Progress"
                     : "Not Started"}
                 </span>
               </div>
               <h4 className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
-                {test.title}
+                {item.name}
               </h4>
-              <TestMeta test={test} />
-              {attempt?.status === "in-progress" ? (
+              <ItemMeta item={item} />
+              {item.attemptStatus === "IN_PROGRESS" ? (
                 <Button
                   asChild
                   variant="outline"
                   className="mt-3 w-full justify-center text-[var(--orange-600)]"
                 >
-                  <Link href={`/student/cbt/${test.id}`}>
+                  <Link href={`/student/cbt/${item.assessmentId}`}>
                     <RotateCcw className="mr-1 h-3.5 w-3.5" />
                     Resume Test
                   </Link>
                 </Button>
               ) : (
                 <Button asChild className="mt-3 w-full justify-center">
-                  <Link href={`/student/cbt/${test.id}`}>
+                  <Link href={`/student/cbt/${item.assessmentId}`}>
                     <Play className="mr-1 h-3.5 w-3.5" />
                     Start Test
                   </Link>
@@ -189,23 +166,23 @@ export const StudentDashboard = () => {
           dotColor="bg-[var(--orange-500)]"
           count={upcoming.length}
         >
-          {upcoming.map(({ test }) => (
+          {upcoming.map((item) => (
             <div
-              key={test.id}
+              key={item.assessmentId}
               className="rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-[var(--blue-600)]">
-                  {subjectName(test.subjectId)}
+                  {item.subjectName}
                 </span>
                 <span className="rounded-full bg-[var(--color-bg-badge-blue)] px-2 py-0.5 text-[10px] font-medium text-[var(--blue-700)]">
                   Scheduled
                 </span>
               </div>
               <h4 className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
-                {test.title}
+                {item.name}
               </h4>
-              <TestMeta test={test} />
+              <ItemMeta item={item} />
               <Button
                 disabled
                 variant="outline"
@@ -228,90 +205,93 @@ export const StudentDashboard = () => {
           dotColor="bg-[var(--green-500)]"
           count={completed.length}
         >
-          {completed.map(({ test, attempt }) => (
-            <div
-              key={test.id}
-              className="rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-[var(--blue-600)]">
-                  {subjectName(test.subjectId)}
-                </span>
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                    attempt?.status === "graded"
-                      ? "bg-[var(--color-bg-badge-green)] text-[var(--green-700)]"
-                      : attempt?.status === "submitted"
-                        ? "bg-[var(--color-bg-badge-violet)] text-[var(--violet-700)]"
-                        : "bg-[var(--color-bg-badge-red)] text-[var(--red-700)]",
-                  )}
-                >
-                  {attempt?.status === "graded"
-                    ? "Graded"
-                    : attempt?.status === "submitted"
-                      ? "Submitted"
-                      : "Missed"}
-                </span>
-              </div>
-              <h4 className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
-                {test.title}
-              </h4>
-              <TestMeta test={test} />
-              {attempt?.status === "graded" && (
-                <div className="mt-3 rounded-md bg-[var(--color-bg-badge-green)] px-3 py-2 text-xs">
-                  <div className="text-[var(--green-700)]">Score</div>
-                  <div className="text-base font-semibold text-[var(--green-800)]">
-                    {attempt.score} / {attempt.totalMarks}
-                  </div>
-                </div>
-              )}
-              {attempt?.status === "submitted" && (
-                <div className="mt-3 rounded-md bg-[var(--color-bg-badge-violet)] px-3 py-2 text-xs">
-                  <div className="text-[var(--violet-700)]">
-                    Awaiting Results
-                  </div>
-                  <div className="font-medium text-[var(--violet-800)]">
-                    Your teacher is grading this assessment
-                  </div>
-                </div>
-              )}
-              {attempt?.status === "missed" && (
-                <div className="mt-3 rounded-md bg-[var(--color-bg-badge-gray)] px-3 py-2 text-xs">
-                  <div className="font-medium text-[var(--color-text-subtle)]">
-                    Test Closed
-                  </div>
-                  <div className="text-[var(--color-text-muted)]">
-                    This test is no longer available
-                  </div>
-                </div>
-              )}
-              <Button
-                asChild
-                variant="outline"
-                className="mt-3 w-full justify-center"
+          {completed.map((item) => {
+            const isGraded =
+              item.attemptStatus === "COMPLETED" && item.score !== null;
+            const isPending = item.attemptStatus === "PENDING";
+            const isMissed =
+              item.attemptStatus === "ABSENT" ||
+              item.attemptStatus === "TIMED_OUT";
+            return (
+              <div
+                key={item.assessmentId}
+                className="rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4"
               >
-                <Link href={`/student/cbt/${test.id}/result`}>
-                  {attempt?.status === "graded" ? (
-                    <>
-                      <Award className="mr-1 h-3.5 w-3.5" />
-                      View Result
-                    </>
-                  ) : attempt?.status === "submitted" ? (
-                    <>
-                      <Eye className="mr-1 h-3.5 w-3.5" />
-                      View Submission
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="mr-1 h-3.5 w-3.5" />
-                      View Details
-                    </>
-                  )}
-                </Link>
-              </Button>
-            </div>
-          ))}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-[var(--blue-600)]">
+                    {item.subjectName}
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                      isGraded
+                        ? "bg-[var(--color-bg-badge-green)] text-[var(--green-700)]"
+                        : isPending
+                          ? "bg-[var(--color-bg-badge-violet)] text-[var(--violet-700)]"
+                          : "bg-[var(--color-bg-badge-red)] text-[var(--red-700)]",
+                    )}
+                  >
+                    {isGraded ? "Graded" : isPending ? "Submitted" : "Missed"}
+                  </span>
+                </div>
+                <h4 className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
+                  {item.name}
+                </h4>
+                <ItemMeta item={item} />
+                {isGraded && (
+                  <div className="mt-3 rounded-md bg-[var(--color-bg-badge-green)] px-3 py-2 text-xs">
+                    <div className="text-[var(--green-700)]">Score</div>
+                    <div className="text-base font-semibold text-[var(--green-800)]">
+                      {item.score} / {item.totalMarks}
+                    </div>
+                  </div>
+                )}
+                {isPending && (
+                  <div className="mt-3 rounded-md bg-[var(--color-bg-badge-violet)] px-3 py-2 text-xs">
+                    <div className="text-[var(--violet-700)]">
+                      Awaiting Results
+                    </div>
+                    <div className="font-medium text-[var(--violet-800)]">
+                      Your teacher is grading this assessment
+                    </div>
+                  </div>
+                )}
+                {isMissed && (
+                  <div className="mt-3 rounded-md bg-[var(--color-bg-badge-gray)] px-3 py-2 text-xs">
+                    <div className="font-medium text-[var(--color-text-subtle)]">
+                      Test Closed
+                    </div>
+                    <div className="text-[var(--color-text-muted)]">
+                      This test is no longer available
+                    </div>
+                  </div>
+                )}
+                {item.studentAssessmentId !== null && (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="mt-3 w-full justify-center"
+                  >
+                    <Link
+                      href={`/student/cbt/${item.studentAssessmentId}/result`}
+                    >
+                      {isGraded ? (
+                        <>
+                          <Award className="mr-1 h-3.5 w-3.5" />
+                          View Result
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="mr-1 h-3.5 w-3.5" />
+                          View Details
+                        </>
+                      )}
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            );
+          })}
           {completed.length === 0 && (
             <p className="col-span-full text-xs text-[var(--color-text-muted)]">
               You haven&apos;t finished any assessments yet.

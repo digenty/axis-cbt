@@ -2,32 +2,50 @@
 
 import Link from "next/link";
 import { use, useCallback, useMemo } from "react";
-import { Bell, Eye } from "lucide-react";
+import { Bell, Eye, Loader2 } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
-import { useCBTStore } from "@/store";
-import { Subject } from "@/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { DataTable } from "@/components/DataTable";
+import {
+  useGetClassDetails,
+  useGetSubjectsByClassId,
+} from "@/hooks/queryHooks/useSubjects";
 import { toast } from "sonner";
+import type { ApiClassSubject } from "@/types/subjects";
 
 interface ClassSubjectsViewProps {
   params: Promise<{ classId: string }>;
 }
 
 export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
-  const { classId } = use(params);
-  const { classes, subjects } = useCBTStore();
+  const { classId: classIdStr } = use(params);
+  const classId = Number(classIdStr);
 
-  const cls = useMemo(
-    () => classes.find((c) => c.id === classId),
-    [classes, classId],
-  );
-  const classSubjects = useMemo(
-    () => subjects.filter((s) => s.classId === classId),
-    [subjects, classId],
+  const { data: classDetailsRes, isLoading: classLoading } =
+    useGetClassDetails(classId);
+  const {
+    data: subjectsRes,
+    isLoading: subjectsLoading,
+    isError: subjectsError,
+  } = useGetSubjectsByClassId(classId);
+
+  const className = useMemo(() => {
+    const raw = classDetailsRes as
+      | { data?: { name?: string } }
+      | { name?: string }
+      | undefined;
+    if (!raw) return "";
+    if ("data" in raw && raw.data?.name) return raw.data.name;
+    if ("name" in raw && typeof raw.name === "string") return raw.name;
+    return "";
+  }, [classDetailsRes]);
+
+  const classSubjects = useMemo<ApiClassSubject[]>(
+    () => subjectsRes?.data ?? [],
+    [subjectsRes],
   );
 
   const handleNotify = useCallback((subjectName: string) => {
@@ -36,7 +54,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
     });
   }, []);
 
-  const columns = useMemo<ColumnDef<Subject>[]>(
+  const columns = useMemo<ColumnDef<ApiClassSubject>[]>(
     () => [
       {
         id: "subject",
@@ -80,7 +98,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
       {
         id: "tests",
         header: "Tests",
-        cell: ({ row }) => row.original.tests,
+        cell: ({ row }) => row.original.assessmentCount,
       },
       {
         id: "actions",
@@ -104,7 +122,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
                 size="sm"
                 className="h-7 gap-1 text-xs"
               >
-                <Link href={`/classes/${classId}/subjects/${sub.id}`}>
+                <Link href={`/classes/${classIdStr}/subjects/${sub.id}`}>
                   <Eye className="h-3 w-3" />
                   View
                 </Link>
@@ -114,16 +132,24 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
         },
       },
     ],
-    [classId, handleNotify],
+    [classIdStr, handleNotify],
   );
 
-  if (!cls) {
+  if (classLoading || subjectsLoading) {
+    return (
+      <div className="px-6 py-10 flex justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-[var(--color-icon-default-muted)]" />
+      </div>
+    );
+  }
+
+  if (subjectsError) {
     return (
       <div className="px-6 py-6">
-        <PageHeader title="Class not found" showBack backHref="/classes" />
+        <PageHeader title="Class" showBack backHref="/classes" />
         <EmptyState
-          title="We couldn't find this class"
-          description="The class may have been deleted or the link is wrong."
+          title="Failed to load subjects"
+          description="Please refresh the page to try again."
         />
       </div>
     );
@@ -131,7 +157,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
-      <PageHeader title={cls.name} showBack backHref="/classes" />
+      <PageHeader title={className || "Class"} showBack backHref="/classes" />
 
       <div className="mt-5">
         {classSubjects.length === 0 ? (
@@ -148,7 +174,6 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
             setCurrentPage={() => {}}
             pageSize={classSubjects.length}
             showPagination={false}
-            // border
             headerBg
           />
         )}
