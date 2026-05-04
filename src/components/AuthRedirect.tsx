@@ -1,16 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { createSession } from "@/actions/auth";
 
 export const AuthRedirect = () => {
-  const router = useRouter();
   const search = useSearchParams();
 
   useEffect(() => {
-    const returnTo = search.get("returnTo") ?? "/subjects";
-    router.replace(returnTo);
-  }, [router, search]);
+    const token = search.get("token");
+    if (token) {
+      createSession(token);
+      return;
+    }
+    const main = process.env.NEXT_PUBLIC_MAIN_APP_URL ?? "";
+    window.location.href = `${main}/auth/staff`;
+  }, [search]);
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-[var(--color-bg-default)]">
