@@ -60,8 +60,8 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
         id: "subject",
         header: "Subject",
         cell: ({ row }) => (
-          <span className="text-[var(--color-text-default)]">
-            {row.original.name}
+          <span className="text-[var(--color-text-default)] capitalize">
+            {row.original.name.toLowerCase()}
           </span>
         ),
       },
@@ -122,7 +122,12 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
                 size="sm"
                 className="h-7 gap-1 text-xs"
               >
-                <Link href={`/classes/${classIdStr}/subjects/${sub.id}`}>
+                <Link
+                  href={{
+                    pathname: `/classes/${classIdStr}/subjects/${sub.id}`,
+                    query: { className, subjectName: sub.name },
+                  }}
+                >
                   <Eye className="h-3 w-3" />
                   View
                 </Link>
@@ -132,7 +137,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
         },
       },
     ],
-    [classIdStr, handleNotify],
+    [classIdStr, className, handleNotify],
   );
 
   if (classLoading || subjectsLoading) {

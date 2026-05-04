@@ -2,7 +2,13 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, BookText, GraduationCap, Loader2 } from "lucide-react";
+import {
+  ArrowRight,
+  Book,
+  BookText,
+  GraduationCap,
+  Loader2,
+} from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatCard } from "@/components/common/StatCard";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -13,6 +19,17 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
 import { useGetAllClasses } from "@/hooks/queryHooks/useClasses";
 import type { ApiClass } from "@/types/classes";
+import {
+  ArrowOpenRight,
+  BookFill,
+  BookOpen,
+  GraduationCapFill,
+  NumStudentIcon,
+  TimeFill,
+} from "@digenty/icons";
+import { Badge } from "../ui/badge";
+import { useRouter } from "next/navigation";
+import { IconBadge } from "../common/IconBadge";
 
 export const AllClassesView = () => {
   const { data, isLoading, isError } = useGetAllClasses();
@@ -22,7 +39,7 @@ export const AllClassesView = () => {
   const classes = useMemo<ApiClass[]>(() => data?.data?.content ?? [], [data]);
 
   const allLevels = useMemo(
-    () => Array.from(new Set(classes.map((c) => c.level.name))),
+    () => Array.from(new Set(classes.map((c) => c.name))),
     [classes],
   );
 
@@ -30,10 +47,12 @@ export const AllClassesView = () => {
     const q = search.trim().toLowerCase();
     return classes.filter((c) => {
       const matchesSearch = !q || c.name.toLowerCase().includes(q);
-      const matchesLevel = levels.length === 0 || levels.includes(c.level.name);
+      const matchesLevel = levels.length === 0 || levels.includes(c.name);
       return matchesSearch && matchesLevel;
     });
   }, [classes, search, levels]);
+
+  console.log(filtered);
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
@@ -51,12 +70,29 @@ export const AllClassesView = () => {
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <StatCard
-          icon={<GraduationCap className="h-4 w-4" />}
+          icon={
+            <IconBadge
+              color="--color-bg-basic-teal-subtle"
+              className="border-bg-basic-teal-accent border rounded-xs"
+            >
+              <GraduationCapFill
+                fill="var(--color-text-default)"
+                className="size-2.5"
+              />
+            </IconBadge>
+          }
           label="Total Classes"
           value={data?.data?.totalElements ?? classes.length}
         />
         <StatCard
-          icon={<BookText className="h-4 w-4" />}
+          icon={
+            <IconBadge
+              color="--color-bg-basic-yellow-subtle"
+              className="border-bg-basic-yellow-accent border rounded-xs"
+            >
+              <BookFill fill="var(--color-text-default)" className="size-2.5" />
+            </IconBadge>
+          }
           label="Levels"
           value={allLevels.length}
         />
@@ -108,32 +144,36 @@ export const AllClassesView = () => {
   );
 };
 
-const ApiClassCard = ({ cls }: { cls: ApiClass }) => (
-  <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
-    <div className="flex items-start justify-between gap-2">
-      <div>
-        <div className="text-sm font-semibold text-[var(--color-text-default)]">
-          {cls.name}
-        </div>
-        <div className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-          {cls.level.name}
-        </div>
-      </div>
-      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-bg-badge-gray)] px-2 py-0.5 text-[11px] text-[var(--color-text-subtle)]">
-        <BookText className="h-3 w-3" />
-        {cls.arms.length} {cls.arms.length === 1 ? "Arm" : "Arms"}
-      </span>
-    </div>
+const ApiClassCard = ({ cls }: { cls: ApiClass }) => {
+  const router = useRouter();
 
-    <Button
-      asChild
-      variant="outline"
-      className="mt-4 w-full justify-center font-medium"
-    >
-      <Link href={`/classes/${cls.id}`}>
-        Open
-        <ArrowRight className="ml-1 h-3.5 w-3.5" />
-      </Link>
-    </Button>
-  </div>
-);
+  return (
+    <div className="bg-bg-subtle border-border-default flex flex-col gap-4 rounded-md border p-4 md:p-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-text-default text-xs font-medium">{cls.name}</p>
+          {/* <p className="text-text-muted pt-2 text-xs font-normal">{cls.branchName ? cls.branchName : "Not available"}</p> */}
+          <p className="text-text-muted pt-2 text-xs font-normal">
+            {"Not available"}
+          </p>
+        </div>
+        <Badge className="border-border-default bg-bg-badge-default text-text-muted flex items-center gap-1 rounded-md text-xs font-normal">
+          {/* <NumStudentIcon fill="var(--color-icon-default-muted)" /> {cls.} Subject{totalStudents !== "1" && "s"} */}
+          <BookFill fill="var(--color-icon-default-muted)" /> Not available
+        </Badge>
+      </div>
+
+      <Button
+        onClick={() => router.push(`/classes/${cls.id}`)}
+        className="border cursor-pointer border-border-darker bg-bg-state-secondary! text-text-default flex h-7 items-center gap-2 rounded-md border p-2"
+      >
+        {/* {isPending && <Spinner />} */}
+        <span className="text-sm font-medium">Open</span>
+        <ArrowOpenRight
+          fill="var(--color-icon-default-muted)"
+          className="size-3"
+        />
+      </Button>
+    </div>
+  );
+};

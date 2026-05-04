@@ -43,31 +43,10 @@ import type {
 } from "@/types/question";
 import type { AttemptStatus as UiAttemptStatus } from "@/types/results";
 import { cn } from "@/lib/utils";
+import { IconBadge } from "../common/IconBadge";
 
 interface ResultsViewProps {
   params: Promise<{ classId: string; subjectId: string }>;
-}
-
-function IconBadge({
-  color,
-  children,
-  className,
-}: {
-  color: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <span
-      className={cn(
-        "flex size-4.5 items-center justify-center  border border-white/20",
-        className,
-      )}
-      style={{ background: `var(${color})` }}
-    >
-      {children}
-    </span>
-  );
 }
 
 const apiResultStatusToUi = (

@@ -1,18 +1,6 @@
-/**
- * Next.js 16 Proxy (formerly Middleware).
- *
- * Runs on every request before the page renders.
- * Checks for the shared "token" cookie written by the main app.
- * If absent, redirects to the /auth-entry page (which in turn redirects
- * back to the main app login so the user can re-authenticate).
- *
- * Public paths (anything starting with /auth-entry, /_next, /favicon, /api)
- * are exempted so the entry page itself and static assets are always reachable.
- */
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-import { NextRequest, NextResponse } from "next/server";
-
-/** Paths that don't require authentication */
 const PUBLIC_PREFIXES = [
 	"/auth-entry",
 	"/_next/",
@@ -22,24 +10,23 @@ const PUBLIC_PREFIXES = [
 	"/sitemap",
 ];
 
+
 export function proxy(request: NextRequest) {
 	const { pathname } = request.nextUrl;
 
 	if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
 		return NextResponse.next();
 	}
-
+	
 	const token = request.cookies.get("token")?.value;
+	if (token) return NextResponse.next();
 
-	if (!token) {
-		const entryUrl = new URL("/auth-entry", request.url);
-		entryUrl.searchParams.set("returnTo", pathname);
-		return NextResponse.redirect(entryUrl);
-	}
-
-	return NextResponse.next();
+	const main = process.env.NEXT_PUBLIC_MAIN_APP_URL ?? "";
+	return NextResponse.redirect(`${main}/auth/staff`);
 }
 
 export const config = {
-	matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+	matcher: [
+		"/((?!auth-entry|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
+	],
 };
