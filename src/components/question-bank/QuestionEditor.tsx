@@ -2,10 +2,10 @@
 
 import { use, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCBTStore } from "@/store";
 import { generateId } from "@/lib/utils";
 import { RichTextEditor } from "./RichTextEditor";
 import { QuestionTypeSelector } from "./QuestionTypeSelector";
@@ -20,8 +20,25 @@ import { ComprehensionPassageEditor } from "./answer-editors/ComprehensionPassag
 import { MultipleBlanksEditor } from "./answer-editors/MultipleBlanksEditor";
 import { QuestionGroupEditor } from "./answer-editors/QuestionGroupEditor";
 import type { MaterialKind } from "./answer-editors/QuestionGroupEditor";
-import type { Question, QuestionType, Option, Blank } from "@/types";
+import type {
+  Blank,
+  Option,
+  Question,
+  QuestionMetadata,
+  QuestionType,
+} from "@/types";
+import type { ApiTopic } from "@/types/question";
 import { toast } from "sonner";
+import {
+  useCreateCbtQuestion,
+  useGetQuestion,
+  useGetTopics,
+  useUpdateCbtQuestion,
+} from "@/hooks/queryHooks/useQuestionBank";
+import {
+  apiQuestionToUI,
+  questionToCreatePayload,
+} from "@/types/question.mapper";
 
 interface QuestionEditorProps {
   params: Promise<{ classId: string; subjectId: string; questionId?: string }>;
@@ -48,169 +65,247 @@ const GROUPED_TYPES: QuestionType[] = [
 const ALL_TYPES = [...SIMPLE_TYPES, ...GROUPED_TYPES];
 
 export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
-  const { classId, subjectId, questionId } = use(params);
+  const {
+    classId: classIdStr,
+    subjectId: subjectIdStr,
+    questionId,
+  } = use(params);
+  const classId = Number(classIdStr);
+  const subjectId = Number(subjectIdStr);
   const router = useRouter();
   const search = useSearchParams();
   const topicIdParam = search.get("topicId") ?? "";
   const typeParam = search.get("type") as QuestionType | null;
   const returnTo = search.get("returnTo");
-  const sectionId = search.get("sectionId");
-  const assessmentIdParam = search.get("assessmentId");
-  const baseUrl = `/classes/${classId}/subjects/${subjectId}`;
+  const baseUrl = `/classes/${classIdStr}/subjects/${subjectIdStr}`;
 
-  const { topics, questions, tests, addQuestion, updateQuestion, updateTest } =
-    useCBTStore();
+  const { data: topicsRes } = useGetTopics({ classId, subjectId });
+  const apiTopics = topicsRes?.data ?? [];
 
+  const numericQuestionId =
+    mode === "edit" && questionId ? Number(questionId) : 0;
+  const { data: existingRes, isLoading: existingLoading } =
+    useGetQuestion(numericQuestionId);
   const existing =
-    mode === "edit" && questionId
-      ? questions.find((q) => q.id === questionId)
+    mode === "edit" && existingRes?.data
+      ? apiQuestionToUI(existingRes.data)
       : null;
 
-  const [type, setType] = useState<QuestionType>(
-    existing?.type ?? typeParam ?? "multiple-choice",
+  if (mode === "edit" && existingLoading && !existing) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-[var(--color-text-muted)]" />
+      </div>
+    );
+  }
+
+  return (
+    <QuestionEditorBody
+      key={existing?.id ?? "new"}
+      mode={mode}
+      classId={classId}
+      subjectId={subjectId}
+      baseUrl={baseUrl}
+      returnTo={returnTo}
+      topicIdParam={topicIdParam}
+      typeParam={typeParam}
+      existing={existing}
+      apiTopics={apiTopics}
+      onClose={() => router.push(returnTo ?? `${baseUrl}/question-bank`)}
+    />
   );
-  const [text, setText] = useState(existing?.text ?? "");
-  const [marks, setMarks] = useState<number>(existing?.marks ?? 1);
-  const [instruction, setInstruction] = useState(existing?.instruction ?? "");
-  const [topicId, setTopicId] = useState(
+};
+
+// ─── Editor body (uses lazy useState initializers, no hydration effect) ────
+
+interface BodyProps {
+  mode: "create" | "edit";
+  classId: number;
+  subjectId: number;
+  baseUrl: string;
+  returnTo: string | null;
+  topicIdParam: string;
+  typeParam: QuestionType | null;
+  existing: Question | null;
+  apiTopics: ApiTopic[];
+  onClose: () => void;
+}
+
+const QuestionEditorBody = ({
+  mode,
+  classId,
+  subjectId,
+  returnTo,
+  baseUrl,
+  topicIdParam,
+  typeParam,
+  existing,
+  apiTopics,
+  onClose,
+}: BodyProps) => {
+  const createMutation = useCreateCbtQuestion();
+  const updateMutation = useUpdateCbtQuestion();
+
+  const [type, setType] = useState<QuestionType>(
+    () => existing?.type ?? typeParam ?? "multiple-choice",
+  );
+  const [text, setText] = useState(() => existing?.text ?? "");
+  const [marks, setMarks] = useState<number>(() => existing?.marks ?? 1);
+  const [instruction, setInstruction] = useState(
+    () => existing?.instruction ?? "",
+  );
+  const [topicId, setTopicId] = useState(() =>
     existing ? String(existing.topicId) : topicIdParam,
   );
-
   const [options, setOptions] = useState<Option[]>(
-    existing?.options ?? [
-      { id: "a", text: "", isCorrect: false },
-      { id: "b", text: "", isCorrect: false },
-      { id: "c", text: "", isCorrect: false },
-      { id: "d", text: "", isCorrect: false },
-    ],
+    () =>
+      existing?.options ?? [
+        { id: "a", text: "", isCorrect: false },
+        { id: "b", text: "", isCorrect: false },
+        { id: "c", text: "", isCorrect: false },
+        { id: "d", text: "", isCorrect: false },
+      ],
   );
-  const [tfAnswer, setTfAnswer] = useState<"true" | "false" | null>(
-    existing && existing.type === "true-false"
-      ? ((existing.options?.find((o) => o.isCorrect)?.id as
-          | "true"
-          | "false"
-          | null) ?? null)
-      : null,
-  );
-  const [shortAnswer, setShortAnswer] = useState(
-    (existing?.correctAnswer as string) ?? "",
+  const [tfAnswer, setTfAnswer] = useState<"true" | "false" | null>(() => {
+    if (existing?.type === "true-false") {
+      const id = existing.options?.find((o) => o.isCorrect)?.id;
+      return id === "true" || id === "false" ? id : null;
+    }
+    return null;
+  });
+  const [shortAnswer, setShortAnswer] = useState<string>(() =>
+    typeof existing?.correctAnswer === "string" ? existing.correctAnswer : "",
   );
   const [matchItems, setMatchItems] = useState(
-    existing?.matchItems ?? [
-      { id: generateId(), text: "" },
-      { id: generateId(), text: "" },
-    ],
+    () =>
+      existing?.matchItems ?? [
+        { id: generateId(), text: "" },
+        { id: generateId(), text: "" },
+      ],
   );
   const [matchOptions, setMatchOptions] = useState(
-    existing?.matchOptions ?? [
-      { id: generateId(), text: "" },
-      { id: generateId(), text: "" },
-    ],
+    () =>
+      existing?.matchOptions ?? [
+        { id: generateId(), text: "" },
+        { id: generateId(), text: "" },
+      ],
   );
-  const [passage, setPassage] = useState(existing?.passage ?? "");
+  const [passage, setPassage] = useState(() => existing?.passage ?? "");
   const [subQuestions, setSubQuestions] = useState<Question[]>(
-    existing?.subQuestions ?? [],
+    () => existing?.subQuestions ?? [],
   );
-  const [blanks, setBlanks] = useState<Blank[]>(existing?.blanks ?? []);
-  const [groupName, setGroupName] = useState(existing?.text ?? "");
-  const [materialKind, setMaterialKind] = useState<MaterialKind>("diagram");
+  const [blanks, setBlanks] = useState<Blank[]>(() => existing?.blanks ?? []);
+  const [groupName, setGroupName] = useState(() =>
+    existing?.type === "question-group" ||
+    existing?.type === "comprehension-passage"
+      ? existing.text
+      : "",
+  );
+  const [materialKind, setMaterialKind] = useState<MaterialKind>(() => {
+    const t = existing?.metadata?.stimulusType;
+    if (
+      t === "comprehension-passage" ||
+      t === "diagram" ||
+      t === "table" ||
+      t === "chart" ||
+      t === "multiple-blanks"
+    )
+      return t;
+    return "diagram";
+  });
+  const [metadata, setMetadata] = useState<QuestionMetadata>(
+    () => existing?.metadata ?? {},
+  );
 
   const handleSave = () => {
     if (!topicId) {
       toast.error("Topic missing");
       return;
     }
-    if (!text && type !== "question-group") {
+    if (!text && !isGrouped) {
       toast.error("Question text required");
       return;
     }
 
-    const base = {
+    const uiQuestion: Question = {
       id: existing?.id ?? generateId(),
-      topicId: topicId as unknown as Question["topicId"],
+      topicId: Number(topicId),
       type,
-      text,
+      text:
+        type === "question-group" || type === "comprehension-passage"
+          ? groupName ||
+            (type === "comprehension-passage"
+              ? passage.slice(0, 60)
+              : "Question group")
+          : text,
       marks,
       instruction,
+      options:
+        type === "true-false"
+          ? [
+              { id: "true", text: "True", isCorrect: tfAnswer === "true" },
+              { id: "false", text: "False", isCorrect: tfAnswer === "false" },
+            ]
+          : type === "multiple-choice" || type === "multiple-answers"
+            ? options
+            : undefined,
+      correctAnswer:
+        type === "short-answer" ||
+        type === "numerical" ||
+        type === "fill-in-blank"
+          ? shortAnswer
+          : undefined,
+      blanks: type === "multiple-blanks" ? blanks : undefined,
+      passage:
+        type === "comprehension-passage" || type === "question-group"
+          ? passage
+          : undefined,
+      subQuestions:
+        type === "comprehension-passage" || type === "question-group"
+          ? subQuestions
+          : undefined,
+      matchItems: type === "matching" ? matchItems : undefined,
+      matchOptions: type === "matching" ? matchOptions : undefined,
+      metadata:
+        type === "question-group" || type === "comprehension-passage"
+          ? { ...metadata, stimulusType: materialKind }
+          : metadata,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    let payload: Question;
+    const payload = questionToCreatePayload(uiQuestion, {
+      classId,
+      subjectId,
+      topicId: Number(topicId),
+    });
 
-    switch (type) {
-      case "multiple-choice":
-      case "multiple-answers":
-        payload = { ...base, options };
-        break;
-      case "true-false":
-        payload = {
-          ...base,
-          options: [
-            { id: "true", text: "True", isCorrect: tfAnswer === "true" },
-            { id: "false", text: "False", isCorrect: tfAnswer === "false" },
-          ],
-        };
-        break;
-      case "essay":
-        payload = { ...base, instruction };
-        break;
-      case "short-answer":
-      case "numerical":
-      case "fill-in-blank":
-        payload = { ...base, correctAnswer: shortAnswer };
-        break;
-      case "matching":
-        payload = {
-          ...base,
-          matchItems,
-          matchOptions,
-        };
-        break;
-      case "comprehension-passage":
-        payload = {
-          ...base,
-          passage,
-          subQuestions,
-          text: groupName || passage.slice(0, 60),
-        };
-        break;
-      case "multiple-blanks":
-        payload = { ...base, blanks };
-        break;
-      case "question-group":
-        payload = {
-          ...base,
-          subQuestions,
-          text: groupName || "Question group",
-          passage,
-        };
-        break;
-    }
-
-    if (existing) {
-      updateQuestion(existing.id, payload);
-      toast.success("Question updated");
+    if (mode === "edit" && existing) {
+      updateMutation.mutate(
+        { id: Number(existing.id), payload },
+        {
+          onSuccess: () => {
+            toast.success("Question updated");
+            onClose();
+          },
+        },
+      );
     } else {
-      addQuestion(payload);
-      if (sectionId && assessmentIdParam) {
-        const test = tests.find((t) => t.id === assessmentIdParam);
-        if (test) {
-          updateTest(assessmentIdParam, {
-            sections: test.sections.map((s) =>
-              s.id === sectionId
-                ? { ...s, questionIds: [...s.questionIds, payload.id] }
-                : s,
-            ),
-          });
-        }
-      }
-      toast.success("Question created");
+      createMutation.mutate(payload, {
+        onSuccess: () => {
+          toast.success("Question created");
+          onClose();
+        },
+      });
     }
-    router.push(returnTo ?? `${baseUrl}/question-bank`);
   };
 
   const isGrouped = GROUPED_TYPES.includes(type);
+  const saving = createMutation.isPending || updateMutation.isPending;
+
+  // Reference baseUrl/returnTo via the onClose callback only — keep linter happy
+  void baseUrl;
+  void returnTo;
 
   return (
     <div className="flex h-full min-h-[calc(100vh-3.5rem)] flex-col">
@@ -226,15 +321,12 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
       )}
 
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-4 py-2.5 md:px-6">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => router.push(returnTo ?? `${baseUrl}/question-bank`)}
-        >
+        <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button onClick={handleSave}>
-          {existing ? "Update" : "Save"}{" "}
+        <Button onClick={handleSave} disabled={saving}>
+          {saving && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+          {mode === "edit" ? "Update" : "Save"}{" "}
           {isGrouped
             ? type === "comprehension-passage" || type === "question-group"
               ? "Question Group"
@@ -300,13 +392,23 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
             <TrueFalseEditor value={tfAnswer} onChange={setTfAnswer} />
           )}
           {type === "essay" && (
-            <EssayEditor guidance={instruction} onChange={setInstruction} />
+            <EssayEditor
+              guidance={instruction}
+              onChange={setInstruction}
+              metadata={metadata}
+              onChangeMetadata={setMetadata}
+            />
           )}
           {type === "short-answer" && (
             <ShortAnswerEditor answer={shortAnswer} onChange={setShortAnswer} />
           )}
           {type === "numerical" && (
-            <NumericalEditor answer={shortAnswer} onChange={setShortAnswer} />
+            <NumericalEditor
+              answer={shortAnswer}
+              onChange={setShortAnswer}
+              metadata={metadata}
+              onChangeMetadata={setMetadata}
+            />
           )}
           {type === "fill-in-blank" && (
             <FillInBlankEditor answer={shortAnswer} onChange={setShortAnswer} />
@@ -374,13 +476,11 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
                 <option value="" disabled>
                   Choose a topic
                 </option>
-                {topics
-                  .filter((t) => String(t.subjectId) === String(subjectId))
-                  .map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
+                {apiTopics.map((t) => (
+                  <option key={t.id} value={String(t.id)}>
+                    {t.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

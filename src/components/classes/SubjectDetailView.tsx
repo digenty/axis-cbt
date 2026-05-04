@@ -2,11 +2,15 @@
 
 import Link from "next/link";
 import { use, useMemo } from "react";
-import { HardDrive, ClipboardList, BarChart3 } from "lucide-react";
-import { useCBTStore } from "@/store";
+import { HardDrive, ClipboardList, BarChart3, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { cn } from "@/lib/utils";
+import {
+  useGetClassDetails,
+  useGetTeacherSubjects,
+} from "@/hooks/queryHooks/useSubjects";
+import { Skeleton } from "../ui/skeleton";
 
 interface SubjectDetailViewProps {
   params: Promise<{ classId: string; subjectId: string }>;
@@ -37,19 +41,40 @@ const HUB_CARDS = [
 ] as const;
 
 export const SubjectDetailView = ({ params }: SubjectDetailViewProps) => {
-  const { classId, subjectId } = use(params);
-  const { classes, subjects } = useCBTStore();
+  const { classId: classIdStr, subjectId: subjectIdStr } = use(params);
+  const classId = Number(classIdStr);
+  const subjectId = Number(subjectIdStr);
 
-  const cls = useMemo(
-    () => classes.find((c) => c.id === classId),
-    [classes, classId],
-  );
+  const { data: classDetails, isLoading: classLoading } =
+    useGetClassDetails(classId);
+  const { data: teacherSubjects, isLoading: subjectsLoading } =
+    useGetTeacherSubjects();
+
   const subject = useMemo(
-    () => subjects.find((s) => s.id === subjectId),
-    [subjects, subjectId],
+    () => teacherSubjects?.data?.find((s) => s.subjectId === subjectId),
+    [teacherSubjects, subjectId],
   );
 
-  if (!cls || !subject) {
+  const className = useMemo(() => {
+    const raw = classDetails as
+      | { data?: { name?: string } }
+      | { name?: string }
+      | undefined;
+    if (!raw) return "";
+    if ("data" in raw && raw.data?.name) return raw.data.name;
+    if ("name" in raw && typeof raw.name === "string") return raw.name;
+    return "";
+  }, [classDetails]);
+
+  if (classLoading || subjectsLoading) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center p-4 md:p-8">
+        <Skeleton className="h-100 w-full bg-bg-state-soft" />
+      </div>
+    );
+  }
+
+  if (!className || !subject) {
     return (
       <div className="px-6 py-6">
         <PageHeader title="Subject not found" showBack backHref="/subjects" />
@@ -58,7 +83,7 @@ export const SubjectDetailView = ({ params }: SubjectDetailViewProps) => {
     );
   }
 
-  const title = `${cls.name.replace(" ", "")} ${subject.name}`;
+  const title = `${className.replace(" ", "")} ${subject.subjectName}`;
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
@@ -68,7 +93,7 @@ export const SubjectDetailView = ({ params }: SubjectDetailViewProps) => {
         {HUB_CARDS.map((card) => (
           <Link
             key={card.key}
-            href={`/classes/${cls.id}/subjects/${subject.id}/${card.key}`}
+            href={`/classes/${classId}/subjects/${subjectId}/${card.key}`}
             className="group rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-5 transition-colors hover:border-[var(--color-border-darker)] hover:bg-[var(--color-bg-card-subtle)]"
           >
             <div

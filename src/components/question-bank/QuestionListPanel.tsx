@@ -38,6 +38,7 @@ interface QuestionListPanelProps {
   onSaveNew?: (q: Question) => void;
   onCancelNew?: () => void;
   onUpdateQuestion?: (q: Question) => void;
+  savingNew?: boolean;
 }
 
 const Sortable = ({
@@ -97,6 +98,7 @@ export const QuestionListPanel = ({
   onSaveNew,
   onCancelNew,
   onUpdateQuestion,
+  savingNew = false,
 }: QuestionListPanelProps) => {
   const [search, setSearch] = useState("");
 
@@ -162,6 +164,7 @@ export const QuestionListPanel = ({
               initialType={newQuestionType}
               initialMaterialKind={newMaterialKind ?? undefined}
               topicId={String(topic.id)}
+              loading={savingNew}
               onSave={(q) => onSaveNew?.(q)}
               onCancel={() => onCancelNew?.()}
             />

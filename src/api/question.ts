@@ -4,6 +4,7 @@ import type {
   CbtQueBankTopicPayload,
   CreateQuestionPayload,
   ImportQuestionsResult,
+  QuestionBankStatsResponse,
   QuestionResponse,
   QuestionsListResponse,
   TopicResponse,
@@ -143,6 +144,25 @@ export const deleteCbtQuestion = async (
     throw error;
   }
 };
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+export const getQuestionBankStats = async (payload: {
+  classId: number;
+  subjectId: number;
+}): Promise<QuestionBankStatsResponse> => {
+  try {
+    const { data } = await api.get(
+      `/api/cbt/question-bank/stats?classId=${payload.classId}&subjectId=${payload.subjectId}`,
+    );
+    return data;
+  } catch (error: unknown) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
+
+// ─── Import ───────────────────────────────────────────────────────────────────
 
 export const importCbtQuestions = async (payload: {
   classId: number;

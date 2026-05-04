@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ImageIcon, Trash2 } from "lucide-react";
+import { ImageIcon, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { QuestionTypeSelector } from "./QuestionTypeSelector";
@@ -42,6 +42,7 @@ interface InlineQuestionCardProps {
   initialType: QuestionType;
   initialMaterialKind?: MaterialKind;
   topicId: string;
+  loading?: boolean;
   onSave: (question: Question) => void;
   onCancel: () => void;
 }
@@ -50,6 +51,7 @@ export const InlineQuestionCard = ({
   initialType,
   initialMaterialKind,
   topicId,
+  loading = false,
   onSave,
   onCancel,
 }: InlineQuestionCardProps) => {
@@ -89,7 +91,8 @@ export const InlineQuestionCard = ({
   const isGrouped = GROUPED_TYPES.includes(type);
 
   const handleSave = () => {
-    if (!text && type !== "question-group" && type !== "multiple-blanks") {
+    if (loading) return;
+    if (!text && !isGrouped) {
       toast.error("Question text required");
       return;
     }
@@ -364,6 +367,7 @@ export const InlineQuestionCard = ({
           variant="outline"
           size="sm"
           onClick={onCancel}
+          disabled={loading}
           className="h-7 px-3 text-sm font-medium"
         >
           Discard
@@ -371,8 +375,10 @@ export const InlineQuestionCard = ({
         <Button
           size="sm"
           onClick={handleSave}
+          disabled={loading}
           className="h-7 px-3 text-sm font-medium"
         >
+          {loading && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
           Save Question
         </Button>
       </div>

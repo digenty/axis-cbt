@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   addCbtQuestionBankTopic,
   createCbtQuestion,
@@ -7,6 +8,7 @@ import {
   getCbtQuestion,
   getCbtQuestions,
   getCbtQuestionBankTopics,
+  getQuestionBankStats,
   importCbtQuestions,
   updateCbtQuestion,
   updateCbtQuestionBankTopic,
@@ -28,6 +30,19 @@ export const questionBankKeys = {
     ["question-bank", "questions", classId, subjectId, topicId] as const,
 
   questionDetail: (id: number) => ["question-bank", "question", id] as const,
+
+  stats: (classId: number, subjectId: number) =>
+    ["question-bank", "stats", classId, subjectId] as const,
+};
+
+// ─── Error helper ─────────────────────────────────────────────────────────────
+
+const errMsg = (e: unknown, fallback: string): string => {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === "string" && m.length > 0) return m;
+  }
+  return fallback;
 };
 
 // ─── Topics ───────────────────────────────────────────────────────────────────
@@ -54,6 +69,7 @@ export const useAddCbtTopic = () => {
         queryKey: questionBankKeys.topicsList(vars.classId, vars.subjectId),
       });
     },
+    onError: (e) => toast.error(errMsg(e, "Failed to add topic")),
   });
 };
 
@@ -75,8 +91,11 @@ export const useUpdateCbtTopic = () => {
             vars.payload.subjectId,
           ),
         });
+      } else {
+        qc.invalidateQueries({ queryKey: ["question-bank", "topics"] });
       }
     },
+    onError: (e) => toast.error(errMsg(e, "Failed to update topic")),
   });
 };
 
@@ -85,9 +104,11 @@ export const useDeleteCbtTopic = () => {
   return useMutation({
     mutationFn: (id: number) => deleteCbtQuestionBankTopic(id),
     onSuccess: () => {
-      // Invalidate all topic lists — we don't have classId/subjectId here
       qc.invalidateQueries({ queryKey: ["question-bank", "topics"] });
+      qc.invalidateQueries({ queryKey: ["question-bank", "questions"] });
+      qc.invalidateQueries({ queryKey: ["question-bank", "stats"] });
     },
+    onError: (e) => toast.error(errMsg(e, "Failed to delete topic")),
   });
 };
 
@@ -126,7 +147,11 @@ export const useCreateCbtQuestion = () => {
       qc.invalidateQueries({
         queryKey: ["question-bank", "questions", vars.classId, vars.subjectId],
       });
+      qc.invalidateQueries({
+        queryKey: questionBankKeys.stats(vars.classId, vars.subjectId),
+      });
     },
+    onError: (e) => toast.error(errMsg(e, "Failed to create question")),
   });
 };
 
@@ -138,7 +163,7 @@ export const useUpdateCbtQuestion = () => {
       payload,
     }: {
       id: number;
-      payload: CreateQuestionPayload; // full payload required — API needs all fields
+      payload: CreateQuestionPayload;
     }) => updateCbtQuestion(id, payload),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({
@@ -153,16 +178,39 @@ export const useUpdateCbtQuestion = () => {
         queryKey: questionBankKeys.questionDetail(vars.id),
       });
     },
+    onError: (e) => toast.error(errMsg(e, "Failed to update question")),
   });
 };
 
-export const useDeleteCbtQuestion = () => {
+export const useDeleteCbtQuestion = (ctx?: {
+  classId: number;
+  subjectId: number;
+}) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => deleteCbtQuestion(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["question-bank", "questions"] });
+      if (ctx) {
+        qc.invalidateQueries({
+          queryKey: questionBankKeys.stats(ctx.classId, ctx.subjectId),
+        });
+      } else {
+        qc.invalidateQueries({ queryKey: ["question-bank", "stats"] });
+      }
     },
+    onError: (e) => toast.error(errMsg(e, "Failed to delete question")),
+  });
+};
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+export const useGetQuestionBankStats = (classId: number, subjectId: number) => {
+  return useQuery({
+    queryKey: questionBankKeys.stats(classId, subjectId),
+    queryFn: () => getQuestionBankStats({ classId, subjectId }),
+    enabled: !!classId && !!subjectId,
+    staleTime: 1000 * 60 * 5,
   });
 };
 
@@ -177,6 +225,10 @@ export const useImportQuestions = (classId: number, subjectId: number) => {
       qc.invalidateQueries({
         queryKey: ["question-bank", "questions", classId, subjectId],
       });
+      qc.invalidateQueries({
+        queryKey: questionBankKeys.stats(classId, subjectId),
+      });
     },
+    onError: (e) => toast.error(errMsg(e, "Failed to import questions")),
   });
 };
