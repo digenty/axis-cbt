@@ -14,7 +14,7 @@ export const getCbtOverview = async (params?: {
   branchId?: number;
   levelId?: number;
   search?: string;
-}): Promise<ApiCbtOverview> => {
+}): Promise<{ data: ApiCbtOverview }> => {
   try {
     const { data } = await api.get("/api/cbt/overview", { params });
     return data;

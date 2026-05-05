@@ -1,16 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { use, useMemo } from "react";
-import { HardDrive, ClipboardList, BarChart3, Loader2 } from "lucide-react";
+import { use } from "react";
+import { useSearchParams } from "next/navigation";
+import { HardDrive, ClipboardList, BarChart3 } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
-import { EmptyState } from "@/components/common/EmptyState";
 import { cn } from "@/lib/utils";
-import {
-  useGetClassDetails,
-  useGetTeacherSubjects,
-} from "@/hooks/queryHooks/useSubjects";
-import { Skeleton } from "../ui/skeleton";
 
 interface SubjectDetailViewProps {
   params: Promise<{ classId: string; subjectId: string }>;
@@ -45,49 +40,17 @@ export const SubjectDetailView = ({ params }: SubjectDetailViewProps) => {
   const classId = Number(classIdStr);
   const subjectId = Number(subjectIdStr);
 
-  const { data: classDetails, isLoading: classLoading } =
-    useGetClassDetails(classId);
-  const { data: teacherSubjects, isLoading: subjectsLoading } =
-    useGetTeacherSubjects();
-
-  const subject = useMemo(
-    () => teacherSubjects?.data?.find((s) => s.subjectId === subjectId),
-    [teacherSubjects, subjectId],
-  );
-
-  const className = useMemo(() => {
-    const raw = classDetails as
-      | { data?: { name?: string } }
-      | { name?: string }
-      | undefined;
-    if (!raw) return "";
-    if ("data" in raw && raw.data?.name) return raw.data.name;
-    if ("name" in raw && typeof raw.name === "string") return raw.name;
-    return "";
-  }, [classDetails]);
-
-  if (classLoading || subjectsLoading) {
-    return (
-      <div className="flex h-[60vh] items-center justify-center p-4 md:p-8">
-        <Skeleton className="h-100 w-full bg-bg-state-soft" />
-      </div>
-    );
-  }
-
-  if (!className || !subject) {
-    return (
-      <div className="px-6 py-6">
-        <PageHeader title="Subject not found" showBack backHref="/subjects" />
-        <EmptyState title="We couldn't find this subject" />
-      </div>
-    );
-  }
-
-  const title = `${className.replace(" ", "")} ${subject.subjectName}`;
+  const searchParams = useSearchParams();
+  const className = searchParams.get("className") ?? "";
+  const subjectName = searchParams.get("subjectName") ?? "";
+  const title =
+    className && subjectName
+      ? `${className.replace(/\s+/g, "")}  ${subjectName}`
+      : className || subjectName || "Subject";
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
-      <PageHeader title={title} showBack backHref="/subjects" />
+      <PageHeader title={title} showBack />
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {HUB_CARDS.map((card) => (

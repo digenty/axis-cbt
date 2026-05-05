@@ -38,7 +38,7 @@ export const SearchInput = ({
   return (
     <div
       className={cn(
-        "flex h-9 w-full items-center gap-2 rounded-lg border border-[var(--color-border-default)]  px-3",
+        "flex h-9 w-full items-center gap-2 rounded-lg bg-bg-input-soft  px-3",
         className,
       )}
     >
@@ -53,7 +53,7 @@ export const SearchInput = ({
         className="flex-1 bg-transparent text-sm text-[var(--color-text-default)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
       />
       {hint && (
-        <kbd className="hidden h-5 items-center rounded border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-1.5 text-[10px] text-[var(--color-text-muted)] sm:inline-flex">
+        <kbd className="hidden h-5 items-center rounded border border-[var(--color-border-default)] px-1.5 text-[10px] text-[var(--color-text-muted)] sm:inline-flex">
           {hint}
         </kbd>
       )}

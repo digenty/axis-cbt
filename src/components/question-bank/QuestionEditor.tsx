@@ -35,6 +35,7 @@ import {
   useGetTopics,
   useUpdateCbtQuestion,
 } from "@/hooks/queryHooks/useQuestionBank";
+import { useAddQuestionsToSection } from "@/hooks/queryHooks/useAssessment";
 import {
   apiQuestionToUI,
   questionToCreatePayload,
@@ -77,6 +78,10 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
   const topicIdParam = search.get("topicId") ?? "";
   const typeParam = search.get("type") as QuestionType | null;
   const returnTo = search.get("returnTo");
+  const sectionIdParam = search.get("sectionId");
+  const assessmentIdParam = search.get("assessmentId");
+  const sectionId = sectionIdParam ? Number(sectionIdParam) : null;
+  const assessmentId = assessmentIdParam ? Number(assessmentIdParam) : null;
   const baseUrl = `/classes/${classIdStr}/subjects/${subjectIdStr}`;
 
   const { data: topicsRes } = useGetTopics({ classId, subjectId });
@@ -109,6 +114,8 @@ export const QuestionEditor = ({ params, mode }: QuestionEditorProps) => {
       returnTo={returnTo}
       topicIdParam={topicIdParam}
       typeParam={typeParam}
+      sectionId={sectionId}
+      assessmentId={assessmentId}
       existing={existing}
       apiTopics={apiTopics}
       onClose={() => router.push(returnTo ?? `${baseUrl}/question-bank`)}
@@ -126,6 +133,8 @@ interface BodyProps {
   returnTo: string | null;
   topicIdParam: string;
   typeParam: QuestionType | null;
+  sectionId: number | null;
+  assessmentId: number | null;
   existing: Question | null;
   apiTopics: ApiTopic[];
   onClose: () => void;
@@ -139,12 +148,15 @@ const QuestionEditorBody = ({
   baseUrl,
   topicIdParam,
   typeParam,
+  sectionId,
+  assessmentId,
   existing,
   apiTopics,
   onClose,
 }: BodyProps) => {
   const createMutation = useCreateCbtQuestion();
   const updateMutation = useUpdateCbtQuestion();
+  const addToSectionMutation = useAddQuestionsToSection(assessmentId ?? 0);
 
   const [type, setType] = useState<QuestionType>(
     () => existing?.type ?? typeParam ?? "multiple-choice",
@@ -292,16 +304,38 @@ const QuestionEditorBody = ({
       );
     } else {
       createMutation.mutate(payload, {
-        onSuccess: () => {
-          toast.success("Question created");
-          onClose();
+        onSuccess: (res) => {
+          const newQuestionId = res.data.id;
+          if (sectionId && assessmentId) {
+            addToSectionMutation.mutate(
+              { sectionId, questionIds: [newQuestionId] },
+              {
+                onSuccess: () => {
+                  toast.success("Question added to section");
+                  onClose();
+                },
+                onError: () => {
+                  toast.error(
+                    "Question created but couldn't be added to the section. You can add it from the question bank.",
+                  );
+                  onClose();
+                },
+              },
+            );
+          } else {
+            toast.success("Question created");
+            onClose();
+          }
         },
       });
     }
   };
 
   const isGrouped = GROUPED_TYPES.includes(type);
-  const saving = createMutation.isPending || updateMutation.isPending;
+  const saving =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    addToSectionMutation.isPending;
 
   // Reference baseUrl/returnTo via the onClose callback only — keep linter happy
   void baseUrl;

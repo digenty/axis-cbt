@@ -7,6 +7,7 @@ import {
   Cloud,
   FileText,
   GripVertical,
+  Loader2,
   Pencil,
   Plus,
   Star,
@@ -15,19 +16,50 @@ import {
   Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCBTStore } from "@/store";
-import { generateId } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/common/PageHeader";
 import { QuestionTypeBadge } from "@/components/common/QuestionTypeBadge";
 import { EmptyState } from "@/components/common/EmptyState";
-import { Switch } from "@/components/ui/switch";
 import { QuestionBankModal } from "@/components/assessments/QuestionBankModal";
 import { AddAssessmentItemModal } from "@/components/question-bank/AddAssessmentItemModal";
 import { QuestionEditForm } from "@/components/question-bank/QuestionEditForm";
-import type { Question, QuestionType, Test, TestSection, Topic } from "@/types";
+import {
+  apiQuestionToUI,
+  questionToCreatePayload,
+} from "@/types/question.mapper";
+import {
+  addMinutes,
+  composeStartDateTime,
+  splitStartDateTime,
+  uiTermToApi,
+  uiTestTypeToApi,
+} from "@/types/assessment.mapper";
+import {
+  useGetClassDetails,
+  useGetSubjectsByClassId,
+  useGetTeacherSubjects,
+} from "@/hooks/queryHooks/useSubjects";
+import {
+  useAddQuestionsToSection,
+  useAddSection,
+  useDeleteSection,
+  useGetAssessment,
+  useGetAssessmentSections,
+  usePublishAssessment,
+  useRemoveQuestionFromSection,
+  useUpdateAssessment,
+} from "@/hooks/queryHooks/useAssessment";
+import {
+  useGetQuestions,
+  useGetTopics,
+  useUpdateCbtQuestion,
+} from "@/hooks/queryHooks/useQuestionBank";
+import type { ApiSection } from "@/types/question";
+import type { Question, QuestionType, TermType, TestType } from "@/types";
+import type { ApiTopic } from "@/types/question";
+import type { Topic } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Draft } from "@digenty/icons";
@@ -40,41 +72,63 @@ interface TestEditorProps {
   }>;
 }
 
+const apiTopicToUI = (t: ApiTopic): Topic => ({
+  id: String(t.id),
+  name: t.name,
+  subjectId: t.subjectId,
+  questions: [],
+  createdAt: "",
+});
+
+// ─── Section panel ────────────────────────────────────────────────────────────
+
+interface SectionPanelProps {
+  section: ApiSection;
+  classId: number;
+  subjectId: number;
+  topicId: number | null;
+  bankQuestions: Question[];
+  subjectTopics: Topic[];
+  onRenameSection: (newTitle: string) => void;
+  onDeleteSection: () => void;
+  onAddFromBank: (questionIds: number[]) => void;
+  onRemoveQuestion: (assessmentQuestionId: number) => void;
+  onAddQuestion: (type: QuestionType, materialKind?: string) => void;
+  busy: boolean;
+}
+
 const SectionPanel = ({
   section,
-  onUpdate,
-  onDelete,
-  onAddFromBank,
-  onAddQuestion,
-  allQuestions,
-  subjectName,
+  classId,
+  subjectId,
+  topicId,
+  bankQuestions,
   subjectTopics,
-}: {
-  section: TestSection;
-  onUpdate: (s: TestSection) => void;
-  onDelete: () => void;
-  onAddFromBank: (questionIds: string[]) => void;
-  onAddQuestion: (type: QuestionType, materialKind?: string) => void;
-  allQuestions: Question[];
-  subjectName: string;
-  subjectTopics: Topic[];
-}) => {
-  const { updateQuestion, duplicateQuestion } = useCBTStore();
+  onRenameSection,
+  onDeleteSection,
+  onAddFromBank,
+  onRemoveQuestion,
+  onAddQuestion,
+  busy,
+}: SectionPanelProps) => {
+  const updateQuestion = useUpdateCbtQuestion();
   const [open, setOpen] = useState(true);
   const [showBankModal, setShowBankModal] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
-  const toggleExpand = (id: string) =>
+  const toggleExpand = (id: number) =>
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
 
-  const questions = section.questionIds
-    .map((id) => allQuestions.find((q) => q.id === id))
-    .filter(Boolean) as typeof allQuestions;
+  const alreadyAddedQuestionIds = useMemo(
+    () => section.questions.map((q) => String(q.questionId)),
+    [section.questions],
+  );
 
   return (
     <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)]">
@@ -85,7 +139,7 @@ const SectionPanel = ({
       >
         <div className="flex flex-col items-start text-left">
           <span className="text-lg font-semibold text-[var(--color-text-default)]">
-            {section.title}
+            {section.name}
           </span>
           <span className="text-sm text-[var(--color-text-muted)]">
             Instructions{" "}
@@ -97,8 +151,8 @@ const SectionPanel = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              const name = window.prompt("Section name", section.title);
-              if (name?.trim()) onUpdate({ ...section, title: name.trim() });
+              const name = window.prompt("Section name", section.name);
+              if (name?.trim()) onRenameSection(name.trim());
             }}
             className="text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-default-subtle)]"
           >
@@ -108,8 +162,9 @@ const SectionPanel = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onDelete();
+              onDeleteSection();
             }}
+            disabled={busy}
             className="text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-destructive)]"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -140,7 +195,7 @@ const SectionPanel = ({
             </Button>
           </div>
 
-          {questions.length === 0 ? (
+          {section.questions.length === 0 ? (
             <EmptyState
               icon={<FileText className="h-7 w-7" />}
               title="No questions yet"
@@ -158,11 +213,14 @@ const SectionPanel = ({
             />
           ) : (
             <div className="flex flex-col gap-2">
-              {questions.map((q, i) => {
-                const isExpanded = expandedIds.has(q.id);
+              {section.questions.map((aq, i) => {
+                const isExpanded = expandedIds.has(aq.assessmentQuestionId);
+                const fullQuestion = bankQuestions.find(
+                  (q) => Number(q.id) === aq.questionId,
+                );
                 return (
                   <div
-                    key={q.id}
+                    key={aq.assessmentQuestionId}
                     className={cn(
                       "rounded-lg border transition-colors hover:bg-[var(--color-bg-state-soft)]",
                       isExpanded
@@ -172,7 +230,7 @@ const SectionPanel = ({
                   >
                     <button
                       type="button"
-                      onClick={() => toggleExpand(q.id)}
+                      onClick={() => toggleExpand(aq.assessmentQuestionId)}
                       className="flex w-full items-center gap-2 px-3 py-4.5 text-left"
                     >
                       <GripVertical className="h-3.5 w-3.5 shrink-0 text-[var(--color-icon-default-muted)]" />
@@ -181,12 +239,14 @@ const SectionPanel = ({
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm text-[var(--color-text-default)]">
-                          {q.text || "(untitled)"}
+                          {aq.questionText || "(untitled)"}
                         </div>
                         <div className="mt-1 flex items-center gap-2">
-                          <QuestionTypeBadge type={q.type} />
+                          {fullQuestion ? (
+                            <QuestionTypeBadge type={fullQuestion.type} />
+                          ) : null}
                           <span className="text-[11px] text-[var(--color-text-muted)]">
-                            • {q.marks} mark{q.marks === 1 ? "" : "s"}
+                            • {aq.marks} mark{aq.marks === 1 ? "" : "s"}
                           </span>
                         </div>
                       </div>
@@ -198,20 +258,27 @@ const SectionPanel = ({
                       />
                     </button>
 
-                    {isExpanded && (
+                    {isExpanded && fullQuestion && (
                       <QuestionEditForm
-                        question={q}
-                        onUpdate={(updated) =>
-                          updateQuestion(updated.id, updated)
-                        }
-                        onDuplicate={() => duplicateQuestion(q.id)}
+                        question={fullQuestion}
+                        onUpdate={(updated) => {
+                          const targetTopicId = topicId ?? fullQuestion.topicId;
+                          updateQuestion.mutate({
+                            id: Number(updated.id),
+                            payload: questionToCreatePayload(updated, {
+                              classId,
+                              subjectId,
+                              topicId: Number(targetTopicId),
+                            }),
+                          });
+                        }}
+                        onDuplicate={() => {
+                          toast.info(
+                            "Duplicate-question endpoint not yet exposed by backend",
+                          );
+                        }}
                         onDelete={() =>
-                          onUpdate({
-                            ...section,
-                            questionIds: section.questionIds.filter(
-                              (id) => id !== q.id,
-                            ),
-                          })
+                          onRemoveQuestion(aq.assessmentQuestionId)
                         }
                       />
                     )}
@@ -226,10 +293,10 @@ const SectionPanel = ({
       <QuestionBankModal
         open={showBankModal}
         setOpen={setShowBankModal}
-        questions={allQuestions}
-        alreadyAddedIds={section.questionIds}
+        questions={bankQuestions}
+        alreadyAddedIds={alreadyAddedQuestionIds}
         topics={subjectTopics}
-        onAdd={(ids) => onAddFromBank(ids)}
+        onAdd={(ids) => onAddFromBank(ids.map((id) => Number(id)))}
       />
 
       <AddAssessmentItemModal
@@ -244,56 +311,90 @@ const SectionPanel = ({
   );
 };
 
+// ─── Main editor ─────────────────────────────────────────────────────────────
+
 export const TestEditor = ({ params }: TestEditorProps) => {
-  const { classId, subjectId, assessmentId } = use(params);
+  const {
+    classId: classIdStr,
+    subjectId: subjectIdStr,
+    assessmentId: assessmentIdStr,
+  } = use(params);
+  const classId = Number(classIdStr);
+  const subjectId = Number(subjectIdStr);
+  const assessmentId = Number(assessmentIdStr);
   const router = useRouter();
-  const { tests, subjects, classes, questions, topics, updateTest } =
-    useCBTStore();
 
-  const test = useMemo(
-    () => tests.find((t) => t.id === assessmentId),
-    [tests, assessmentId],
-  );
-  const subject = useMemo(
-    () => subjects.find((s) => s.id === subjectId),
-    [subjects, subjectId],
-  );
-  const cls = useMemo(
-    () => classes.find((c) => c.id === classId),
-    [classes, classId],
-  );
-  const subjectQuestions = useMemo(
-    () =>
-      questions.filter((q) => {
-        const t = subject?.topics ?? [];
-        return t.some((topic) => topic.id === String(q.topicId));
-      }),
-    [questions, subject],
-  );
+  const baseUrl = `/classes/${classIdStr}/subjects/${subjectIdStr}`;
+
+  // ─── Server data ─────────────────────────────────────────────────────────
+  const { data: classDetails } = useGetClassDetails(classId);
+  const { data: teacherSubjects } = useGetTeacherSubjects();
+  const { data: classSubjects } = useGetSubjectsByClassId(classId);
+  const {
+    data: assessmentRes,
+    isLoading: assessmentLoading,
+    isError: assessmentError,
+  } = useGetAssessment(assessmentId);
+  const { data: sectionsRes, isLoading: sectionsLoading } =
+    useGetAssessmentSections(assessmentId);
+  const { data: topicsRes } = useGetTopics({ classId, subjectId });
+  const { data: questionsRes } = useGetQuestions({ classId, subjectId });
+
+  const assessment = assessmentRes?.data;
+  const sections = useMemo(() => sectionsRes?.data ?? [], [sectionsRes]);
   const subjectTopics = useMemo(
-    () => topics.filter((t) => String(t.subjectId) === String(subjectId)),
-    [topics, subjectId],
+    () => (topicsRes?.data ?? []).map(apiTopicToUI),
+    [topicsRes],
+  );
+  const bankQuestions = useMemo<Question[]>(
+    () => (questionsRes?.data ?? []).map(apiQuestionToUI),
+    [questionsRes],
   );
 
-  // Fall back to all questions tied to topics that belong to this subject id
-  const subjectQuestionsFinal = useMemo(
+  const subjectName = useMemo(
     () =>
-      subjectQuestions.length > 0
-        ? subjectQuestions
-        : questions.filter((q) =>
-            useCBTStore
-              .getState()
-              .topics.filter((t) => String(t.subjectId) === String(subjectId))
-              .some((t) => String(q.topicId) === String(t.id)),
-          ),
-    [subjectQuestions, questions, subjectId],
+      teacherSubjects?.data?.find((s) => s.subjectId === subjectId)
+        ?.subjectName ?? "",
+    [teacherSubjects, subjectId],
   );
 
+  const className = useMemo(() => {
+    const raw = classDetails as
+      | { data?: { name?: string } }
+      | { name?: string }
+      | undefined;
+    if (!raw) return "";
+    if ("data" in raw && raw.data?.name) return raw.data.name;
+    if ("name" in raw && typeof raw.name === "string") return raw.name;
+    return "";
+  }, [classDetails]);
+
+  const branchId = useMemo(
+    () => classSubjects?.data?.find((s) => s.id === subjectId)?.branchId,
+    [classSubjects, subjectId],
+  );
+
+  // ─── Mutations ───────────────────────────────────────────────────────────
+  const updateMutation = useUpdateAssessment(assessmentId);
+  const publishMutation = usePublishAssessment(assessmentId);
+  const addSectionMutation = useAddSection(assessmentId);
+  const deleteSectionMutation = useDeleteSection(assessmentId);
+  const addQuestionsToSectionMutation = useAddQuestionsToSection(assessmentId);
+  const removeQuestionMutation = useRemoveQuestionFromSection(assessmentId);
+
+  // ─── Local UI state for the title editor ─────────────────────────────────
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
 
-  const baseUrl = `/classes/${classId}/subjects/${subjectId}`;
+  if (assessmentLoading || sectionsLoading) {
+    return (
+      <div className="flex justify-center px-6 py-12">
+        <Loader2 className="h-5 w-5 animate-spin text-[var(--color-icon-default-muted)]" />
+      </div>
+    );
+  }
 
-  if (!test || !subject || !cls) {
+  if (assessmentError || !assessment) {
     return (
       <div className="px-6 py-6">
         <PageHeader
@@ -305,68 +406,103 @@ export const TestEditor = ({ params }: TestEditorProps) => {
     );
   }
 
-  const totalMarks = test.sections
-    .flatMap((s) => s.questionIds)
-    .map((id) => questions.find((q) => q.id === id)?.marks ?? 0)
-    .reduce((a, b) => a + b, 0);
+  const startSplit = splitStartDateTime(assessment.startDateTime);
 
-  const updateSection = (sectionId: string, next: TestSection) => {
-    updateTest(test.id, {
-      sections: test.sections.map((s) => (s.id === sectionId ? next : s)),
-      totalMarks: test.sections
-        .map((s) => (s.id === sectionId ? next : s))
-        .flatMap((s) => s.questionIds)
-        .map((id) => questions.find((q) => q.id === id)?.marks ?? 0)
-        .reduce((a, b) => a + b, 0),
-    });
-  };
+  const totalMarks = sections
+    .flatMap((s) => s.questions)
+    .reduce((acc, q) => acc + q.marks, 0);
 
-  const deleteSection = (sectionId: string) => {
-    updateTest(test.id, {
-      sections: test.sections.filter((s) => s.id !== sectionId),
-    });
-  };
-
-  const addSection = () => {
-    const letter = String.fromCharCode(65 + test.sections.length);
-    updateTest(test.id, {
-      sections: [
-        ...test.sections,
-        {
-          id: generateId(),
-          title: `Section ${letter}`,
-          instruction: "",
-          questionIds: [],
-        },
-      ],
-    });
+  // ─── Handlers ────────────────────────────────────────────────────────────
+  const patchAssessment = (
+    patch: Partial<Parameters<typeof updateMutation.mutate>[0]>,
+  ) => {
+    updateMutation.mutate(
+      {
+        name: assessment.name,
+        classId: assessment.classId,
+        subjectId: assessment.subjectId,
+        branchId: assessment.branchId,
+        term: assessment.term,
+        testType: assessment.testType,
+        assessmentMapping: assessment.assessmentMapping,
+        durationMinutes: assessment.durationMinutes,
+        totalMarks: assessment.totalMarks,
+        passingMarks: assessment.passingMarks,
+        startDateTime: assessment.startDateTime,
+        endDateTime: assessment.endDateTime,
+        instructions: assessment.instructions,
+        shuffleQuestions: assessment.shuffleQuestions,
+        shuffleOptions: assessment.shuffleOptions,
+        showResultsImmediately: assessment.showResultsImmediately,
+        allowReview: assessment.allowReview,
+        ...patch,
+      },
+      {
+        onError: () => toast.error("Failed to update test"),
+      },
+    );
   };
 
   const handlePublish = () => {
-    updateTest(test.id, { status: "published" });
-    toast.success("Test published");
+    publishMutation.mutate(undefined, {
+      onSuccess: () => toast.success("Test published"),
+      onError: () => toast.error("Failed to publish test"),
+    });
+  };
+
+  const handleAddSection = () => {
+    const letter = String.fromCharCode(65 + sections.length);
+    addSectionMutation.mutate(
+      {
+        name: `Section ${letter}`,
+        instructions: "",
+        sectionOrder: sections.length + 1,
+      },
+      {
+        onError: () => toast.error("Failed to add section"),
+      },
+    );
   };
 
   const handleAddQuestion = (
     type: QuestionType,
     materialKind?: string,
-    sectionId?: string,
+    sectionId?: number,
   ) => {
     const searchParams = new URLSearchParams({ type });
     if (materialKind) searchParams.set("materialKind", materialKind);
-    searchParams.set("returnTo", `${baseUrl}/assessments/${assessmentId}`);
-    searchParams.set("assessmentId", assessmentId);
-    if (sectionId) searchParams.set("sectionId", sectionId);
+    searchParams.set("returnTo", `${baseUrl}/assessments/${assessmentIdStr}`);
+    searchParams.set("assessmentId", assessmentIdStr);
+    if (sectionId !== undefined)
+      searchParams.set("sectionId", String(sectionId));
     router.push(`${baseUrl}/question-bank/new?${searchParams}`);
   };
+
+  // Map UI term/type labels for the selects
+  const uiTerm: TermType =
+    assessment.term === "FIRST"
+      ? "First Term"
+      : assessment.term === "SECOND"
+        ? "Second Term"
+        : "Third Term";
+  const uiTestType: TestType =
+    assessment.testType === "EXAMINATION"
+      ? "Examination"
+      : "Continuous Assessment";
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
       <PageHeader
         title={
           <input
-            value={test.title}
-            onChange={(e) => updateTest(test.id, { title: e.target.value })}
+            value={titleDraft ?? assessment.name}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={() => {
+              if (titleDraft !== null && titleDraft !== assessment.name) {
+                patchAssessment({ name: titleDraft });
+              }
+              setTitleDraft(null);
+            }}
             className="bg-transparent text-lg font-semibold focus:outline-none"
           />
         }
@@ -393,8 +529,16 @@ export const TestEditor = ({ params }: TestEditorProps) => {
               />
               Save as Draft
             </Button>
-            <Button size="sm" onClick={handlePublish}>
-              <Cloud className="mr-1 h-3.5 w-3.5" />
+            <Button
+              size="sm"
+              onClick={handlePublish}
+              disabled={publishMutation.isPending}
+            >
+              {publishMutation.isPending ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Cloud className="mr-1 h-3.5 w-3.5" />
+              )}
               Publish Test
             </Button>
           </>
@@ -404,12 +548,11 @@ export const TestEditor = ({ params }: TestEditorProps) => {
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-blue)] px-2 py-1 text-[11px] h-7 border border-bg-basic-blue-accent text-[var(--blue-700)]">
           <BookOpen className="h-3 w-3 text-bg-basic-blue-accent" />
-          {cls.name.replace(" ", "")} • {subject.name}
+          {className} • {subjectName}
         </span>
         <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-gray)] px-2 py-1 h-7 border border-bg-basic-gray-accent text-[11px] text-[var(--color-text-subtle)]">
           <FileText className="h-3 w-3" />
-          {test.sections.reduce((n, s) => n + s.questionIds.length, 0)}{" "}
-          questions
+          {sections.reduce((n, s) => n + s.questions.length, 0)} questions
         </span>
         <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-amber)] px-2 py-1 h-7 border border-bg-basic-amber-accent text-[11px] text-[var(--amber-700)]">
           <Star className="h-3 w-3" />
@@ -417,12 +560,12 @@ export const TestEditor = ({ params }: TestEditorProps) => {
         </span>
         <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-purple)] px-2 py-1 h-7 border border-bg-basic-purple-accent text-[11px] text-[var(--purple-700)]">
           <Timer className="h-3 w-3" />
-          {test.duration} minutes
+          {assessment.durationMinutes} minutes
         </span>
-        {test.mappingLabel && (
+        {assessment.assessmentMapping && (
           <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-green)] px-2 py-1 h-7 border border-bg-basic-green-accent text-[11px] text-[var(--green-700)]">
             <Tag className="h-3 w-3" />
-            {test.mappingLabel}
+            {assessment.assessmentMapping}
           </span>
         )}
       </div>
@@ -433,10 +576,10 @@ export const TestEditor = ({ params }: TestEditorProps) => {
             <div className="space-y-1.5">
               <Label className="text-xs">Test type</Label>
               <select
-                value={test.testType}
+                value={uiTestType}
                 onChange={(e) =>
-                  updateTest(test.id, {
-                    testType: e.target.value as Test["testType"],
+                  patchAssessment({
+                    testType: uiTestTypeToApi(e.target.value as TestType),
                   })
                 }
                 className="h-9 w-full rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 text-sm focus:outline-none"
@@ -448,10 +591,10 @@ export const TestEditor = ({ params }: TestEditorProps) => {
             <div className="space-y-1.5">
               <Label className="text-xs">Term</Label>
               <select
-                value={test.term}
+                value={uiTerm}
                 onChange={(e) =>
-                  updateTest(test.id, {
-                    term: e.target.value as Test["term"],
+                  patchAssessment({
+                    term: uiTermToApi(e.target.value as TermType),
                   })
                 }
                 className="h-9 w-full rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 text-sm focus:outline-none"
@@ -463,86 +606,126 @@ export const TestEditor = ({ params }: TestEditorProps) => {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Mapping</Label>
-              <select
-                value={test.assessmentMapping || ""}
-                onChange={(e) => {
-                  const v = e.target.value as Test["assessmentMapping"];
-                  const label =
-                    v === "Continuous Assessment 1 (20%)"
-                      ? "CA 1"
-                      : v === "Continuous Assessment 2 (20%)"
-                        ? "CA 2"
-                        : v === "Examination (60%)"
-                          ? "Exam"
-                          : "";
-                  updateTest(test.id, {
-                    assessmentMapping: v,
-                    mappingLabel: label,
-                  });
-                }}
-                className="h-9 w-full rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 text-sm focus:outline-none"
-              >
-                <option value="">None ( Manual Scoring)</option>
-                <option>Continuous Assessment 1 (20%)</option>
-                <option>Continuous Assessment 2 (20%)</option>
-                <option>Examination (60%)</option>
-              </select>
+              <Input
+                value={assessment.assessmentMapping}
+                onChange={(e) =>
+                  patchAssessment({ assessmentMapping: e.target.value })
+                }
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Duration (minutes)</Label>
               <Input
                 type="number"
-                value={test.duration}
-                onChange={(e) =>
-                  updateTest(test.id, {
-                    duration: Number(e.target.value) || 0,
-                  })
-                }
+                value={assessment.durationMinutes}
+                onChange={(e) => {
+                  const minutes = Number(e.target.value) || 0;
+                  patchAssessment({
+                    durationMinutes: minutes,
+                    endDateTime: addMinutes(assessment.startDateTime, minutes),
+                  });
+                }}
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Test date</Label>
               <Input
                 type="date"
-                value={test.testDate}
-                onChange={(e) =>
-                  updateTest(test.id, { testDate: e.target.value })
-                }
+                value={startSplit.testDate}
+                onChange={(e) => {
+                  const newStart = composeStartDateTime({
+                    testDate: e.target.value,
+                    startHour: startSplit.startHour,
+                    startMinute: startSplit.startMinute,
+                    amPm: startSplit.amPm,
+                  });
+                  patchAssessment({
+                    startDateTime: newStart,
+                    endDateTime: addMinutes(
+                      newStart,
+                      assessment.durationMinutes,
+                    ),
+                  });
+                }}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Start time</Label>
+              <Label className="text-xs">Start time (24h)</Label>
               <Input
                 type="time"
-                value={test.startTime}
-                onChange={(e) =>
-                  updateTest(test.id, { startTime: e.target.value })
-                }
+                value={`${startSplit.amPm === "PM" && Number(startSplit.startHour) !== 12 ? Number(startSplit.startHour) + 12 : startSplit.amPm === "AM" && Number(startSplit.startHour) === 12 ? 0 : Number(startSplit.startHour)}:${startSplit.startMinute}`}
+                onChange={(e) => {
+                  const [hh, mm] = e.target.value.split(":");
+                  const h24 = Number(hh);
+                  const newStart = composeStartDateTime({
+                    testDate: startSplit.testDate,
+                    startHour: String(h24 % 12 === 0 ? 12 : h24 % 12).padStart(
+                      2,
+                      "0",
+                    ),
+                    startMinute: mm,
+                    amPm: h24 >= 12 ? "PM" : "AM",
+                  });
+                  patchAssessment({
+                    startDateTime: newStart,
+                    endDateTime: addMinutes(
+                      newStart,
+                      assessment.durationMinutes,
+                    ),
+                  });
+                }}
               />
             </div>
           </div>
+          {branchId === undefined && (
+            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+              Branch is being resolved…
+            </p>
+          )}
         </div>
       )}
 
       <div className="mt-5 flex flex-col gap-3">
-        {test.sections.map((section) => (
+        {sections.map((section) => (
           <SectionPanel
             key={section.id}
             section={section}
-            subjectName={subject.name}
+            classId={classId}
+            subjectId={subjectId}
+            topicId={subjectTopics[0] ? Number(subjectTopics[0].id) : null}
+            bankQuestions={bankQuestions}
             subjectTopics={subjectTopics}
-            allQuestions={subjectQuestionsFinal}
-            onUpdate={(s) => updateSection(section.id, s)}
-            onDelete={() => deleteSection(section.id)}
-            onAddFromBank={(ids) => {
-              const next = {
-                ...section,
-                questionIds: Array.from(
-                  new Set([...section.questionIds, ...ids]),
-                ),
-              };
-              updateSection(section.id, next);
+            busy={
+              deleteSectionMutation.isPending ||
+              addQuestionsToSectionMutation.isPending ||
+              removeQuestionMutation.isPending
+            }
+            onRenameSection={() => {
+              toast.info(
+                "Renaming sections is not supported by the backend yet",
+              );
             }}
+            onDeleteSection={() =>
+              deleteSectionMutation.mutate(section.id, {
+                onSuccess: () => toast.success("Section deleted"),
+                onError: () => toast.error("Failed to delete section"),
+              })
+            }
+            onAddFromBank={(ids) =>
+              addQuestionsToSectionMutation.mutate(
+                { sectionId: section.id, questionIds: ids },
+                {
+                  onSuccess: () => toast.success("Questions added"),
+                  onError: () => toast.error("Failed to add questions"),
+                },
+              )
+            }
+            onRemoveQuestion={(aqId) =>
+              removeQuestionMutation.mutate(aqId, {
+                onSuccess: () => toast.success("Question removed"),
+                onError: () => toast.error("Failed to remove question"),
+              })
+            }
             onAddQuestion={(type, materialKind) =>
               handleAddQuestion(type, materialKind, section.id)
             }
@@ -551,29 +734,18 @@ export const TestEditor = ({ params }: TestEditorProps) => {
 
         <button
           type="button"
-          onClick={addSection}
-          className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border-strong)] bg-[var(--color-bg-card)] py-3 text-sm text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)]"
+          onClick={handleAddSection}
+          disabled={addSectionMutation.isPending}
+          className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border-strong)] bg-[var(--color-bg-card)] py-3 text-sm text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)] disabled:opacity-50"
         >
-          <Plus className="h-3.5 w-3.5" />
+          {addSectionMutation.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Plus className="h-3.5 w-3.5" />
+          )}
           Add New Section
         </button>
       </div>
-
-      {/* <div className="mt-5 flex items-center gap-3 rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
-        <Switch
-          id="result-access"
-          checked={test.studentResultAccess}
-          onCheckedChange={(checked: boolean) =>
-            updateTest(test.id, { studentResultAccess: checked })
-          }
-        />
-        <label
-          htmlFor="result-access"
-          className="text-sm text-[var(--color-text-default)]"
-        >
-          Allow students to see their result after submission
-        </label>
-      </div> */}
     </div>
   );
 };

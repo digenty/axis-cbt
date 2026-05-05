@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, Flag } from "lucide-react";
-import { useCBTStore } from "@/store";
+import { Clock, Flag, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,34 +12,82 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { generateId } from "@/lib/utils";
-import type { Question, StudentAnswer } from "@/types";
+import { EmptyState } from "@/components/common/EmptyState";
+import {
+  useGetAssessmentPaper,
+  useStartAssessment,
+  useSubmitAnswer,
+  useSubmitAssessment,
+} from "@/hooks/queryHooks/useStudentCBT";
+import type {
+  ApiStudentOption,
+  ApiStudentQuestion,
+  ApiStudentSection,
+} from "@/types/student-api";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 interface TestRunnerProps {
+  // The route segment is named [testId] but the value is `assessmentId`.
   testId: string;
   studentName: string;
 }
 
+interface AnswerState {
+  selectedOptionIds: number[];
+  textAnswer: string;
+}
+
+const emptyAnswer = (): AnswerState => ({
+  selectedOptionIds: [],
+  textAnswer: "",
+});
+
+const isAnswered = (a: AnswerState | undefined): boolean => {
+  if (!a) return false;
+  if (a.selectedOptionIds.length > 0) return true;
+  if (a.textAnswer.trim().length > 0) return true;
+  return false;
+};
+
+const buildAnswerData = (
+  q: ApiStudentQuestion,
+  a: AnswerState,
+): Record<string, unknown> => {
+  const t = q.questionType.toUpperCase();
+  if (t === "MULTIPLE_CHOICE" || t === "TRUE_FALSE") {
+    return { selectedOptionId: a.selectedOptionIds[0] ?? null };
+  }
+  if (t === "MULTIPLE_ANSWERS") {
+    return { selectedOptionIds: a.selectedOptionIds };
+  }
+  return { answerText: a.textAnswer };
+};
+
+const getOptions = (q: ApiStudentQuestion): ApiStudentOption[] => {
+  const td = q.typeData as { options?: ApiStudentOption[] } | null | undefined;
+  return td?.options ?? [];
+};
+
 const renderAnswerInput = (
-  q: Question,
-  answer: StudentAnswer | undefined,
-  onChange: (a: StudentAnswer) => void,
+  q: ApiStudentQuestion,
+  answer: AnswerState,
+  onChange: (a: AnswerState) => void,
 ) => {
-  if (q.type === "multiple-choice" || q.type === "true-false") {
+  const t = q.questionType.toUpperCase();
+  const options = getOptions(q);
+
+  if (t === "MULTIPLE_CHOICE" || t === "TRUE_FALSE") {
     return (
       <div className="flex flex-col gap-1.5">
-        {(q.options ?? []).map((opt) => {
-          const picked = answer?.selectedOptionIds?.includes(opt.id);
+        {options.map((opt) => {
+          const picked = answer.selectedOptionIds.includes(opt.id);
           return (
             <button
               key={opt.id}
               type="button"
               onClick={() =>
-                onChange({
-                  questionId: q.id,
-                  selectedOptionIds: [opt.id],
-                })
+                onChange({ selectedOptionIds: [opt.id], textAnswer: "" })
               }
               className={cn(
                 "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
@@ -61,30 +108,28 @@ const renderAnswerInput = (
                   <span className="block h-1.5 w-1.5 rounded-full bg-white" />
                 )}
               </span>
-              {opt.text}
+              {opt.optionText}
             </button>
           );
         })}
       </div>
     );
   }
-  if (q.type === "multiple-answers") {
+
+  if (t === "MULTIPLE_ANSWERS") {
     return (
       <div className="flex flex-col gap-1.5">
-        {(q.options ?? []).map((opt) => {
-          const picked = answer?.selectedOptionIds?.includes(opt.id);
+        {options.map((opt) => {
+          const picked = answer.selectedOptionIds.includes(opt.id);
           return (
             <button
               key={opt.id}
               type="button"
               onClick={() => {
-                const current = answer?.selectedOptionIds ?? [];
-                onChange({
-                  questionId: q.id,
-                  selectedOptionIds: picked
-                    ? current.filter((id) => id !== opt.id)
-                    : [...current, opt.id],
-                });
+                const next = picked
+                  ? answer.selectedOptionIds.filter((id) => id !== opt.id)
+                  : [...answer.selectedOptionIds, opt.id];
+                onChange({ selectedOptionIds: next, textAnswer: "" });
               }}
               className={cn(
                 "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
@@ -113,7 +158,7 @@ const renderAnswerInput = (
                   </svg>
                 )}
               </span>
-              {opt.text}
+              {opt.optionText}
             </button>
           );
         })}
@@ -123,9 +168,9 @@ const renderAnswerInput = (
 
   return (
     <textarea
-      value={answer?.textAnswer ?? ""}
+      value={answer.textAnswer}
       onChange={(e) =>
-        onChange({ questionId: q.id, textAnswer: e.target.value })
+        onChange({ selectedOptionIds: [], textAnswer: e.target.value })
       }
       rows={4}
       placeholder="Type your answer here"
@@ -134,115 +179,144 @@ const renderAnswerInput = (
   );
 };
 
-export const TestRunner = ({ testId, studentName }: TestRunnerProps) => {
+interface OrderedQuestion {
+  section: ApiStudentSection;
+  question: ApiStudentQuestion;
+  globalIndex: number;
+}
+
+export const TestRunner = ({ testId }: TestRunnerProps) => {
   const router = useRouter();
-  const { tests, questions, attempts, updateAttempt } = useCBTStore();
-  const test = useMemo(
-    () => tests.find((t) => t.id === testId),
-    [tests, testId],
-  );
-  const orderedQuestions = useMemo<Question[]>(
-    () =>
-      test
-        ? test.sections.flatMap(
-            (s) =>
-              s.questionIds
-                .map((id) => questions.find((q) => q.id === id))
-                .filter(Boolean) as Question[],
-          )
-        : [],
-    [test, questions],
-  );
+  const assessmentId = Number(testId);
 
-  const existingAttempt = useMemo(
-    () =>
-      attempts.find(
-        (a) => a.testId === testId && a.studentName === studentName,
-      ),
-    [attempts, testId, studentName],
+  // ─── Lifecycle: start the attempt on mount ──────────────────────────────
+  const startMutation = useStartAssessment();
+  const [studentAssessmentId, setStudentAssessmentId] = useState<number | null>(
+    null,
   );
-
-  const [attemptId] = useState(existingAttempt?.id ?? generateId());
-  const [answers, setAnswers] = useState<StudentAnswer[]>(
-    existingAttempt?.answers ?? [],
-  );
-  const [activeIdx, setActiveIdx] = useState(0);
-  const [secondsLeft, setSecondsLeft] = useState((test?.duration ?? 60) * 60);
-  const [submitOpen, setSubmitOpen] = useState(false);
+  const startedRef = useRef(false);
 
   useEffect(() => {
-    if (!test) return;
+    if (startedRef.current || studentAssessmentId !== null) return;
+    startedRef.current = true;
+    startMutation.mutate(
+      { assessmentId },
+      {
+        onSuccess: (res) => {
+          setStudentAssessmentId(res.id);
+        },
+        onError: () => {
+          toast.error("Failed to start the assessment");
+        },
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assessmentId]);
+
+  // ─── Paper fetch ────────────────────────────────────────────────────────
+  const { data: paper, isLoading: paperLoading } = useGetAssessmentPaper(
+    studentAssessmentId ?? 0,
+  );
+
+  const orderedQuestions = useMemo<OrderedQuestion[]>(() => {
+    if (!paper) return [];
+    const out: OrderedQuestion[] = [];
+    let idx = 0;
+    for (const section of paper.sections ?? []) {
+      for (const question of section.questions ?? []) {
+        out.push({ section, question, globalIndex: idx });
+        idx++;
+      }
+    }
+    return out;
+  }, [paper]);
+
+  // ─── Answer state per assessmentQuestionId ─────────────────────────────
+  const [answers, setAnswers] = useState<Record<number, AnswerState>>({});
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [submitOpen, setSubmitOpen] = useState(false);
+
+  // Initialize timer once paper is loaded
+  useEffect(() => {
+    if (paper && secondsLeft === null) {
+      setSecondsLeft(paper.timeRemainingSeconds ?? paper.durationMinutes * 60);
+    }
+  }, [paper, secondsLeft]);
+
+  // Tick timer
+  useEffect(() => {
+    if (secondsLeft === null || secondsLeft <= 0) return;
     const id = setInterval(() => {
-      setSecondsLeft((s) => {
-        if (s <= 0) {
-          clearInterval(id);
-          return 0;
-        }
-        return s - 1;
-      });
+      setSecondsLeft((s) => (s === null ? null : Math.max(0, s - 1)));
     }, 1000);
     return () => clearInterval(id);
-  }, [test]);
+  }, [secondsLeft]);
 
-  if (!test) return null;
+  const submitAnswerMutation = useSubmitAnswer();
+  const submitAssessmentMutation = useSubmitAssessment();
 
-  const activeQ = orderedQuestions[activeIdx];
-
-  const setAnswer = (a: StudentAnswer) =>
-    setAnswers((prev) => {
-      const others = prev.filter((p) => p.questionId !== a.questionId);
-      return [...others, a];
-    });
-
-  const minutes = Math.floor(secondsLeft / 60);
-  const seconds = secondsLeft % 60;
-
-  const handleSubmit = () => {
-    if (existingAttempt) {
-      updateAttempt(existingAttempt.id, {
-        answers,
-        status: "submitted",
-        submittedAt: new Date().toISOString(),
-        totalMarks: test.totalMarks,
+  // Debounced auto-save per question on answer change
+  const saveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const setAnswer = (q: ApiStudentQuestion, next: AnswerState) => {
+    const aqId = q.assessmentQuestionId;
+    setAnswers((prev) => ({ ...prev, [aqId]: next }));
+    if (studentAssessmentId === null) return;
+    if (saveTimers.current[aqId]) clearTimeout(saveTimers.current[aqId]);
+    saveTimers.current[aqId] = setTimeout(() => {
+      submitAnswerMutation.mutate({
+        studentAssessmentId,
+        assessmentQuestionId: aqId,
+        answerData: buildAnswerData(q, next),
       });
-    } else {
-      useCBTStore.setState((state) => ({
-        attempts: [
-          ...state.attempts,
-          {
-            id: attemptId,
-            testId: test.id,
-            subjectId: test.subjectId,
-            classId: test.classId,
-            studentId: studentName.toLowerCase().replace(/\s+/g, "-"),
-            studentName,
-            studentClass: "JSS 1 A",
-            answers,
-            status: "submitted" as const,
-            totalMarks: test.totalMarks,
-            startedAt: new Date().toISOString(),
-            submittedAt: new Date().toISOString(),
-          },
-        ],
-      }));
-    }
-    setSubmitOpen(false);
-    router.push(`/student/cbt/${test.id}/result`);
+    }, 600);
   };
 
-  const answeredCount = orderedQuestions.filter((q) =>
-    answers.some(
-      (a) =>
-        a.questionId === q.id &&
-        (a.textAnswer || (a.selectedOptionIds?.length ?? 0) > 0),
-    ),
+  const handleSubmit = () => {
+    if (studentAssessmentId === null) return;
+    submitAssessmentMutation.mutate(studentAssessmentId, {
+      onSuccess: () => {
+        setSubmitOpen(false);
+        router.push(`/student/cbt/${studentAssessmentId}/result`);
+      },
+      onError: () => toast.error("Failed to submit assessment"),
+    });
+  };
+
+  if (paperLoading || startMutation.isPending || !paper) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-[var(--color-icon-default-muted)]" />
+      </div>
+    );
+  }
+
+  if (orderedQuestions.length === 0) {
+    return (
+      <div className="px-6 py-12">
+        <EmptyState
+          title="This test has no questions"
+          description="Please contact your teacher."
+        />
+      </div>
+    );
+  }
+
+  const activeOQ = orderedQuestions[activeIdx];
+  const activeQ = activeOQ.question;
+  const activeAnswer = answers[activeQ.assessmentQuestionId] ?? emptyAnswer();
+  const minutes = Math.floor((secondsLeft ?? 0) / 60);
+  const seconds = (secondsLeft ?? 0) % 60;
+
+  const answeredCount = orderedQuestions.filter((oq) =>
+    isAnswered(answers[oq.question.assessmentQuestionId]),
   ).length;
 
   return (
     <div className="flex h-screen flex-col bg-[var(--color-bg-default)]">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-4 md:px-6">
         <h1 className="text-base font-semibold text-[var(--color-text-default)]">
-          {test.title}
+          {paper.assessmentName}
         </h1>
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-bg-state-soft)] px-3 py-1 text-sm font-medium text-[var(--color-text-default)]">
@@ -250,7 +324,12 @@ export const TestRunner = ({ testId, studentName }: TestRunnerProps) => {
             {String(minutes).padStart(2, "0")}:
             {String(seconds).padStart(2, "0")}
           </span>
-          <Button onClick={() => setSubmitOpen(true)}>Submit Test</Button>
+          <Button
+            onClick={() => setSubmitOpen(true)}
+            disabled={submitAssessmentMutation.isPending}
+          >
+            Submit Test
+          </Button>
         </div>
       </header>
 
@@ -259,24 +338,24 @@ export const TestRunner = ({ testId, studentName }: TestRunnerProps) => {
           <div className="text-xs font-medium text-[var(--color-text-muted)]">
             Question Navigator
           </div>
-          {test.sections.map((s) => (
-            <div key={s.id} className="mt-4">
+          {paper.sections.map((s) => (
+            <div key={s.sectionId} className="mt-4">
               <div className="text-xs font-medium text-[var(--blue-600)]">
-                {s.title}
+                {s.name}
               </div>
               <div className="mt-2 grid grid-cols-4 gap-1.5">
-                {s.questionIds.map((qid) => {
-                  const idx = orderedQuestions.findIndex((q) => q.id === qid);
+                {s.questions.map((q) => {
+                  const idx = orderedQuestions.findIndex(
+                    (oq) =>
+                      oq.question.assessmentQuestionId ===
+                      q.assessmentQuestionId,
+                  );
                   if (idx === -1) return null;
                   const isActive = idx === activeIdx;
-                  const answered = answers.some(
-                    (a) =>
-                      a.questionId === qid &&
-                      (a.textAnswer || (a.selectedOptionIds?.length ?? 0) > 0),
-                  );
+                  const answered = isAnswered(answers[q.assessmentQuestionId]);
                   return (
                     <button
-                      key={qid}
+                      key={q.assessmentQuestionId}
                       type="button"
                       onClick={() => setActiveIdx(idx)}
                       className={cn(
@@ -298,65 +377,62 @@ export const TestRunner = ({ testId, studentName }: TestRunnerProps) => {
         </aside>
 
         <main className="flex-1 overflow-y-auto px-4 py-5 md:px-8">
-          {activeQ && (
-            <div className="mx-auto max-w-3xl">
-              <div className="flex items-center gap-3">
-                <span className="flex h-7 w-9 items-center justify-center rounded-full bg-[var(--color-bg-state-gray)] text-xs font-medium text-white">
-                  {activeIdx + 1}
-                </span>
-                <span className="text-xs text-[var(--color-text-muted)]">
-                  {activeQ.marks} marks
-                </span>
-                <button
-                  type="button"
-                  className="ml-auto text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-warning)]"
-                >
-                  <Flag className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div
-                className="mt-3 rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4 text-sm text-[var(--color-text-default)]"
-                dangerouslySetInnerHTML={{ __html: activeQ.text }}
-              />
-
-              <div className="mt-4">
-                {renderAnswerInput(
-                  activeQ,
-                  answers.find((a) => a.questionId === activeQ.id),
-                  setAnswer,
-                )}
-              </div>
-
-              <div className="mt-6 flex items-center justify-between">
-                <Button
-                  variant="outline"
-                  disabled={activeIdx === 0}
-                  onClick={() => setActiveIdx((i) => Math.max(0, i - 1))}
-                >
-                  Previous Question
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (activeIdx === orderedQuestions.length - 1)
-                      setSubmitOpen(true);
-                    else setActiveIdx((i) => i + 1);
-                  }}
-                >
-                  {activeIdx === orderedQuestions.length - 1
-                    ? "Submit"
-                    : "Next Question"}
-                </Button>
-              </div>
+          <div className="mx-auto max-w-3xl">
+            <div className="flex items-center gap-3">
+              <span className="flex h-7 w-9 items-center justify-center rounded-full bg-[var(--color-bg-state-gray)] text-xs font-medium text-white">
+                {activeIdx + 1}
+              </span>
+              <span className="text-xs text-[var(--color-text-muted)]">
+                {activeQ.marks} marks
+              </span>
+              <button
+                type="button"
+                className="ml-auto text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-warning)]"
+              >
+                <Flag className="h-4 w-4" />
+              </button>
             </div>
-          )}
+
+            <div
+              className="mt-3 rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4 text-sm text-[var(--color-text-default)]"
+              dangerouslySetInnerHTML={{
+                __html: activeQ.questionHtml || activeQ.questionText,
+              }}
+            />
+
+            <div className="mt-4">
+              {renderAnswerInput(activeQ, activeAnswer, (next) =>
+                setAnswer(activeQ, next),
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-between">
+              <Button
+                variant="outline"
+                disabled={activeIdx === 0}
+                onClick={() => setActiveIdx((i) => Math.max(0, i - 1))}
+              >
+                Previous Question
+              </Button>
+              <Button
+                onClick={() => {
+                  if (activeIdx === orderedQuestions.length - 1)
+                    setSubmitOpen(true);
+                  else setActiveIdx((i) => i + 1);
+                }}
+              >
+                {activeIdx === orderedQuestions.length - 1
+                  ? "Submit"
+                  : "Next Question"}
+              </Button>
+            </div>
+          </div>
         </main>
       </div>
 
       <footer className="flex shrink-0 items-center justify-between border-t border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-4 py-2 text-xs text-[var(--color-text-muted)] md:px-6">
         <span>
-          Section {Math.min(activeIdx + 1, test.sections.length)} of{" "}
-          {test.sections.length}
+          Section {activeOQ.section.sectionOrder} of {paper.sections.length}
         </span>
         <span className="text-[var(--blue-600)]">
           {answeredCount} / {orderedQuestions.length} answered
@@ -376,7 +452,15 @@ export const TestRunner = ({ testId, studentName }: TestRunnerProps) => {
             <Button variant="outline" onClick={() => setSubmitOpen(false)}>
               Keep going
             </Button>
-            <Button onClick={handleSubmit}>Submit</Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={submitAssessmentMutation.isPending}
+            >
+              {submitAssessmentMutation.isPending && (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              )}
+              Submit
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

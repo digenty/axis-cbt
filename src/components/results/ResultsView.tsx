@@ -17,89 +17,113 @@ import {
   ChevronDown,
   MoreHorizontal,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { type ColumnDef } from "@tanstack/react-table";
-import { useCBTStore } from "@/store";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatCard } from "@/components/common/StatCard";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { EmptyState } from "@/components/common/EmptyState";
 import { DataTable } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import type { StudentAttempt } from "@/types";
+import {
+  useGetClassDetails,
+  useGetSubjectsByClassId,
+  useGetTeacherSubjects,
+} from "@/hooks/queryHooks/useSubjects";
+import {
+  useGetAssessments,
+  useGetAssessmentResults,
+  useGetAssessmentStats,
+} from "@/hooks/queryHooks/useAssessment";
+import type {
+  AssessmentStudentResult,
+  StudentResultStatus,
+} from "@/types/question";
+import type { AttemptStatus as UiAttemptStatus } from "@/types/results";
+import { cn } from "@/lib/utils";
+import { IconBadge } from "../common/IconBadge";
 
 interface ResultsViewProps {
   params: Promise<{ classId: string; subjectId: string }>;
 }
 
-function IconBadge({
-  color,
-  children,
-}: {
-  color: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <span
-      className="flex size-8 items-center justify-center rounded-lg border-2 border-white/20"
-      style={{ background: `var(${color})` }}
-    >
-      {children}
-    </span>
-  );
-}
+const apiResultStatusToUi = (
+  s: StudentResultStatus,
+  hasScore: boolean,
+): UiAttemptStatus => {
+  if (s === "IN_PROGRESS") return "in-progress";
+  if (s === "PENDING") return "submitted";
+  if (s === "ABSENT" || s === "TIMED_OUT") return "missed";
+  if (s === "COMPLETED") return hasScore ? "graded" : "submitted";
+  return "submitted";
+};
 
 export const ResultsView = ({ params }: ResultsViewProps) => {
-  const { classId, subjectId } = use(params);
-  const { tests, attempts, classes, subjects } = useCBTStore();
+  const { classId: classIdStr, subjectId: subjectIdStr } = use(params);
+  const classId = Number(classIdStr);
+  const subjectId = Number(subjectIdStr);
 
-  const cls = useMemo(
-    () => classes.find((c) => c.id === classId),
-    [classes, classId],
-  );
-  const subject = useMemo(
-    () => subjects.find((s) => String(s.id) === subjectId),
-    [subjects, subjectId],
+  const { data: classDetails } = useGetClassDetails(classId);
+  const { data: teacherSubjects } = useGetTeacherSubjects();
+  const { data: classSubjects } = useGetSubjectsByClassId(classId);
+
+  const branchId = useMemo(
+    () => classSubjects?.data?.find((s) => s.id === subjectId)?.branchId,
+    [classSubjects, subjectId],
   );
 
-  const subjectTests = useMemo(
+  const className = useMemo(() => {
+    const raw = classDetails as
+      | { data?: { name?: string } }
+      | { name?: string }
+      | undefined;
+    if (!raw) return "";
+    if ("data" in raw && raw.data?.name) return raw.data.name;
+    if ("name" in raw && typeof raw.name === "string") return raw.name;
+    return "";
+  }, [classDetails]);
+
+  const subjectName = useMemo(
     () =>
-      tests.filter((t) => t.subjectId === subjectId && t.classId === classId),
-    [tests, classId, subjectId],
+      teacherSubjects?.data?.find((s) => s.subjectId === subjectId)
+        ?.subjectName ?? "",
+    [teacherSubjects, subjectId],
   );
 
-  const [activeTestId, setActiveTestId] = useState<string | null>(
-    subjectTests[0]?.id ?? null,
+  const { data: assessmentsRes, isLoading: assessmentsLoading } =
+    useGetAssessments({
+      branchId: branchId ?? 0,
+      classId,
+      subjectId,
+    });
+  const subjectTests = useMemo(
+    () => assessmentsRes?.data ?? [],
+    [assessmentsRes],
   );
+
+  const [selectedTestId, setSelectedTestId] = useState<number | null>(null);
+  const activeTestId =
+    selectedTestId !== null && subjectTests.some((t) => t.id === selectedTestId)
+      ? selectedTestId
+      : (subjectTests[0]?.id ?? null);
+
   const activeTest = useMemo(
     () => subjectTests.find((t) => t.id === activeTestId),
     [subjectTests, activeTestId],
   );
 
-  const testAttempts = useMemo(
-    () =>
-      activeTest ? attempts.filter((a) => a.testId === activeTest.id) : [],
-    [attempts, activeTest],
-  );
+  const { data: resultsRes, isLoading: resultsLoading } =
+    useGetAssessmentResults(activeTestId ?? 0);
+  const results = useMemo(() => resultsRes?.data ?? [], [resultsRes]);
 
-  const stats = useMemo(() => {
-    const graded = testAttempts.filter((a) => typeof a.percentage === "number");
-    if (graded.length === 0)
-      return { total: testAttempts.length, avg: "-", high: "-", low: "-" };
-    const percentages = graded.map((a) => a.percentage as number);
-    return {
-      total: testAttempts.length,
-      avg: Math.round(
-        percentages.reduce((a, b) => a + b, 0) / percentages.length,
-      ),
-      high: Math.max(...percentages),
-      low: Math.min(...percentages),
-    };
-  }, [testAttempts]);
+  const { data: statsRes } = useGetAssessmentStats(activeTestId ?? 0);
+  const apiStats = statsRes?.data;
 
-  const baseUrl = `/classes/${classId}/subjects/${subjectId}`;
+  const baseUrl = `/classes/${classIdStr}/subjects/${subjectIdStr}`;
 
-  const columns = useMemo<ColumnDef<StudentAttempt>[]>(
+  const columns = useMemo<ColumnDef<AssessmentStudentResult>[]>(
     () => [
       {
         id: "studentName",
@@ -110,7 +134,7 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
             <span className="flex items-center gap-2">
               <Avatar className="h-7 w-7">
                 <AvatarFallback className="bg-[var(--color-bg-muted)] text-[10px] text-[var(--color-text-subtle)]">
-                  {a.studentName[0]}
+                  {(a.studentName || "?")[0]}
                 </AvatarFallback>
               </Avatar>
               <span className="text-[var(--color-text-default)]">
@@ -125,9 +149,7 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
         header: "Score",
         cell: ({ row }) => {
           const a = row.original;
-          return typeof a.score === "number"
-            ? `${a.score} / ${a.totalMarks}`
-            : "-";
+          return a.score !== null ? `${a.score} / ${a.totalMarks}` : "-";
         },
       },
       {
@@ -135,23 +157,28 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
         header: "Percentage",
         cell: ({ row }) => {
           const a = row.original;
-          return typeof a.percentage === "number" ? `${a.percentage}%` : "-";
+          return a.percentage !== null ? `${a.percentage}%` : "-";
         },
       },
       {
         id: "weightedScore",
-        header: "Weighted Score",
+        header: "Weighted",
         cell: ({ row }) => {
           const a = row.original;
-          return typeof a.weightedScore === "number"
-            ? a.weightedScore.toFixed(1)
-            : "-";
+          return a.percentage !== null ? (a.percentage * 0.2).toFixed(1) : "-";
         },
       },
       {
         id: "status",
         header: "Status",
-        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+        cell: ({ row }) => (
+          <StatusBadge
+            status={apiResultStatusToUi(
+              row.original.status,
+              row.original.score !== null,
+            )}
+          />
+        ),
       },
       {
         id: "actions",
@@ -172,7 +199,9 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
-                  <Link href={`${baseUrl}/results/${a.id}`}>Open / Grade</Link>
+                  <Link href={`${baseUrl}/results/${a.studentAssessmentId}`}>
+                    Open / Grade
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
@@ -196,7 +225,11 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
     <div className="px-4 py-5 md:px-6 md:py-6">
       <PageHeader
         title="Results"
-        subtitle={cls && subject ? `${cls.name} • ${subject.name}` : undefined}
+        subtitle={
+          className && subjectName
+            ? `${className} • ${subjectName.toLocaleLowerCase()}`
+            : undefined
+        }
         showBack
         backHref={baseUrl}
       />
@@ -208,7 +241,7 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
               type="button"
               className="flex h-9 items-center gap-2 rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 text-sm text-[var(--color-text-default)]"
             >
-              {activeTest?.title ?? "Select a test"}
+              {activeTest?.name ?? "Select a test"}
               <ChevronDown className="h-3.5 w-3.5 text-[var(--color-icon-default-muted)]" />
             </button>
           </DropdownMenuTrigger>
@@ -216,9 +249,9 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
             {subjectTests.map((t) => (
               <DropdownMenuItem
                 key={t.id}
-                onClick={() => setActiveTestId(t.id)}
+                onClick={() => setSelectedTestId(t.id)}
               >
-                {t.title}
+                {t.name}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -226,11 +259,11 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
 
         <Button
           size="sm"
-          onClick={() =>
-            toast.info("Export results", {
-              description: "Mock export — no file emitted.",
-            })
-          }
+          // onClick={() =>
+          //   toast.info("Export results", {
+          //     description: "Mock export — no file emitted.",
+          //   })
+          // }
         >
           <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
           Export Result
@@ -240,57 +273,80 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={
-            <IconBadge color="--color-bg-basic-teal-accent">
-              <Users className="h-4 w-4 text-white" />
+            <IconBadge
+              color="--color-bg-basic-teal-subtle"
+              className="border-bg-basic-teal-accent border rounded-xs"
+            >
+              <Users className="size-2.5 text-text-default" />
             </IconBadge>
           }
           label="Total Students"
-          value={stats.total}
+          value={apiStats?.totalStudents ?? results.length}
         />
         <StatCard
           icon={
-            <IconBadge color="--color-bg-basic-amber-accent">
-              <BarChart2 className="h-4 w-4 text-white" />
+            <IconBadge
+              color="--color-bg-basic-amber-subtle"
+              className="border-bg-basic-amber-accent border rounded-xs"
+            >
+              <BarChart2 className="size-2.5 text-text-default" />
             </IconBadge>
           }
           label="Average Score"
-          value={stats.avg}
+          value={apiStats?.averagePercentage ?? "-"}
           hint="/100"
         />
         <StatCard
           icon={
-            <IconBadge color="--color-bg-basic-green-accent">
-              <Trophy className="h-4 w-4 text-white" />
+            <IconBadge
+              color="--color-bg-basic-green-subtle"
+              className="border-bg-basic-green-accent border rounded-xs"
+            >
+              <Trophy className="size-2.5 text-text-default" />
             </IconBadge>
           }
           label="Highest Score"
-          value={stats.high}
+          value={apiStats?.highestScore ?? "-"}
           hint="/100"
         />
         <StatCard
           icon={
-            <IconBadge color="--color-bg-basic-red-accent">
-              <Star className="h-4 w-4 text-white" />
+            <IconBadge
+              color="--color-bg-basic-red-subtle"
+              className="border-bg-basic-red-accent border rounded-xs"
+            >
+              <Star className="size-2.5 text-text-default" />
             </IconBadge>
           }
           label="Lowest Score"
-          value={stats.low}
+          value={apiStats?.lowestScore ?? "-"}
           hint="/100"
         />
       </div>
 
       <div className="mt-5">
-        <DataTable
-          columns={columns}
-          data={testAttempts}
-          totalCount={testAttempts.length}
-          page={1}
-          setCurrentPage={() => {}}
-          pageSize={testAttempts.length || 10}
-          showPagination={false}
-          border
-          headerBg
-        />
+        {assessmentsLoading || resultsLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-5 w-5 animate-spin text-[var(--color-icon-default-muted)]" />
+          </div>
+        ) : !activeTest ? (
+          <EmptyState
+            title="No tests yet"
+            description="Create an assessment to view results here."
+          />
+        ) : (
+          <DataTable
+            columns={columns}
+            data={results}
+            totalCount={results.length}
+            page={1}
+            setCurrentPage={() => {}}
+            pageSize={results.length || 10}
+            showPagination={false}
+            border
+            headerBg
+          />
+        )}
       </div>
     </div>
   );

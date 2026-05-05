@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
-import { useCBTStore } from "@/store";
-import { generateId, cn } from "@/lib/utils";
+import { CalendarIcon, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,16 +24,29 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { Modal } from "@/components/Modal";
 import { MobileDrawer } from "@/components/MobileDrawer";
-import type { Test, TermType, TestType } from "@/types";
-import type { AssessmentSetting } from "@/types/question";
+import type { TermType, TestType } from "@/types";
+import type {
+  AssessmentSetting,
+  CreateAssessmentPayload,
+} from "@/types/question";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { useGetAssessmentSettingsByClass } from "@/hooks/queryHooks/useAssessment";
+import {
+  useCreateAssessment,
+  useGetAssessmentSettingsByClass,
+} from "@/hooks/queryHooks/useAssessment";
+import {
+  addMinutes,
+  composeStartDateTime,
+  uiTermToApi,
+  uiTestTypeToApi,
+} from "@/types/assessment.mapper";
 
 interface CreateTestModalProps {
   open: boolean;
   setOpen: (v: boolean) => void;
   classId: string;
   subjectId: string;
+  branchId?: number;
   className: string;
   subjectName: string;
   onSuccess: (testId: string) => void;
@@ -65,6 +78,7 @@ const FormBody = ({
   assessmentSettingsLoading,
   onCancel,
   onSubmit,
+  submitting,
   idPrefix,
 }: {
   form: FormState;
@@ -75,6 +89,7 @@ const FormBody = ({
   assessmentSettingsLoading: boolean;
   onCancel: () => void;
   onSubmit: () => void;
+  submitting: boolean;
   idPrefix: string;
 }) => (
   <div className="flex flex-col gap-4 p-4">
@@ -309,10 +324,13 @@ const FormBody = ({
 
     {/* Footer */}
     <div className="flex items-center justify-between border-t border-[var(--color-border-default)] pt-4">
-      <Button variant="outline" onClick={onCancel}>
+      <Button variant="outline" onClick={onCancel} disabled={submitting}>
         Cancel
       </Button>
-      <Button onClick={onSubmit}>Save &amp; Continue</Button>
+      <Button onClick={onSubmit} disabled={submitting}>
+        {submitting && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+        Save &amp; Continue
+      </Button>
     </div>
   </div>
 );
@@ -324,13 +342,14 @@ export const CreateTestModal = ({
   setOpen,
   classId,
   subjectId,
+  branchId,
   className,
   subjectName,
   onSuccess,
 }: CreateTestModalProps) => {
-  const { addTest } = useCBTStore();
   const [form, setForm] = useState<FormState>(defaultForm);
   const isMobile = useIsMobile();
+  const createMutation = useCreateAssessment();
 
   const { data: settingsRes, isLoading: assessmentSettingsLoading } =
     useGetAssessmentSettingsByClass(Number(classId));
@@ -345,6 +364,15 @@ export const CreateTestModal = ({
     setForm((f) => ({ ...f, [key]: value }));
 
   const handleSubmit = () => {
+    if (!form.testDate) {
+      toast.error("Please pick a test date");
+      return;
+    }
+    if (branchId === undefined) {
+      toast.error("Branch could not be resolved for this subject");
+      return;
+    }
+
     const selectedSetting = assessmentSettings.find(
       (a) => String(a.id) === form.assessmentMapping,
     );
@@ -352,37 +380,48 @@ export const CreateTestModal = ({
       ? `${selectedSetting.name} (${selectedSetting.weight}%)`
       : "";
 
-    const newTest: Test = {
-      id: generateId(),
-      title: form.title.trim() || "Untitled Test",
-      subjectId,
-      classId,
-      term: form.term,
-      testType: form.testType,
-      assessmentMapping: form.assessmentMapping as Test["assessmentMapping"],
-      mappingLabel,
+    const startDateTime = composeStartDateTime({
       testDate: form.testDate,
-      startTime: `${form.startHour}:${form.startMinute}`,
+      startHour: form.startHour,
+      startMinute: form.startMinute,
       amPm: form.amPm,
-      duration: form.duration,
-      studentResultAccess: form.studentResultAccess,
-      status: "draft",
-      sections: [
-        {
-          id: generateId(),
-          title: "Section A",
-          instruction: "",
-          questionIds: [],
-        },
-      ],
+    });
+    const endDateTime = addMinutes(startDateTime, form.duration);
+
+    const payload: CreateAssessmentPayload = {
+      name: form.title.trim() || "Untitled Test",
+      classId: Number(classId),
+      subjectId: Number(subjectId),
+      branchId,
+      term: uiTermToApi(form.term),
+      testType: uiTestTypeToApi(form.testType),
+      // assessmentMapping: mappingLabel,
+      assessmentMapping: "NONE_MANUAL_SCORING",
+      durationMinutes: form.duration,
       totalMarks: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      passingMarks: 0,
+      startDateTime,
+      endDateTime,
+      instructions: "",
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      showResultsImmediately: form.studentResultAccess,
+      allowReview: form.studentResultAccess,
     };
 
-    addTest(newTest);
-    handleSetOpen(false);
-    onSuccess(newTest.id);
+    createMutation.mutate(payload, {
+      onSuccess: (res) => {
+        toast.success("Test created");
+        handleSetOpen(false);
+        onSuccess(String(res.data.id));
+      },
+      onError: (err) => {
+        const msg =
+          (err as { message?: string } | undefined)?.message ??
+          "Failed to create test";
+        toast.error(msg);
+      },
+    });
   };
 
   const formProps = {
@@ -394,6 +433,7 @@ export const CreateTestModal = ({
     assessmentSettingsLoading,
     onCancel: () => handleSetOpen(false),
     onSubmit: handleSubmit,
+    submitting: createMutation.isPending,
   };
 
   const modalTitle = (

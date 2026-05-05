@@ -1,20 +1,21 @@
 "use client";
 
-import { useMemo } from "react";
 import {
   BookOpen,
   Clock,
   FileText,
   GraduationCap,
   Info,
+  Loader2,
   Star,
 } from "lucide-react";
-import { useCBTStore } from "@/store";
+import { useGetAssessmentPreview } from "@/hooks/queryHooks/useStudentCBT";
 import { BackButton } from "@/components/common/BackButton";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
 
 interface TestInstructionsViewProps {
+  // The route segment is named [testId] but the value is `assessmentId`.
   testId: string;
   onBegin: () => void;
 }
@@ -23,21 +24,18 @@ export const TestInstructionsView = ({
   testId,
   onBegin,
 }: TestInstructionsViewProps) => {
-  const { tests, subjects, classes } = useCBTStore();
-  const test = useMemo(
-    () => tests.find((t) => t.id === testId),
-    [tests, testId],
-  );
-  const subject = useMemo(
-    () => subjects.find((s) => s.id === test?.subjectId),
-    [subjects, test],
-  );
-  const cls = useMemo(
-    () => classes.find((c) => c.id === test?.classId),
-    [classes, test],
-  );
+  const assessmentId = Number(testId);
+  const { data, isLoading, isError } = useGetAssessmentPreview(assessmentId);
 
-  if (!test) {
+  if (isLoading) {
+    return (
+      <div className="px-6 py-12 flex justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-[var(--color-icon-default-muted)]" />
+      </div>
+    );
+  }
+
+  if (isError || !data) {
     return (
       <div className="px-6 py-12">
         <EmptyState title="Test not found" />
@@ -45,10 +43,7 @@ export const TestInstructionsView = ({
     );
   }
 
-  const totalQuestions = test.sections.reduce(
-    (n, s) => n + s.questionIds.length,
-    0,
-  );
+  const preview = data;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-8">
@@ -56,12 +51,12 @@ export const TestInstructionsView = ({
 
       <div className="mt-3 flex items-center gap-3">
         <h1 className="text-lg font-semibold text-[var(--color-text-default)]">
-          {test.title}
+          {preview.name}
         </h1>
       </div>
       <span className="mt-2 inline-flex items-center gap-1 rounded-md border border-[var(--amber-300)] bg-[var(--color-bg-badge-amber)] px-2 py-0.5 text-[11px] text-[var(--amber-700)]">
         <Star className="h-3 w-3" />
-        {test.totalMarks} marks
+        {preview.totalMarks} marks
       </span>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -71,7 +66,7 @@ export const TestInstructionsView = ({
             Class
           </div>
           <div className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
-            {cls?.name ?? "-"}
+            {preview.className || "-"}
           </div>
         </div>
         <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
@@ -80,7 +75,7 @@ export const TestInstructionsView = ({
             Subject
           </div>
           <div className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
-            {subject?.name ?? "-"}
+            {preview.subjectName || "-"}
           </div>
         </div>
         <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
@@ -89,7 +84,7 @@ export const TestInstructionsView = ({
             Duration
           </div>
           <div className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
-            {test.duration} minutes
+            {preview.durationMinutes} minutes
           </div>
         </div>
         <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
@@ -98,7 +93,7 @@ export const TestInstructionsView = ({
             Questions
           </div>
           <div className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
-            {totalQuestions}
+            {preview.questionCount}
           </div>
         </div>
       </div>
@@ -110,22 +105,12 @@ export const TestInstructionsView = ({
             Instructions
           </span>
         </header>
-        <div className="px-4 py-4 text-sm text-[var(--color-text-default)]">
-          <p>
-            This test covers topics from <strong>chapters 1-5</strong> of your{" "}
-            {subject?.name ?? "course"} textbook.
-          </p>
-          <p className="mt-3 font-medium">Rules:</p>
-          <ul className="mt-1 space-y-1 text-[var(--color-text-subtle)]">
-            <li>→ You have {test.duration} minutes to complete this test</li>
-            <li>→ Each question carries equal marks</li>
-            <li>→ There is no negative marking</li>
-            <li>→ Once submitted you cannot change your answers</li>
-            <li>
-              → Make sure you have a stable internet connection.{" "}
-              <strong>Good luck!</strong>
-            </li>
-          </ul>
+        <div className="px-4 py-4 text-sm text-[var(--color-text-default)] whitespace-pre-line">
+          {preview.instructions ?? (
+            <span className="text-[var(--color-text-muted)]">
+              No specific instructions were provided for this test.
+            </span>
+          )}
         </div>
       </div>
 

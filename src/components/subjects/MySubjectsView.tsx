@@ -1,22 +1,52 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { useRouter } from "next/navigation";
 import { useGetTeacherSubjects } from "@/hooks/queryHooks/useSubjects";
 import { Skeleton } from "../ui/skeleton";
+import { useLoggedInUser } from "@/hooks/useLoggedInUser";
+import { AllClassesView } from "@/components/classes/AllClassesView";
 
 export const MySubjectsView = () => {
   const router = useRouter();
   const { data: subjects, isLoading, isError } = useGetTeacherSubjects();
+  const { isAdmin, isMain, isUserLoading } = useLoggedInUser();
+
+  const isPrivileged = Boolean(isAdmin || isMain);
+  const hasSubjects = (subjects?.data?.length ?? 0) > 0;
+  console.log(isAdmin, isMain);
+
+  if (
+    !isLoading &&
+    !isUserLoading &&
+    !isError &&
+    isPrivileged &&
+    !hasSubjects
+  ) {
+    return <AllClassesView />;
+  }
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
-      <PageHeader title="My Subjects" />
+      <PageHeader
+        title="My Subjects"
+        right={
+          isPrivileged && hasSubjects ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/classes">
+                View All Classes
+                <ArrowRight className="ml-1 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          ) : undefined
+        }
+      />
 
-      {isLoading ? (
+      {isLoading || isUserLoading ? (
         <div className="mt-10 max-w-160 ">
           <Skeleton className="h-100 w-full bg-bg-state-soft" />
         </div>
@@ -27,7 +57,7 @@ export const MySubjectsView = () => {
             description="Please refresh the page and try again."
           />
         </div>
-      ) : !subjects || subjects?.data?.length === 0 ? (
+      ) : !hasSubjects ? (
         <div className="mt-10">
           <EmptyState
             title="No subjects assigned"
@@ -57,11 +87,15 @@ export const MySubjectsView = () => {
                     </span>
                     <Button
                       size="sm"
-                      onClick={() =>
+                      onClick={() => {
+                        const qs = new URLSearchParams({
+                          className: arm.classArmName,
+                          subjectName: subject.subjectName,
+                        }).toString();
                         router.push(
-                          `/classes/${arm.classId}/subjects/${subject.subjectId}`,
-                        )
-                      }
+                          `/classes/${arm.classId}/subjects/${subject.subjectId}?${qs}`,
+                        );
+                      }}
                       className="h-7 bg-bg-state-primary! cursor-pointer"
                     >
                       View Subject
