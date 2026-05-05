@@ -120,10 +120,18 @@
 import { JwtPayload } from "jwt-decode";
 
 interface JWTUser {
-  id: string;
-  branchId: number;
+  id: number;
   schoolId: number;
   permissions: string[];
+  armIds: number[];
+  branchIds: number[];
+  created: number;
+  email: string;
+  name: string;
+  subjectIds: number[];
+  isMain: boolean;
+  isAdmin: boolean;
+  adminBranchIds: number[];
 }
 
 export type JWTPayload = JwtPayload & JWTUser;
@@ -135,6 +143,33 @@ export type LevelType =
   | "PRIMARY"
   | "JUNIOR_SECONDARY"
   | "SENIOR_SECONDARY";
+
+export interface QuestionMetadata {
+  // Essay
+  minWords?: number;
+  maxWords?: number;
+  modelAnswer?: string;
+  rubric?: string;
+  // Numeric
+  tolerance?: number;
+  minValue?: number;
+  maxValue?: number;
+  unit?: string;
+  decimalPlaces?: number;
+  // Multiple-answers
+  minSelections?: number;
+  maxSelections?: number;
+  partialCredit?: boolean;
+  // Match
+  marksForEach?: number;
+  shuffleItems?: boolean;
+  // Short-answer / fill-in-blank
+  caseSensitive?: boolean;
+  exactMatch?: boolean;
+  maxLength?: number;
+  // Question-group / comprehension-passage
+  stimulusType?: string;
+}
 
 export interface Question {
   id: string;
@@ -152,6 +187,8 @@ export interface Question {
   matchItems?: { id: string; text: string }[];
   /** For matching questions: right column options */
   matchOptions?: { id: string; text: string }[];
+  /** Type-specific advanced metadata (round-tripped to API) */
+  metadata?: QuestionMetadata;
   createdAt: string;
   updatedAt: string;
 }

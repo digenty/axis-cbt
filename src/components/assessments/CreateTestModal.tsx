@@ -1,474 +1,433 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
+import { useCBTStore } from "@/store";
+import { generateId, cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Modal } from "@/components/Modal";
-import { useCreateAssessment } from "@/hooks/queryHooks/useAssessment";
-import type {
-  ApiTerm,
-  ApiTestType,
-  CreateAssessmentPayload,
-} from "@/types/question";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type TermOption = "First Term" | "Second Term" | "Third Term";
-type TestTypeOption = "Continuous Assessment" | "Examination";
-
-const TERM_MAP: Record<TermOption, ApiTerm> = {
-  "First Term": "FIRST",
-  "Second Term": "SECOND",
-  "Third Term": "THIRD",
-};
-
-const TEST_TYPE_MAP: Record<TestTypeOption, ApiTestType> = {
-  "Continuous Assessment": "CONTINUOUS_ASSESSMENT",
-  Examination: "EXAMINATION",
-};
-
-const TERMS: TermOption[] = ["First Term", "Second Term", "Third Term"];
-const TEST_TYPES: TestTypeOption[] = ["Continuous Assessment", "Examination"];
-
-type AssessmentMappingOption =
-  | "None ( Manual Scoring)"
-  | "Continuous Assessment 1 (20%)"
-  | "Continuous Assessment 2 (20%)"
-  | "Examination (60%)";
-
-const ASSESSMENT_MAPPINGS: AssessmentMappingOption[] = [
-  "None ( Manual Scoring)",
-  "Continuous Assessment 1 (20%)",
-  "Continuous Assessment 2 (20%)",
-  "Examination (60%)",
-];
-
-const ASSESSMENT_MAPPING_MAP: Record<AssessmentMappingOption, string> = {
-  "None ( Manual Scoring)": "NONE_MANUAL_SCORING",
-  "Continuous Assessment 1 (20%)": "CONTINUOUS_ASSESSMENT_1_20_PERCENT",
-  "Continuous Assessment 2 (20%)": "CONTINUOUS_ASSESSMENT_2_20_PERCENT",
-  "Examination (60%)": "EXAMINATION_60_PERCENT",
-};
-
-interface FormState {
-  title: string;
-  term: TermOption;
-  testType: TestTypeOption;
-  assessmentMapping: string;
-  testDate: string;
-  startHour: string;
-  startMinute: string;
-  amPm: "AM" | "PM";
-  duration: number;
-  studentResultAccess: boolean;
-}
-
-const defaultForm = (): FormState => ({
-  title: "",
-  term: "First Term",
-  testType: "Continuous Assessment",
-  assessmentMapping: "",
-  testDate: "",
-  startHour: "08",
-  startMinute: "00",
-  amPm: "AM",
-  duration: 60,
-  studentResultAccess: false,
-});
+import { MobileDrawer } from "@/components/MobileDrawer";
+import type { Test, TermType, TestType } from "@/types";
+import type { AssessmentSetting } from "@/types/question";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { useGetAssessmentSettingsByClass } from "@/hooks/queryHooks/useAssessment";
 
 interface CreateTestModalProps {
   open: boolean;
-  onClose: () => void;
-  subjectId: number;
-  classId: number;
-  branchId: number;
+  setOpen: (v: boolean) => void;
+  classId: string;
+  subjectId: string;
   className: string;
   subjectName: string;
-  onCreated: (assessmentId: number) => void;
+  onSuccess: (testId: string) => void;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const buildDateTime = (
-  date: string,
-  hour: string,
-  minute: string,
-  amPm: "AM" | "PM",
-): string => {
-  if (!date) return new Date().toISOString();
-  let h = parseInt(hour, 10);
-  if (amPm === "PM" && h < 12) h += 12;
-  if (amPm === "AM" && h === 12) h = 0;
-  return new Date(
-    `${date}T${String(h).padStart(2, "0")}:${minute}:00`,
-  ).toISOString();
+const defaultForm = {
+  title: "",
+  term: "First Term" as TermType,
+  testType: "Continuous Assessment" as TestType,
+  assessmentMapping: "",
+  testDate: "",
+  startHour: "00",
+  startMinute: "00",
+  amPm: "AM" as "AM" | "PM",
+  duration: 60,
+  studentResultAccess: false,
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+type FormState = typeof defaultForm;
 
-export const CreateTestModal = ({
-  open,
-  onClose,
-  subjectId,
-  classId,
-  branchId,
+// ─── Form Body ────────────────────────────────────────────────────────────────
+
+const FormBody = ({
+  form,
+  set,
   className,
   subjectName,
-  onCreated,
-}: CreateTestModalProps) => {
-  const [form, setForm] = useState<FormState>(defaultForm);
-  const [errors, setErrors] = useState<
-    Partial<Record<keyof FormState, string>>
-  >({});
-  const [testTypeOpen, setTestTypeOpen] = useState(false);
-  const [mappingOpen, setMappingOpen] = useState(false);
+  assessmentSettings,
+  assessmentSettingsLoading,
+  onCancel,
+  onSubmit,
+  idPrefix,
+}: {
+  form: FormState;
+  set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  className: string;
+  subjectName: string;
+  assessmentSettings: AssessmentSetting[];
+  assessmentSettingsLoading: boolean;
+  onCancel: () => void;
+  onSubmit: () => void;
+  idPrefix: string;
+}) => (
+  <div className="flex flex-col gap-4 p-4">
+    {/* Test Name */}
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium">Test Name</Label>
+      <Input
+        value={form.title}
+        onChange={(e) => set("title", e.target.value)}
+        placeholder="e.g Mid-term mathematics test"
+      />
+    </div>
 
-  const { mutateAsync: createAssessment, isPending } = useCreateAssessment();
+    {/* Class / Subject */}
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1.5">
+        <Label className="text-sm font-medium">Class</Label>
+        <Input
+          value={className}
+          readOnly
+          className="bg-[var(--color-bg-subtle)] text-[var(--color-text-muted)]"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-sm font-medium">Subject</Label>
+        <Input
+          value={subjectName}
+          readOnly
+          className="bg-[var(--color-bg-subtle)] text-[var(--color-text-muted)]"
+        />
+      </div>
+    </div>
 
-  const handleClose = () => {
-    setForm(defaultForm());
-    setErrors({});
-    onClose();
-  };
+    {/* Term / Test Type */}
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1.5">
+        <Label className="text-sm font-medium">Term</Label>
+        <Select
+          value={form.term}
+          onValueChange={(v: string) => set("term", v as TermType)}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="First Term">First Term</SelectItem>
+            <SelectItem value="Second Term">Second Term</SelectItem>
+            <SelectItem value="Third Term">Third Term</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-sm font-medium">Test Type</Label>
+        <Select
+          value={form.testType}
+          onValueChange={(v: string) => set("testType", v as TestType)}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Continuous Assessment">
+              Continuous Assessment
+            </SelectItem>
+            <SelectItem value="Examination">Examination</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
 
-  const update = <K extends keyof FormState>(k: K, v: FormState[K]) => {
-    setForm((p) => ({ ...p, [k]: v }));
-    setErrors((p) => ({ ...p, [k]: undefined }));
-  };
-
-  const validate = () => {
-    const e: Partial<Record<keyof FormState, string>> = {};
-    if (!form.title.trim()) e.title = "Test name is required";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSave = async () => {
-    if (!validate()) return;
-
-    const startDateTime = buildDateTime(
-      form.testDate,
-      form.startHour,
-      form.startMinute,
-      form.amPm,
-    );
-    // Default end = start + duration
-    const endDateTime = new Date(
-      new Date(startDateTime).getTime() + form.duration * 60_000,
-    ).toISOString();
-
-    const payload: CreateAssessmentPayload = {
-      name: form.title,
-      classId,
-      subjectId,
-      branchId,
-      term: TERM_MAP[form.term],
-      testType: TEST_TYPE_MAP[form.testType],
-      assessmentMapping: form.assessmentMapping
-        ? ASSESSMENT_MAPPING_MAP[
-            form.assessmentMapping as AssessmentMappingOption
-          ]
-        : "",
-      durationMinutes: form.duration,
-      totalMarks: 0,
-      passingMarks: 0,
-      startDateTime,
-      endDateTime,
-      instructions: "",
-      shuffleQuestions: false,
-      shuffleOptions: false,
-      showResultsImmediately: form.studentResultAccess,
-      allowReview: form.studentResultAccess,
-    };
-
-    const res = await createAssessment(payload);
-    onCreated(res.data.id);
-  };
-
-  return (
-    <Modal
-      open={open}
-      onClose={handleClose}
-      title="Create Test"
-      className="max-h-[90vh] overflow-y-auto"
-      subtitle="Set up the basic details. You'll add questions in the next step."
-      footer={
-        <div className="flex items-center justify-between px-5 pb-5">
-          <button
-            onClick={handleClose}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
-          >
-            {isPending && (
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-            )}
-            Save & Continue
-          </button>
-        </div>
-      }
-    >
-      <div className="space-y-5 px-6 py-5">
-        {/* Test name */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-800">
-            Test Name
-          </label>
-          <input
-            type="text"
-            value={form.title}
-            onChange={(e) => update("title", e.target.value)}
-            placeholder="e.g Mid-term mathematics test"
-            className={cn(
-              "h-11 w-full rounded-xl border px-4 py-2.5 text-sm transition placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none",
-              errors.title ? "border-red-400" : "border-gray-200",
-            )}
+    {/* Assessment Mapping */}
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium">Assessment Mapping</Label>
+      <Select
+        value={form.assessmentMapping}
+        onValueChange={(v: string) => set("assessmentMapping", v)}
+        disabled={assessmentSettingsLoading || assessmentSettings.length === 0}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue
+            placeholder={
+              assessmentSettingsLoading
+                ? "Loading…"
+                : assessmentSettings.length === 0
+                  ? "No assessment mappings configured"
+                  : "Map assessment"
+            }
           />
-          {errors.title && (
-            <p className="mt-1 text-xs text-red-500">{errors.title}</p>
-          )}
-        </div>
+        </SelectTrigger>
+        <SelectContent>
+          {assessmentSettings.map((a) => (
+            <SelectItem key={a.id} value={String(a.id)}>
+              {a.name} ({a.weight}%)
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
 
-        {/* Class + Subject (read-only) */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-800">
-              Class
-            </label>
-            <input
-              readOnly
-              value={className}
-              className="h-11 w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-500"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-800">
-              Subject
-            </label>
-            <input
-              readOnly
-              value={subjectName}
-              className="h-11 w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-500"
-            />
-          </div>
-        </div>
-
-        {/* Term + Test Type */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-800">
-              Term
-            </label>
-            <div className="relative">
-              <select
-                value={form.term}
-                onChange={(e) => update("term", e.target.value as TermOption)}
-                className="h-11 w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              >
-                {TERMS.map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            </div>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-800">
-              Test Type
-            </label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setTestTypeOpen((v) => !v)}
-                className="flex h-11 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              >
-                <span>{form.testType}</span>
-                <ChevronDown className="h-4 w-4 text-gray-400" />
-              </button>
-              {testTypeOpen && (
-                <div className="absolute top-full right-0 z-30 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-                  {TEST_TYPES.map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => {
-                        update("testType", t);
-                        setTestTypeOpen(false);
-                      }}
-                      className="w-full px-4 py-2.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
+    {/* Test Date / Time */}
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1.5">
+        <Label className="text-sm font-medium">Test Date</Label>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                "text-text-muted bg-bg-input-soft! focus-visible:border-border-default! hover:bg-bg-input-soft! w-full border-none text-sm font-normal shadow-none focus-visible:border!",
+                form.testDate && "text-[var(--color-text-default)]",
               )}
-            </div>
-          </div>
-        </div>
-
-        {/* Assessment Mapping */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-800">
-            Assessment Mapping
-          </label>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setMappingOpen((v) => !v)}
-              className="flex h-11 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:outline-none"
             >
-              <span
-                className={
-                  form.assessmentMapping ? "text-gray-800" : "text-gray-400"
-                }
-              >
-                {form.assessmentMapping || "Map assessment"}
-              </span>
-              <ChevronDown className="h-4 w-4 text-gray-400" />
-            </button>
-            {mappingOpen && (
-              <div className="absolute top-full left-0 z-30 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-                {ASSESSMENT_MAPPINGS.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      update("assessmentMapping", m);
-                      setMappingOpen(false);
-                    }}
-                    className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                  >
-                    {m}
-                    {form.assessmentMapping === m && (
-                      <Check className="h-3.5 w-3.5 text-blue-600" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Test Date + Time */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-800">
-              Test Date
-            </label>
-            <input
-              type="date"
-              value={form.testDate}
-              onChange={(e) => update("testDate", e.target.value)}
-              className="h-11 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-600 transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              {form.testDate ? (
+                format(new Date(form.testDate + "T00:00:00"), "PPP")
+              ) : (
+                <span>dd / mm / yy</span>
+              )}
+              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="bg-bg-card! p-0!" align="start">
+            <Calendar
+              mode="single"
+              required
+              selected={
+                form.testDate
+                  ? new Date(form.testDate + "T00:00:00")
+                  : undefined
+              }
+              onSelect={(date) => {
+                if (date) set("testDate", format(date, "yyyy-MM-dd"));
+              }}
+              captionLayout="dropdown"
+              className="bg-bg-card w-full border-none"
             />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-800">
-              Select Time
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                maxLength={2}
-                value={form.startHour}
-                onChange={(e) =>
-                  update(
-                    "startHour",
-                    e.target.value
-                      .replace(/\D/g, "")
-                      .padStart(2, "0")
-                      .slice(-2),
-                  )
-                }
-                className="h-11 w-16 rounded-xl border border-gray-200 px-2 py-2.5 text-center text-sm transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-              <span className="font-bold text-gray-400">:</span>
-              <input
-                type="text"
-                maxLength={2}
-                value={form.startMinute}
-                onChange={(e) =>
-                  update(
-                    "startMinute",
-                    e.target.value
-                      .replace(/\D/g, "")
-                      .padStart(2, "0")
-                      .slice(-2),
-                  )
-                }
-                className="h-11 w-16 rounded-xl border border-gray-200 px-2 py-2.5 text-center text-sm transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-              <div className="flex overflow-hidden rounded-xl border border-gray-200">
-                {(["AM", "PM"] as const).map((period) => (
-                  <button
-                    key={period}
-                    type="button"
-                    onClick={() => update("amPm", period)}
-                    className={cn(
-                      "px-3 py-2 text-sm font-medium transition-colors",
-                      form.amPm === period
-                        ? "bg-gray-800 text-white"
-                        : "bg-white text-gray-600 hover:bg-gray-50",
-                    )}
-                  >
-                    {period}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Duration */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-800">
-            Duration{" "}
-            <span className="font-normal text-gray-400">(minutes)</span>
-          </label>
-          <input
+          </PopoverContent>
+        </Popover>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-sm font-medium">Select Time</Label>
+        <div className="flex items-center gap-1.5">
+          <Input
             type="number"
             min={1}
-            value={form.duration}
-            onChange={(e) => update("duration", Number(e.target.value))}
-            className="h-11 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm transition focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            max={12}
+            value={form.startHour}
+            onChange={(e) => set("startHour", e.target.value.padStart(2, "0"))}
+            className="w-14 text-center"
           />
-        </div>
-
-        {/* Student result access */}
-        <div className="flex items-start gap-3">
-          <button
-            type="button"
-            onClick={() =>
-              update("studentResultAccess", !form.studentResultAccess)
+          <span className="font-medium text-[var(--color-text-muted)]">:</span>
+          <Input
+            type="number"
+            min={0}
+            max={59}
+            value={form.startMinute}
+            onChange={(e) =>
+              set("startMinute", e.target.value.padStart(2, "0"))
             }
-            className={cn(
-              "relative mt-0.5 h-6 w-10 shrink-0 rounded-full transition-colors",
-              form.studentResultAccess ? "bg-blue-600" : "bg-gray-200",
-            )}
-          >
-            <span
+            className="w-14 text-center"
+          />
+          <div className="flex rounded-full border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] p-0.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => set("amPm", "AM")}
               className={cn(
-                "absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform",
-                form.studentResultAccess ? "translate-x-5" : "translate-x-1",
+                "h-auto rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                form.amPm === "AM"
+                  ? "bg-white text-[var(--color-text-default)] shadow-sm hover:bg-white"
+                  : "text-[var(--color-text-muted)] hover:bg-transparent hover:text-[var(--color-text-muted)]",
               )}
-            />
-          </button>
-          <div>
-            <p className="text-sm font-medium text-gray-800">
-              Student result access
-            </p>
-            <p className="mt-0.5 text-xs text-gray-500">
-              Enable to allow students view their scores, answers, and feedback
-              after submission.
-            </p>
+            >
+              AM
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => set("amPm", "PM")}
+              className={cn(
+                "h-auto rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                form.amPm === "PM"
+                  ? "bg-white text-[var(--color-text-default)] shadow-sm hover:bg-white"
+                  : "text-[var(--color-text-muted)] hover:bg-transparent hover:text-[var(--color-text-muted)]",
+              )}
+            >
+              PM
+            </Button>
           </div>
         </div>
       </div>
-    </Modal>
+    </div>
+
+    {/* Duration */}
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium">
+        Duration{" "}
+        <span className="font-normal text-[var(--color-text-muted)]">
+          (minutes)
+        </span>
+      </Label>
+      <Input
+        type="number"
+        min={1}
+        value={form.duration}
+        onChange={(e) => set("duration", Number(e.target.value) || 0)}
+      />
+    </div>
+
+    {/* Student result access */}
+    <div className="flex items-start gap-3 border-t border-[var(--color-border-default)] pt-4">
+      <Switch
+        id={`${idPrefix}-result-access`}
+        checked={form.studentResultAccess}
+        onCheckedChange={(v) => set("studentResultAccess", v)}
+        className="mt-0.5 shrink-0"
+      />
+      <div>
+        <label
+          htmlFor={`${idPrefix}-result-access`}
+          className="cursor-pointer text-sm font-medium text-[var(--color-text-default)]"
+        >
+          Student result access
+        </label>
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Enable to allow students view their scores, answers, and feedback
+          after submission.
+        </p>
+      </div>
+    </div>
+
+    {/* Footer */}
+    <div className="flex items-center justify-between border-t border-[var(--color-border-default)] pt-4">
+      <Button variant="outline" onClick={onCancel}>
+        Cancel
+      </Button>
+      <Button onClick={onSubmit}>Save &amp; Continue</Button>
+    </div>
+  </div>
+);
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export const CreateTestModal = ({
+  open,
+  setOpen,
+  classId,
+  subjectId,
+  className,
+  subjectName,
+  onSuccess,
+}: CreateTestModalProps) => {
+  const { addTest } = useCBTStore();
+  const [form, setForm] = useState<FormState>(defaultForm);
+  const isMobile = useIsMobile();
+
+  const { data: settingsRes, isLoading: assessmentSettingsLoading } =
+    useGetAssessmentSettingsByClass(Number(classId));
+  const assessmentSettings = settingsRes?.data?.assessments ?? [];
+
+  const handleSetOpen = (v: boolean) => {
+    if (!v) setForm(defaultForm);
+    setOpen(v);
+  };
+
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+    setForm((f) => ({ ...f, [key]: value }));
+
+  const handleSubmit = () => {
+    const selectedSetting = assessmentSettings.find(
+      (a) => String(a.id) === form.assessmentMapping,
+    );
+    const mappingLabel = selectedSetting
+      ? `${selectedSetting.name} (${selectedSetting.weight}%)`
+      : "";
+
+    const newTest: Test = {
+      id: generateId(),
+      title: form.title.trim() || "Untitled Test",
+      subjectId,
+      classId,
+      term: form.term,
+      testType: form.testType,
+      assessmentMapping: form.assessmentMapping as Test["assessmentMapping"],
+      mappingLabel,
+      testDate: form.testDate,
+      startTime: `${form.startHour}:${form.startMinute}`,
+      amPm: form.amPm,
+      duration: form.duration,
+      studentResultAccess: form.studentResultAccess,
+      status: "draft",
+      sections: [
+        {
+          id: generateId(),
+          title: "Section A",
+          instruction: "",
+          questionIds: [],
+        },
+      ],
+      totalMarks: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    addTest(newTest);
+    handleSetOpen(false);
+    onSuccess(newTest.id);
+  };
+
+  const formProps = {
+    form,
+    set,
+    className,
+    subjectName,
+    assessmentSettings,
+    assessmentSettingsLoading,
+    onCancel: () => handleSetOpen(false),
+    onSubmit: handleSubmit,
+  };
+
+  const modalTitle = (
+    <>
+      <span className="block">Create Test</span>
+      <span className="block text-xs font-normal text-[var(--color-text-muted)]">
+        Set up the basic details. You&apos;ll add questions in the next step.
+      </span>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop modal */}
+      {!isMobile && (
+        <Modal
+          open={open}
+          setOpen={handleSetOpen}
+          title={modalTitle}
+          showFooter={false}
+          className="max-h-[90vh] overflow-y-auto"
+        >
+          <FormBody {...formProps} idPrefix="modal" />
+        </Modal>
+      )}
+
+      {/* Mobile drawer */}
+      {isMobile && (
+        <MobileDrawer open={open} setIsOpen={handleSetOpen} title="Create Test">
+          <div className="max-h-[80vh] overflow-y-auto">
+            <FormBody {...formProps} idPrefix="drawer" />
+          </div>
+        </MobileDrawer>
+      )}
+    </>
   );
 };

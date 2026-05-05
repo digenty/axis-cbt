@@ -1,177 +1,158 @@
 "use client";
 
-import React, { useState } from "react";
 import Link from "next/link";
-import { User, UserX, Eye, Bell } from "lucide-react";
-import { useGetSubjectsByClassId } from "@/hooks/queryHooks/useSubjects";
-import { Badge, Button, Skeleton } from "@/components/ui";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableHead,
-  TableRow,
-  TableCell,
-} from "@/components/ui/table";
-import { ApiClassSubject } from "@/types/subjects";
-
-const COLUMNS = ["Subject", "Teacher", "Questions in Bank", "Tests", ""];
+import { use, useCallback, useMemo } from "react";
+import { Bell, Eye } from "lucide-react";
+import { ColumnDef } from "@tanstack/react-table";
+import { useCBTStore } from "@/store";
+import { Subject } from "@/types";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/common/PageHeader";
+import { EmptyState } from "@/components/common/EmptyState";
+import { DataTable } from "@/components/DataTable";
+import { toast } from "sonner";
 
 interface ClassSubjectsViewProps {
-  classId: string;
+  params: Promise<{ classId: string }>;
 }
 
-export const ClassSubjectsView = ({ classId }: ClassSubjectsViewProps) => {
-  const { data: response, isLoading } = useGetSubjectsByClassId(
-    Number(classId),
+export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
+  const { classId } = use(params);
+  const { classes, subjects } = useCBTStore();
+
+  const cls = useMemo(
+    () => classes.find((c) => c.id === classId),
+    [classes, classId],
+  );
+  const classSubjects = useMemo(
+    () => subjects.filter((s) => s.classId === classId),
+    [subjects, classId],
   );
 
-  const subjects = response?.data ?? [];
+  const handleNotify = useCallback((subjectName: string) => {
+    toast.success("Teacher notified", {
+      description: `A reminder has been sent for ${subjectName}.`,
+    });
+  }, []);
 
-  if (isLoading) {
-    return (
-      <div className="overflow-hidden rounded-xl border border-border-default bg-bg-default">
-        <div className="grid grid-cols-5 border-b border-border-default bg-bg-subtle px-5 py-3">
-          {COLUMNS.map((_, i) => (
-            <Skeleton key={i} className="h-3 w-20" />
-          ))}
-        </div>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={i}
-            className="grid grid-cols-5 border-b border-border-default px-5 py-4"
-          >
-            {COLUMNS.map((_, j) => (
-              <Skeleton key={j} className="h-4 w-24" />
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  }
+  const columns = useMemo<ColumnDef<Subject>[]>(
+    () => [
+      {
+        id: "subject",
+        header: "Subject",
+        cell: ({ row }) => (
+          <span className="text-[var(--color-text-default)]">
+            {row.original.name}
+          </span>
+        ),
+      },
+      {
+        id: "teacher",
+        header: "Teacher",
+        cell: ({ row }) => {
+          const teacher = row.original.teacherName;
+          return (
+            <span className="flex items-center gap-2 text-sm">
+              <Avatar className="h-6 w-6">
+                <AvatarFallback className="bg-[var(--color-bg-muted)] text-[10px] text-[var(--color-text-subtle)]">
+                  {(teacher ?? "U")[0]}
+                </AvatarFallback>
+              </Avatar>
+              {teacher ? (
+                <span className="text-[var(--color-text-default)]">
+                  {teacher}
+                </span>
+              ) : (
+                <span className="text-[var(--color-text-muted)]">
+                  Unassigned
+                </span>
+              )}
+            </span>
+          );
+        },
+      },
+      {
+        id: "questionsInBank",
+        header: "Questions in Bank",
+        cell: ({ row }) => row.original.questionsInBank,
+      },
+      {
+        id: "tests",
+        header: "Tests",
+        cell: ({ row }) => row.original.tests,
+      },
+      {
+        id: "actions",
+        header: "",
+        cell: ({ row }) => {
+          const sub = row.original;
+          return (
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() => handleNotify(sub.name)}
+              >
+                <Bell className="h-3 w-3" />
+                Notify Teacher
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+              >
+                <Link href={`/classes/${classId}/subjects/${sub.id}`}>
+                  <Eye className="h-3 w-3" />
+                  View
+                </Link>
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [classId, handleNotify],
+  );
 
-  if (!subjects?.length) {
+  if (!cls) {
     return (
-      <div className="flex flex-col items-center justify-center py-16">
-        <p className="text-text-muted text-sm">
-          No subjects found for this class
-        </p>
+      <div className="px-6 py-6">
+        <PageHeader title="Class not found" showBack backHref="/classes" />
+        <EmptyState
+          title="We couldn't find this class"
+          description="The class may have been deleted or the link is wrong."
+        />
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border-default bg-bg-default shadow-sm">
-      <Table>
-        <TableHeader className="[&_tr]:border-border-default">
-          <TableRow className="bg-bg-subtle hover:bg-bg-subtle border-border-default">
-            {COLUMNS.map((col, i) => (
-              <TableHead
-                key={i}
-                className="px-5 py-3 text-xs font-medium text-text-muted"
-              >
-                {col}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {subjects?.map((subject) => (
-            <SubjectRow key={subject?.id} subject={subject} classId={classId} />
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-};
+    <div className="px-4 py-5 md:px-6 md:py-6">
+      <PageHeader title={cls.name} showBack backHref="/classes" />
 
-const SubjectRow = ({
-  subject,
-  classId,
-}: {
-  subject: ApiClassSubject;
-  classId: string;
-}) => {
-  const [notifying, setNotifying] = useState(false);
-
-  const handleNotify = async () => {
-    setNotifying(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setNotifying(false);
-  };
-
-  const cells: (() => React.ReactNode)[] = [
-    () => (
-      <span className="text-text-default text-sm font-medium">{subject?.name}</span>
-    ),
-
-    () => (
-      <div className="flex items-center gap-2">
-        {subject?.teacherName ? (
-          <>
-            <div className="bg-bg-basic-blue-subtle flex h-6 w-6 items-center justify-center rounded-full">
-              <User className="text-icon-informative h-3 w-3" />
-            </div>
-            <span className="text-text-subtle text-sm">
-              {subject?.teacherName ?? "-"}
-            </span>
-          </>
+      <div className="mt-5">
+        {classSubjects.length === 0 ? (
+          <EmptyState
+            title="No subjects yet"
+            description="Subjects you add to this class will show up here."
+          />
         ) : (
-          <>
-            <div className="bg-bg-subtle flex h-6 w-6 items-center justify-center rounded-full">
-              <UserX className="text-text-muted h-3 w-3" />
-            </div>
-            <Badge className="border-border-warning bg-bg-basic-amber-subtle text-text-warning">
-              Unassigned
-            </Badge>
-          </>
+          <DataTable
+            columns={columns}
+            data={classSubjects}
+            totalCount={classSubjects.length}
+            page={1}
+            setCurrentPage={() => {}}
+            pageSize={classSubjects.length}
+            showPagination={false}
+            // border
+            headerBg
+          />
         )}
       </div>
-    ),
-
-    () => (
-      <span className="text-text-subtle text-sm">
-        {subject?.questionsInBank ?? 0}
-      </span>
-    ),
-
-    () => (
-      <span className="text-text-subtle text-sm">
-        {subject?.assessmentCount ?? 0}
-      </span>
-    ),
-
-    () => (
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          leftIcon={<Bell className="h-3 w-3" />}
-          loading={notifying}
-          onClick={handleNotify}
-        >
-          Notify Teacher
-        </Button>
-        <Link href={`/classes/${classId}/subjects/${subject?.id}`}>
-          <Button
-            size="sm"
-            variant="outline"
-            leftIcon={<Eye className="h-3 w-3" />}
-          >
-            View
-          </Button>
-        </Link>
-      </div>
-    ),
-  ];
-
-  return (
-    <TableRow className="hover:bg-bg-subtle/70 border-border-default">
-      {cells.map((renderCell, i) => (
-        <TableCell key={i} className="px-5 py-3.5">
-          {renderCell()}
-        </TableCell>
-      ))}
-    </TableRow>
+    </div>
   );
 };

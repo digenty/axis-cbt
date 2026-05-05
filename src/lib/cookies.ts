@@ -4,27 +4,11 @@ import { JWTPayload } from "@/types";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-export const createSession = async (
-  token: string,
-  userType: "SCHOOL_STAFF" | "PARENT",
-) => {
-  const cookieStore = await cookies();
-
-  cookieStore.set("token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    path: "/",
-  });
-
-  redirect(`/${userType === "SCHOOL_STAFF" ? "staff" : "parents"}`);
-};
-
 export const deleteSession = async () => {
   const cookieStore = await cookies();
   cookieStore.delete("token");
 
-  redirect("/auth/staff");
+  redirect(`${process.env.NEXT_PUBLIC_MAIN_APP_URL}/auth/staff`);
 };
 
 export const getSessionToken = async () => {
@@ -32,7 +16,7 @@ export const getSessionToken = async () => {
   const token = cookieStore.get("token")?.value;
 
   if (!token) {
-    redirect("/auth");
+    redirect(`${process.env.NEXT_PUBLIC_MAIN_APP_URL}/auth/staff`);
   }
 
   return { token };

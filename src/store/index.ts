@@ -15,6 +15,7 @@ import {
   mockTopics,
   mockQuestions,
   mockAttempts,
+  mockTests,
 } from "@/lib/mock-data";
 
 interface CBTStore {
@@ -66,7 +67,7 @@ export const useCBTStore = create<CBTStore>()(
       subjects: mockSubjects as unknown as Subject[],
       topics: mockTopics as unknown as Topic[],
       questions: mockQuestions as unknown as Question[],
-      tests: [],
+      tests: mockTests as unknown as Test[],
       attempts: mockAttempts as unknown as StudentAttempt[],
       isLoading: false,
 
