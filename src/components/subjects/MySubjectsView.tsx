@@ -18,6 +18,7 @@ export const MySubjectsView = () => {
 
   const isPrivileged = Boolean(isAdmin || isMain);
   const hasSubjects = (subjects?.data?.length ?? 0) > 0;
+  console.log(isAdmin, isMain);
 
   if (
     !isLoading &&

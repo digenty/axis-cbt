@@ -1,43 +1,66 @@
 "use client";
 
-import { ChevronDown, Calendar } from "lucide-react";
-import { useState } from "react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { Term } from "@/types/term";
+import { Calendar } from "@digenty/icons";
 
-const TERMS = [
-  "24/25 First Term",
-  "24/25 Second Term",
-  "24/25 Third Term",
-  "23/24 Third Term",
-];
+interface TermSelectorProps {
+  terms: Term[];
+  termSelected: Term | null;
+  setTermSelected: (term: Term | null) => void;
+  loading?: boolean;
+}
 
-export const TermSelector = () => {
-  const [active, setActive] = useState(TERMS[2]);
+export const TermSelector = ({
+  terms,
+  termSelected,
+  setTermSelected,
+  loading,
+}: TermSelectorProps) => {
+  if (loading) {
+    return <Skeleton className="bg-bg-input-soft h-9 w-40" />;
+  }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex h-9 items-center gap-2 rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 text-sm text-[var(--color-text-default)] hover:bg-[var(--color-bg-state-soft-hover)]"
+    <Select
+      value={termSelected ? String(termSelected.termId) : "none"}
+      onValueChange={(value) => {
+        if (value === "none") {
+          setTermSelected(null);
+          return;
+        }
+        const found = terms.find((t) => String(t.termId) === value) ?? null;
+        setTermSelected(found);
+      }}
+    >
+      <SelectTrigger className="bg-bg-state-secondary! text-text-default h-8! rounded-md border px-3 py-2 text-sm font-normal! capitalize">
+        <Calendar fill="var(--color-icon-default-muted )" className="size-4" />
+        {termSelected ? `${termSelected.term.toLowerCase()} Term` : "All Terms"}
+      </SelectTrigger>
+      <SelectContent className="bg-bg-card border-border-default">
+        <SelectItem
+          value="none"
+          className="text-text-default text-sm font-medium"
         >
-          <Calendar className="h-3.5 w-3.5 text-[var(--color-icon-default-muted)]" />
-          <span>{active}</span>
-          <ChevronDown className="h-3.5 w-3.5 text-[var(--color-icon-default-muted)]" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {TERMS.map((t) => (
-          <DropdownMenuItem key={t} onClick={() => setActive(t)}>
-            {t}
-          </DropdownMenuItem>
+          All Terms
+        </SelectItem>
+        {terms.map((t) => (
+          <SelectItem
+            key={t.termId}
+            value={String(t.termId)}
+            className="text-text-default text-sm font-medium capitalize"
+          >
+            {t.term.toLowerCase()}
+            {t.isActiveTerm && " (Active)"}
+          </SelectItem>
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </SelectContent>
+    </Select>
   );
 };

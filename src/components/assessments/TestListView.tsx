@@ -81,7 +81,7 @@ export const TestListView = ({ params }: TestListViewProps) => {
         right={
           <Button
             onClick={() => setShowModal(true)}
-            disabled={branchId === undefined}
+            // disabled={branchId === undefined}
           >
             <Plus className="mr-1 h-3.5 w-3.5" />
             Create New Test
@@ -111,7 +111,7 @@ export const TestListView = ({ params }: TestListViewProps) => {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowModal(true)}
-                disabled={branchId === undefined}
+                // disabled={branchId === undefined}
               >
                 <Plus className="mr-1 h-3.5 w-3.5" />
                 Create New Test

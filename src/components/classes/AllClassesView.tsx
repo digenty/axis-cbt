@@ -1,58 +1,74 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
-import {
-  ArrowRight,
-  Book,
-  BookText,
-  GraduationCap,
-  Loader2,
-} from "lucide-react";
-import { PageHeader } from "@/components/common/PageHeader";
-import { StatCard } from "@/components/common/StatCard";
-import { SearchInput } from "@/components/common/SearchInput";
-import { LevelFilter } from "@/components/common/LevelFilter";
-import { SchoolSelector } from "@/components/common/SchoolSelector";
-import { TermSelector } from "@/components/common/TermSelector";
 import { EmptyState } from "@/components/common/EmptyState";
+import { LevelFilter } from "@/components/common/LevelFilter";
+import { PageHeader } from "@/components/common/PageHeader";
+import { BranchSelector } from "@/components/common/BranchSelector";
+import { SearchInput } from "@/components/common/SearchInput";
+import { StatCard } from "@/components/common/StatCard";
+import { TermSelector } from "@/components/common/TermSelector";
 import { Button } from "@/components/ui/button";
-import { useGetAllClasses } from "@/hooks/queryHooks/useClasses";
-import type { ApiClass } from "@/types/classes";
-import {
-  ArrowOpenRight,
-  BookFill,
-  BookOpen,
-  GraduationCapFill,
-  NumStudentIcon,
-  TimeFill,
-} from "@digenty/icons";
-import { Badge } from "../ui/badge";
+import { useGetCbtOverview } from "@/hooks/queryHooks/useCbtOverview";
+import { useGetBranches } from "@/hooks/queryHooks/useBranches";
+import { useGetTermsBySchool } from "@/hooks/queryHooks/useTerms";
+import { useGetClassLevelNames } from "@/hooks/queryHooks/useClassLevels";
+import useDebounce from "@/hooks/useDebounce";
+import { useLoggedInUser } from "@/hooks/useLoggedInUser";
+import { Branch } from "@/types/branch";
+import type { ApiCbtArmSummary } from "@/types/student-api";
+import type { Term } from "@/types/term";
+import { ArrowOpenRight, BookFill, GraduationCapFill } from "@digenty/icons";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { IconBadge } from "../common/IconBadge";
+import { Badge } from "../ui/badge";
+import { extractUniqueLevelsByType } from "@/utils/extractUniqueLevelsByType";
 
 export const AllClassesView = () => {
-  const { data, isLoading, isError } = useGetAllClasses();
-  const [search, setSearch] = useState("");
-  const [levels, setLevels] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedLevelNames, setSelectedLevelNames] = useState<string[]>([]);
+  const [branchSelected, setBranchSelected] = useState<Branch | undefined>();
+  const [termSelected, setTermSelected] = useState<Term | null>(null);
 
-  const classes = useMemo<ApiClass[]>(() => data?.data?.content ?? [], [data]);
+  const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
-  const allLevels = useMemo(
-    () => Array.from(new Set(classes.map((c) => c.name))),
-    [classes],
-  );
+  const { schoolId, isUserLoading } = useLoggedInUser();
+  const { data: branchesRes, isLoading: branchesLoading } = useGetBranches();
+  const { data: termsRes, isLoading: termsLoading } =
+    useGetTermsBySchool(schoolId);
+  const { data: levelNamesRes } = useGetClassLevelNames(branchSelected?.id);
+  const levels = extractUniqueLevelsByType(levelNamesRes?.data || []);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return classes.filter((c) => {
-      const matchesSearch = !q || c.name.toLowerCase().includes(q);
-      const matchesLevel = levels.length === 0 || levels.includes(c.name);
-      return matchesSearch && matchesLevel;
-    });
-  }, [classes, search, levels]);
+  const selectedLevelId = useMemo(() => {
+    if (selectedLevelNames.length !== 1) return undefined;
+    return levels.find((level) => level.levelName === selectedLevelNames[0])
+      ?.id;
+  }, [levels, selectedLevelNames]);
 
-  console.log(filtered);
+  const {
+    data: overviewData,
+    isLoading,
+    isError,
+  } = useGetCbtOverview({
+    branchId: branchSelected?.id,
+    levelId: selectedLevelId,
+    search: debouncedSearchQuery || undefined,
+  });
+
+  console.log(levels, "levels");
+  useEffect(() => {
+    if (termsRes?.data?.terms && termSelected === null) {
+      const active = termsRes.data.terms.find((t) => t.isActiveTerm);
+      setTermSelected(active ?? null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [termsRes]);
+
+  const branches = useMemo(() => branchesRes?.data ?? [], [branchesRes]);
+  const terms = useMemo(() => termsRes?.data?.terms ?? [], [termsRes]);
+  const arms = useMemo(() => overviewData?.data?.arms ?? [], [overviewData]);
+  const levelNames = useMemo(() => levels.map((l) => l.levelName), [levels]);
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
@@ -62,8 +78,18 @@ export const AllClassesView = () => {
         backHref="/subjects"
         right={
           <>
-            <SchoolSelector />
-            <TermSelector />
+            <BranchSelector
+              branches={branches}
+              branchSelected={branchSelected}
+              setBranchSelected={setBranchSelected}
+              loadingBranches={branchesLoading}
+            />
+            <TermSelector
+              terms={terms}
+              termSelected={termSelected}
+              setTermSelected={setTermSelected}
+              loading={termsLoading || isUserLoading}
+            />
           </>
         }
       />
@@ -82,7 +108,7 @@ export const AllClassesView = () => {
             </IconBadge>
           }
           label="Total Classes"
-          value={data?.data?.totalElements ?? classes.length}
+          value={overviewData?.data?.totalClasses ?? "—"}
         />
         <StatCard
           icon={
@@ -93,23 +119,22 @@ export const AllClassesView = () => {
               <BookFill fill="var(--color-text-default)" className="size-2.5" />
             </IconBadge>
           }
-          label="Levels"
-          value={allLevels.length}
+          label="Total Subjects"
+          value={overviewData?.data?.totalSubjects ?? "—"}
         />
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-2">
-        <div className="min-w-0 flex-1">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search classes"
-          />
-        </div>
+      <div className="mt-5 flex items-center gap-2">
+        <SearchInput
+          className="md:w-70.5"
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search classes"
+        />
         <LevelFilter
-          levels={allLevels}
-          selected={levels}
-          onChange={setLevels}
+          levels={levelNames}
+          selected={selectedLevelNames}
+          onChange={setSelectedLevelNames}
         />
       </div>
 
@@ -123,20 +148,20 @@ export const AllClassesView = () => {
           title="Failed to load classes"
           description="Please refresh the page to try again."
         />
-      ) : filtered.length === 0 ? (
+      ) : arms.length === 0 ? (
         <EmptyState
           className="mt-6"
           title="No classes found"
           description={
-            search || levels.length > 0
+            searchQuery || selectedLevelNames.length > 0 || branchSelected
               ? "Try adjusting your filters."
               : "No classes have been created yet."
           }
         />
       ) : (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((cls) => (
-            <ApiClassCard key={cls.id} cls={cls} />
+          {arms.map((arm) => (
+            <ArmCard key={arm.armId} arm={arm} />
           ))}
         </div>
       )}
@@ -144,30 +169,34 @@ export const AllClassesView = () => {
   );
 };
 
-const ApiClassCard = ({ cls }: { cls: ApiClass }) => {
+const ArmCard = ({ arm }: { arm: ApiCbtArmSummary }) => {
   const router = useRouter();
 
   return (
     <div className="bg-bg-subtle border-border-default flex flex-col gap-4 rounded-md border p-4 md:p-6">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-text-default text-xs font-medium">{cls.name}</p>
-          {/* <p className="text-text-muted pt-2 text-xs font-normal">{cls.branchName ? cls.branchName : "Not available"}</p> */}
+          <p className="text-text-default text-xs font-medium">
+            {arm.displayName}
+          </p>
           <p className="text-text-muted pt-2 text-xs font-normal">
-            {"Not available"}
+            {arm.branchName}
           </p>
         </div>
         <Badge className="border-border-default bg-bg-badge-default text-text-muted flex items-center gap-1 rounded-md text-xs font-normal">
-          {/* <NumStudentIcon fill="var(--color-icon-default-muted)" /> {cls.} Subject{totalStudents !== "1" && "s"} */}
-          <BookFill fill="var(--color-icon-default-muted)" /> Not available
+          <BookFill fill="var(--color-icon-default-muted)" />
+          {arm.subjectCount} Subject{arm.subjectCount !== 1 ? "s" : ""}
         </Badge>
       </div>
 
       <Button
-        onClick={() => router.push(`/classes/${cls.id}`)}
+        onClick={() =>
+          router.push(
+            `/classes/${arm.armId}?className=${encodeURIComponent(arm.displayName)}`,
+          )
+        }
         className="border cursor-pointer border-border-darker bg-bg-state-secondary! text-text-default flex h-7 items-center gap-2 rounded-md border p-2"
       >
-        {/* {isPending && <Spinner />} */}
         <span className="text-sm font-medium">Open</span>
         <ArrowOpenRight
           fill="var(--color-icon-default-muted)"

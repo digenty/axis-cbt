@@ -57,3 +57,29 @@ export interface ClassSubjectsResponse {
   message: string;
   status: string;
 }
+
+export interface ApiClassArmSubject {
+  subjectId: number;
+  subjectName: string;
+  teacherId: number;
+  teacherName: string;
+  questionsInBank: number;
+  testsCount: number;
+}
+
+export interface ApiArmSubject {
+  armId: number;
+  armName: string;
+  className: string;
+  displayName: string;
+  classId: number;
+  branchId: number;
+  branchName: string;
+  subjects: ApiClassArmSubject[];
+}
+
+export interface ApiArmSubjectsResponse {
+  data: ApiArmSubject;
+  message: string;
+  status: string;
+}

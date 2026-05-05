@@ -45,7 +45,7 @@ export const SubjectDetailView = ({ params }: SubjectDetailViewProps) => {
   const subjectName = searchParams.get("subjectName") ?? "";
   const title =
     className && subjectName
-      ? `${className.replace(/\s+/g, "")} ${subjectName}`
+      ? `${className.replace(/\s+/g, "")}  ${subjectName}`
       : className || subjectName || "Subject";
 
   return (

@@ -4,6 +4,7 @@
  */
 import api from "@/lib/axios-auth";
 import {
+  ApiArmSubjectsResponse,
   ApiSubject,
   ClassSubjectsResponse,
   TeacherSubjectsResponse,
@@ -59,6 +60,34 @@ export const getSubjectsByClassId = async (
       `/subjects/class/${classId}`,
     );
     return data;
+  } catch (error: unknown) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
+
+export const getSubjectsByArmId = async (
+  armId: number,
+): Promise<ApiArmSubjectsResponse> => {
+  try {
+    const { data } = await api.get<ApiArmSubjectsResponse>(
+      `/api/cbt/classes/${armId}/subjects`,
+    );
+    return data;
+  } catch (error: unknown) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
+
+export const notifyTeacher = async (
+  armId: number,
+  subjectId: number,
+): Promise<void> => {
+  try {
+    await api.post(
+      `/api/cbt/classes/${armId}/subjects/${subjectId}/notify-teacher`,
+    );
   } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
