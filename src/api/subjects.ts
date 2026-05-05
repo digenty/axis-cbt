@@ -4,6 +4,7 @@
  */
 import api from "@/lib/axios-auth";
 import {
+  ApiSubject,
   ClassSubjectsResponse,
   TeacherSubjectsResponse,
 } from "@/types/subjects";
@@ -11,15 +12,18 @@ import { isAxiosError } from "axios";
 
 // ── API calls ──────────────────────────────────────────────────────────────────
 
-export const getTeacherSubjects = async () => {
-  try {
-    const { data } = await api.get("/teacher/subject/my");
-    return data;
-  } catch (error: unknown) {
-    if (isAxiosError(error)) throw error.response?.data;
-    throw error;
-  }
-};
+export const getTeacherSubjects =
+  async (): Promise<TeacherSubjectsResponse> => {
+    try {
+      const { data } = await api.get<TeacherSubjectsResponse>(
+        "/teacher/subject/my",
+      );
+      return data;
+    } catch (error: unknown) {
+      if (isAxiosError(error)) throw error.response?.data;
+      throw error;
+    }
+  };
 
 export const getClassDetails = async (id: number) => {
   try {

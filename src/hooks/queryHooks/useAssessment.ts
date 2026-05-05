@@ -7,6 +7,7 @@ import {
   getAssessment,
   getAssessmentResults,
   getAssessmentSections,
+  getAssessmentSettingsByClass,
   getAssessmentStats,
   getAssessments,
   gradeManually,
@@ -30,6 +31,19 @@ export const assessmentKeys = {
   sections: (id: number) => ["assessments", id, "sections"] as const,
   results: (id: number) => ["assessments", id, "results"] as const,
   stats: (id: number) => ["assessments", id, "stats"] as const,
+  settingsByClass: (classId: number) =>
+    ["assessment-settings", "class", classId] as const,
+};
+
+// ─── Assessment settings (school-level CA/Exam per class) ─────────────────────
+
+export const useGetAssessmentSettingsByClass = (classId: number) => {
+  return useQuery({
+    queryKey: assessmentKeys.settingsByClass(classId),
+    queryFn: () => getAssessmentSettingsByClass(classId),
+    enabled: !!classId,
+    staleTime: 1000 * 60 * 5,
+  });
 };
 
 // ─── Queries ──────────────────────────────────────────────────────────────────

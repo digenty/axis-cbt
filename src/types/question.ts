@@ -307,6 +307,40 @@ export interface ImportQuestionsResult {
   errors: string[];
 }
 
+// ─── Assessment settings (school-level CA/Exam definitions) ───────────────────
+
+export interface AssessmentSetting {
+  id: number;
+  name: string;
+  assessmentType: "CONTINUOUS_ASSESSMENT" | "EXAM";
+  weight: number;
+}
+
+export interface AssessmentSettingsList {
+  assessments: AssessmentSetting[];
+  totalWeight: number;
+}
+
+export interface AssessmentSettingsListResponse {
+  data: AssessmentSettingsList;
+  message: string;
+  status: string;
+}
+
+export interface QuestionBankStats {
+  schoolId: number;
+  classId: number;
+  subjectId: number;
+  questionCount: number;
+  assessmentCount: number;
+}
+
+export interface QuestionBankStatsResponse {
+  data: QuestionBankStats;
+  message: string;
+  status: string;
+}
+
 // ─── UI-only form state types ─────────────────────────────────────────────────
 
 export interface OptionFormItem {

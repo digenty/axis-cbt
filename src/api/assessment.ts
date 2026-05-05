@@ -4,6 +4,7 @@ import type {
   AssessmentListResponse,
   AssessmentResponse,
   AssessmentResultsResponse,
+  AssessmentSettingsListResponse,
   AssessmentStatsResponse,
   CreateAssessmentPayload,
   CreateSectionPayload,
@@ -12,6 +13,20 @@ import type {
   SectionsResponse,
   UpdateAssessmentPayload,
 } from "@/types/question";
+
+// ─── Assessment settings (school-level CA/Exam definitions per class) ─────────
+
+export const getAssessmentSettingsByClass = async (
+  classId: number,
+): Promise<AssessmentSettingsListResponse> => {
+  try {
+    const { data } = await api.get(`/assessments/class?classId=${classId}`);
+    return data;
+  } catch (error: unknown) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
 
 // ─── Assessments ──────────────────────────────────────────────────────────────
 

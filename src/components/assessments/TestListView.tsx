@@ -10,34 +10,54 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { TestCard } from "./TestCard";
 import { CreateTestModal } from "./CreateTestModal";
 import { toast } from "sonner";
+import {
+  useGetClassDetails,
+  useGetTeacherSubjects,
+} from "@/hooks/queryHooks/useSubjects";
 
 interface TestListViewProps {
   params: Promise<{ classId: string; subjectId: string }>;
 }
 
 export const TestListView = ({ params }: TestListViewProps) => {
-  const { classId, subjectId } = use(params);
+  const { classId: classIdStr, subjectId: subjectIdStr } = use(params);
+  const classId = Number(classIdStr);
+  const subjectId = Number(subjectIdStr);
   const router = useRouter();
-  const { tests, subjects, classes, deleteTest } = useCBTStore();
+  const { tests, deleteTest } = useCBTStore();
 
   const [showModal, setShowModal] = useState(false);
 
   const filtered = useMemo(
     () =>
-      tests.filter((t) => t.subjectId === subjectId && t.classId === classId),
-    [tests, classId, subjectId],
+      tests.filter(
+        (t) => t.subjectId === subjectIdStr && t.classId === classIdStr,
+      ),
+    [tests, classIdStr, subjectIdStr],
   );
 
-  const subject = useMemo(
-    () => subjects.find((s) => s.id === subjectId),
-    [subjects, subjectId],
-  );
-  const cls = useMemo(
-    () => classes.find((c) => c.id === classId),
-    [classes, classId],
+  const { data: classDetails } = useGetClassDetails(classId);
+  const { data: teacherSubjects } = useGetTeacherSubjects();
+
+  const subjectName = useMemo(
+    () =>
+      teacherSubjects?.data?.find((s) => s.subjectId === subjectId)
+        ?.subjectName ?? "",
+    [teacherSubjects, subjectId],
   );
 
-  const baseUrl = `/classes/${classId}/subjects/${subjectId}`;
+  const className = useMemo(() => {
+    const raw = classDetails as
+      | { data?: { name?: string } }
+      | { name?: string }
+      | undefined;
+    if (!raw) return "";
+    if ("data" in raw && raw.data?.name) return raw.data.name;
+    if ("name" in raw && typeof raw.name === "string") return raw.name;
+    return "";
+  }, [classDetails]);
+
+  const baseUrl = `/classes/${classIdStr}/subjects/${subjectIdStr}`;
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
@@ -90,10 +110,10 @@ export const TestListView = ({ params }: TestListViewProps) => {
       <CreateTestModal
         open={showModal}
         setOpen={setShowModal}
-        classId={classId}
-        subjectId={subjectId}
-        className={cls?.name ?? ""}
-        subjectName={subject?.name ?? ""}
+        classId={classIdStr}
+        subjectId={subjectIdStr}
+        className={className}
+        subjectName={subjectName}
         onSuccess={(testId) => router.push(`${baseUrl}/assessments/${testId}`)}
       />
     </div>
