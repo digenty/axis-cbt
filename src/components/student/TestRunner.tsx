@@ -17,12 +17,14 @@ import {
   useGetAssessmentPaper,
   useStartAssessment,
   useSubmitAnswer,
+  useSubmitAnswersBatch,
   useSubmitAssessment,
 } from "@/hooks/queryHooks/useStudentCBT";
 import type {
   ApiStudentOption,
   ApiStudentQuestion,
   ApiStudentSection,
+  SubmitAnswerPayload,
 } from "@/types/student-api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -254,26 +256,58 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
   }, [secondsLeft]);
 
   const submitAnswerMutation = useSubmitAnswer();
+  const submitAnswersBatchMutation = useSubmitAnswersBatch();
   const submitAssessmentMutation = useSubmitAssessment();
 
-  // Debounced auto-save per question on answer change
+  // Pending-write tracking: each timer fires the per-question save. If the
+  // student submits or navigates away while answers are still queued, we flush
+  // everything via the batch endpoint so nothing is silently dropped.
   const saveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const pendingPayloads = useRef<Record<number, SubmitAnswerPayload>>({});
+
+  const flushPending = (): SubmitAnswerPayload[] => {
+    const payloads = Object.values(pendingPayloads.current);
+    Object.values(saveTimers.current).forEach((t) => clearTimeout(t));
+    saveTimers.current = {};
+    pendingPayloads.current = {};
+    if (payloads.length > 0) {
+      submitAnswersBatchMutation.mutate(payloads);
+    }
+    return payloads;
+  };
+
   const setAnswer = (q: ApiStudentQuestion, next: AnswerState) => {
     const aqId = q.assessmentQuestionId;
     setAnswers((prev) => ({ ...prev, [aqId]: next }));
     if (studentAssessmentId === null) return;
+    const payload: SubmitAnswerPayload = {
+      studentAssessmentId,
+      assessmentQuestionId: aqId,
+      answerData: buildAnswerData(q, next),
+    };
+    pendingPayloads.current[aqId] = payload;
     if (saveTimers.current[aqId]) clearTimeout(saveTimers.current[aqId]);
     saveTimers.current[aqId] = setTimeout(() => {
-      submitAnswerMutation.mutate({
-        studentAssessmentId,
-        assessmentQuestionId: aqId,
-        answerData: buildAnswerData(q, next),
-      });
+      delete saveTimers.current[aqId];
+      // The latest payload wins; drop from pending only after we send it.
+      const latest = pendingPayloads.current[aqId];
+      if (!latest) return;
+      delete pendingPayloads.current[aqId];
+      submitAnswerMutation.mutate(latest);
     }, 600);
   };
 
+  // Flush pending answers if the runner unmounts mid-test.
+  useEffect(() => {
+    return () => {
+      flushPending();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSubmit = () => {
     if (studentAssessmentId === null) return;
+    flushPending();
     submitAssessmentMutation.mutate(studentAssessmentId, {
       onSuccess: () => {
         setSubmitOpen(false);

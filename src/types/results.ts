@@ -118,6 +118,7 @@ export interface Test {
 // ─── Student Attempts & Results ───────────────────────────────────────────────
 
 export type AttemptStatus =
+  | "not-started"
   | "in-progress"
   | "submitted"
   | "missed"

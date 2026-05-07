@@ -34,6 +34,7 @@ function SubjectCard({
   isNotifying,
   onNotify,
 }: SubjectCardProps) {
+  console.log(className);
   const rows: { label: string; value: ReactNode }[] = [
     {
       label: "Subject",

@@ -26,13 +26,13 @@ import { Modal } from "@/components/Modal";
 import { MobileDrawer } from "@/components/MobileDrawer";
 import type { TermType, TestType } from "@/types";
 import type {
-  AssessmentSetting,
+  AssessmentMappingOption,
   CreateAssessmentPayload,
 } from "@/types/question";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import {
   useCreateAssessment,
-  useGetAssessmentSettingsByClass,
+  useGetAssessmentMappingOptions,
 } from "@/hooks/queryHooks/useAssessment";
 import {
   addMinutes,
@@ -52,11 +52,13 @@ interface CreateTestModalProps {
   onSuccess: (testId: string) => void;
 }
 
+const NONE_MAPPING_VALUE = "NONE_MANUAL_SCORING";
+
 const defaultForm = {
   title: "",
   term: "First Term" as TermType,
   testType: "Continuous Assessment" as TestType,
-  assessmentMapping: "",
+  assessmentMapping: "NONE_MANUAL_SCORING",
   testDate: "",
   startHour: "00",
   startMinute: "00",
@@ -74,8 +76,8 @@ const FormBody = ({
   set,
   className,
   subjectName,
-  assessmentSettings,
-  assessmentSettingsLoading,
+  mappingOptions,
+  mappingOptionsLoading,
   onCancel,
   onSubmit,
   submitting,
@@ -85,8 +87,8 @@ const FormBody = ({
   set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
   className: string;
   subjectName: string;
-  assessmentSettings: AssessmentSetting[];
-  assessmentSettingsLoading: boolean;
+  mappingOptions: AssessmentMappingOption[];
+  mappingOptionsLoading: boolean;
   onCancel: () => void;
   onSubmit: () => void;
   submitting: boolean;
@@ -166,23 +168,23 @@ const FormBody = ({
       <Select
         value={form.assessmentMapping}
         onValueChange={(v: string) => set("assessmentMapping", v)}
-        disabled={assessmentSettingsLoading || assessmentSettings.length === 0}
+        disabled={mappingOptionsLoading}
       >
         <SelectTrigger className="w-full">
           <SelectValue
-            placeholder={
-              assessmentSettingsLoading
-                ? "Loading…"
-                : assessmentSettings.length === 0
-                  ? "No assessment mappings configured"
-                  : "Map assessment"
-            }
+            placeholder={mappingOptionsLoading ? "Loading…" : "Map assessment"}
           />
         </SelectTrigger>
         <SelectContent>
-          {assessmentSettings.map((a) => (
-            <SelectItem key={a.id} value={String(a.id)}>
-              {a.name} ({a.weight}%)
+          <SelectItem value={NONE_MAPPING_VALUE}>
+            None / Manual Scoring
+          </SelectItem>
+          {mappingOptions.map((opt) => (
+            <SelectItem
+              key={opt.assessmentSettingId}
+              value={opt.assessmentType}
+            >
+              {opt.name} ({opt.weight}%)
             </SelectItem>
           ))}
         </SelectContent>
@@ -351,9 +353,12 @@ export const CreateTestModal = ({
   const isMobile = useIsMobile();
   const createMutation = useCreateAssessment();
 
-  const { data: settingsRes, isLoading: assessmentSettingsLoading } =
-    useGetAssessmentSettingsByClass(Number(classId));
-  const assessmentSettings = settingsRes?.data?.assessments ?? [];
+  const { data: mappingOptionsRes, isLoading: mappingOptionsLoading } =
+    useGetAssessmentMappingOptions({
+      classId: Number(classId),
+      branchId: branchId ?? 0,
+    });
+  const mappingOptions = mappingOptionsRes?.data ?? [];
 
   const handleSetOpen = (v: boolean) => {
     if (!v) setForm(defaultForm);
@@ -373,13 +378,6 @@ export const CreateTestModal = ({
       return;
     }
 
-    const selectedSetting = assessmentSettings.find(
-      (a) => String(a.id) === form.assessmentMapping,
-    );
-    const mappingLabel = selectedSetting
-      ? `${selectedSetting.name} (${selectedSetting.weight}%)`
-      : "";
-
     const startDateTime = composeStartDateTime({
       testDate: form.testDate,
       startHour: form.startHour,
@@ -395,8 +393,7 @@ export const CreateTestModal = ({
       branchId,
       term: uiTermToApi(form.term),
       testType: uiTestTypeToApi(form.testType),
-      // assessmentMapping: mappingLabel,
-      assessmentMapping: "NONE_MANUAL_SCORING",
+      assessmentMapping: form.assessmentMapping || NONE_MAPPING_VALUE,
       durationMinutes: form.duration,
       totalMarks: 0,
       passingMarks: 0,
@@ -429,8 +426,8 @@ export const CreateTestModal = ({
     set,
     className,
     subjectName,
-    assessmentSettings,
-    assessmentSettingsLoading,
+    mappingOptions,
+    mappingOptionsLoading,
     onCancel: () => handleSetOpen(false),
     onSubmit: handleSubmit,
     submitting: createMutation.isPending,

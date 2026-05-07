@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FolderOpen, Plus, Loader2 } from "lucide-react";
 import { QuestionBankSidebar } from "./QuestionBankSidebar";
 import { QuestionListPanel } from "./QuestionListPanel";
@@ -25,11 +25,7 @@ import {
   useUpdateCbtQuestion,
   useUpdateCbtTopic,
 } from "@/hooks/queryHooks/useQuestionBank";
-import {
-  useGetClassDetails,
-  useGetSubjectsByClassId,
-  useGetTeacherSubjects,
-} from "@/hooks/queryHooks/useSubjects";
+import { useGetSubjectsByClassId } from "@/hooks/queryHooks/useSubjects";
 import {
   apiQuestionToUI,
   questionToCreatePayload,
@@ -59,9 +55,11 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   const router = useRouter();
   const baseUrl = `/classes/${classIdStr}/subjects/${subjectIdStr}`;
 
+  const searchParams = useSearchParams();
+  const classDisplayName = searchParams.get("className") ?? "";
+  const subjectName = searchParams.get("subjectName") ?? "Subject";
+
   // ─── Server data ──────────────────────────────────────────────────────────
-  const { data: classDetails } = useGetClassDetails(classId);
-  const { data: teacherSubjects } = useGetTeacherSubjects();
   const { data: classSubjects } = useGetSubjectsByClassId(classId);
   const {
     data: topicsRes,
@@ -102,24 +100,6 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   // ─── Stats card data (for header) ─────────────────────────────────────────
   useGetQuestionBankStats(classId, subjectId);
 
-  // ─── Header context (subject + class display names) ───────────────────────
-  const subject = useMemo(
-    () => teacherSubjects?.data?.find((s) => s.subjectId === subjectId),
-    [teacherSubjects, subjectId],
-  );
-  const subjectName = subject?.subjectName ?? "Subject";
-
-  const classDisplayName = useMemo(() => {
-    const raw = classDetails as
-      | { data?: { name?: string } }
-      | { name?: string }
-      | undefined;
-    if (!raw) return "";
-    if ("data" in raw && raw.data?.name) return raw.data.name;
-    if ("name" in raw && typeof raw.name === "string") return raw.name;
-    return "";
-  }, [classDetails]);
-
   // Resolve branchId for the current subject from /subjects/class/{classId}
   const branchId = useMemo(() => {
     const list = classSubjects?.data ?? [];
@@ -149,17 +129,12 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
 
   // ─── Topic handlers ───────────────────────────────────────────────────────
   const handleAddTopic = ({ name, description }: TopicFormDraft) => {
-    if (branchId === undefined) {
-      toast.error("Branch not resolved yet");
-      return;
-    }
     addTopic.mutate(
       {
         name,
         description,
         classId,
         subjectId,
-        branchId,
         displayOrder: apiTopics.length,
       },
       {
@@ -189,7 +164,6 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
           description,
           classId,
           subjectId,
-          branchId,
           displayOrder:
             apiTopics.find((t) => String(t.id) === topic.id)?.displayOrder ?? 0,
         },
@@ -210,7 +184,6 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   };
 
   const handleReorderTopics = async (orderedIds: string[]) => {
-    if (branchId === undefined) return;
     try {
       await Promise.all(
         orderedIds.map((tid, i) => {
@@ -223,7 +196,6 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
               description: t.description ?? "",
               classId,
               subjectId,
-              branchId,
               displayOrder: i,
             },
           });

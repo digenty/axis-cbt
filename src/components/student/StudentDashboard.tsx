@@ -124,7 +124,7 @@ export const StudentDashboard = () => {
                   {item.subjectName}
                 </span>
                 <span className="rounded-full bg-[var(--color-bg-badge-orange)] px-2 py-0.5 text-[10px] font-medium text-[var(--orange-700)]">
-                  {item.attemptStatus === "IN_PROGRESS"
+                  {item.canResume || item.attemptStatus === "IN_PROGRESS"
                     ? "In Progress"
                     : "Not Started"}
                 </span>
@@ -133,7 +133,7 @@ export const StudentDashboard = () => {
                 {item.name}
               </h4>
               <ItemMeta item={item} />
-              {item.attemptStatus === "IN_PROGRESS" ? (
+              {(item.canResume ?? item.attemptStatus === "IN_PROGRESS") ? (
                 <Button
                   asChild
                   variant="outline"
@@ -145,11 +145,22 @@ export const StudentDashboard = () => {
                   </Link>
                 </Button>
               ) : (
-                <Button asChild className="mt-3 w-full justify-center">
-                  <Link href={`/student/cbt/${item.assessmentId}`}>
-                    <Play className="mr-1 h-3.5 w-3.5" />
-                    Start Test
-                  </Link>
+                <Button
+                  asChild={item.canStart !== false}
+                  disabled={item.canStart === false}
+                  className="mt-3 w-full justify-center"
+                >
+                  {item.canStart === false ? (
+                    <>
+                      <Play className="mr-1 h-3.5 w-3.5" />
+                      Start Test
+                    </>
+                  ) : (
+                    <Link href={`/student/cbt/${item.assessmentId}`}>
+                      <Play className="mr-1 h-3.5 w-3.5" />
+                      Start Test
+                    </Link>
+                  )}
                 </Button>
               )}
             </div>

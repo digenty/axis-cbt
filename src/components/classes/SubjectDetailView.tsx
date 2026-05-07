@@ -45,18 +45,21 @@ export const SubjectDetailView = ({ params }: SubjectDetailViewProps) => {
   const subjectName = searchParams.get("subjectName") ?? "";
   const title =
     className && subjectName
-      ? `${className.replace(/\s+/g, "")}  ${subjectName}`
+      ? `${className.replace(/\+/g, "")}  ${subjectName}`
       : className || subjectName || "Subject";
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
-      <PageHeader title={title} showBack />
+      <PageHeader title={title.toLowerCase()} showBack />
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {HUB_CARDS.map((card) => (
           <Link
             key={card.key}
-            href={`/classes/${classId}/subjects/${subjectId}/${card.key}`}
+            href={{
+              pathname: `/classes/${classId}/subjects/${subjectId}/${card.key}`,
+              query: { className, subjectName },
+            }}
             className="group rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-5 transition-colors hover:border-[var(--color-border-darker)] hover:bg-[var(--color-bg-card-subtle)]"
           >
             <div

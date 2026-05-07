@@ -145,6 +145,20 @@ export const deleteCbtQuestion = async (
   }
 };
 
+export const duplicateCbtQuestion = async (
+  id: number,
+): Promise<QuestionResponse> => {
+  try {
+    const { data } = await api.post(
+      `/api/cbt/question-bank/questions/${id}/duplicate`,
+    );
+    return data;
+  } catch (error: unknown) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
+
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 export const getQuestionBankStats = async (payload: {

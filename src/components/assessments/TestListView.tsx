@@ -13,8 +13,12 @@ import {
   useGetSubjectsByClassId,
   useGetTeacherSubjects,
 } from "@/hooks/queryHooks/useSubjects";
-import { useGetAssessments } from "@/hooks/queryHooks/useAssessment";
+import {
+  useDeleteAssessment,
+  useGetAssessments,
+} from "@/hooks/queryHooks/useAssessment";
 import { apiAssessmentToTest } from "@/types/assessment.mapper";
+import { toast } from "sonner";
 
 interface TestListViewProps {
   params: Promise<{ classId: string; subjectId: string }>;
@@ -52,6 +56,21 @@ export const TestListView = ({ params }: TestListViewProps) => {
     [assessmentsRes],
   );
 
+  const deleteMutation = useDeleteAssessment(classId, subjectId, branchId ?? 0);
+
+  const handleDelete = (id: string) => {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("Delete this test? This cannot be undone.")
+    ) {
+      return;
+    }
+    deleteMutation.mutate(Number(id), {
+      onSuccess: () => toast.success("Test deleted"),
+      onError: () => toast.error("Failed to delete test"),
+    });
+  };
+
   const subjectName = useMemo(
     () =>
       teacherSubjects?.data?.find((s) => s.subjectId === subjectId)
@@ -79,10 +98,7 @@ export const TestListView = ({ params }: TestListViewProps) => {
         showBack
         backHref={baseUrl}
         right={
-          <Button
-            onClick={() => setShowModal(true)}
-            // disabled={branchId === undefined}
-          >
+          <Button onClick={() => setShowModal(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" />
             Create New Test
           </Button>
@@ -111,7 +127,6 @@ export const TestListView = ({ params }: TestListViewProps) => {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowModal(true)}
-                // disabled={branchId === undefined}
               >
                 <Plus className="mr-1 h-3.5 w-3.5" />
                 Create New Test
@@ -126,6 +141,7 @@ export const TestListView = ({ params }: TestListViewProps) => {
               key={t.id}
               test={t}
               href={`${baseUrl}/assessments/${t.id}`}
+              onDelete={() => handleDelete(t.id)}
             />
           ))}
         </div>

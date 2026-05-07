@@ -52,6 +52,13 @@ const STATUS_CONFIG: Record<
     ring: "ring-[var(--color-border-orange)]",
     Icon: CircleDot,
   },
+  "not-started": {
+    label: "Not Started",
+    bg: "bg-[var(--color-bg-badge-gray)]",
+    text: "text-[var(--color-text-subtle)]",
+    ring: "ring-[var(--color-border-default)]",
+    Icon: Clock,
+  },
   submitted: {
     label: "Submitted",
     bg: "bg-[var(--color-bg-badge-violet)]",

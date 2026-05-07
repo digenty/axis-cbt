@@ -42,6 +42,8 @@ export interface ApiStudentAssessmentItem {
   score: number | null;
   percentage: number | null;
   passed: boolean | null;
+  canStart?: boolean;
+  canResume?: boolean;
 }
 
 export interface ApiStudentDashboard {
@@ -77,6 +79,24 @@ export interface ApiAssessmentPreview {
 
 // ─── Student result ───────────────────────────────────────────────────────────
 
+export type StudentAnswerGradingStatus =
+  | "PENDING"
+  | "AUTO_GRADED"
+  | "MANUALLY_GRADED"
+  | "REVIEW_REQUIRED";
+
+export interface StudentAnswerSummary {
+  assessmentQuestionId: number;
+  questionText: string;
+  questionType: string;
+  maxMarks: number;
+  answerData?: string | null;
+  isCorrect?: boolean | null;
+  marksAwarded?: number | null;
+  gradingStatus: StudentAnswerGradingStatus;
+  feedback?: string | null;
+}
+
 export interface ApiStudentResult {
   studentAssessmentId: number;
   assessmentId: number;
@@ -88,6 +108,7 @@ export interface ApiStudentResult {
   passed: boolean;
   submissionTime: string;
   timeSpentSeconds: number;
+  answers?: StudentAnswerSummary[];
 }
 
 // ─── Assessment paper ─────────────────────────────────────────────────────────

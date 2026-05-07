@@ -5,6 +5,7 @@ import {
   createCbtQuestion,
   deleteCbtQuestion,
   deleteCbtQuestionBankTopic,
+  duplicateCbtQuestion,
   getCbtQuestion,
   getCbtQuestions,
   getCbtQuestionBankTopics,
@@ -179,6 +180,30 @@ export const useUpdateCbtQuestion = () => {
       });
     },
     onError: (e) => toast.error(errMsg(e, "Failed to update question")),
+  });
+};
+
+export const useDuplicateCbtQuestion = (ctx?: {
+  classId: number;
+  subjectId: number;
+}) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => duplicateCbtQuestion(id),
+    onSuccess: () => {
+      if (ctx) {
+        qc.invalidateQueries({
+          queryKey: questionBankKeys.questionsList(ctx.classId, ctx.subjectId),
+        });
+        qc.invalidateQueries({
+          queryKey: questionBankKeys.stats(ctx.classId, ctx.subjectId),
+        });
+      } else {
+        qc.invalidateQueries({ queryKey: ["question-bank", "questions"] });
+        qc.invalidateQueries({ queryKey: ["question-bank", "stats"] });
+      }
+    },
+    onError: (e) => toast.error(errMsg(e, "Failed to duplicate question")),
   });
 };
 

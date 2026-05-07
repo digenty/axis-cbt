@@ -4,6 +4,7 @@ import type {
   ApiCbtOverview,
   TeacherAssessmentListItem,
 } from "@/types/student-api";
+import type { TeacherCbtOverview } from "@/types/question";
 
 const handleError = (error: unknown): never => {
   if (isAxiosError(error)) throw error.response?.data;
@@ -28,6 +29,17 @@ export const getMyAssessments = async (): Promise<
 > => {
   try {
     const { data } = await api.get("/api/cbt/assessments/my");
+    return data;
+  } catch (e) {
+    return handleError(e);
+  }
+};
+
+export const getMyCbtOverview = async (): Promise<{
+  data: TeacherCbtOverview;
+}> => {
+  try {
+    const { data } = await api.get("/api/cbt/overview/my");
     return data;
   } catch (e) {
     return handleError(e);

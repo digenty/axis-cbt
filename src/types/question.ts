@@ -271,7 +271,7 @@ export interface CbtQueBankTopicPayload {
   name: string;
   classId: number;
   subjectId: number;
-  branchId: number;
+  // branchId: number;
   description: string;
   displayOrder: number;
   id?: number;
@@ -375,9 +375,32 @@ export type StimulusType =
 
 // ─── Assessment API types ─────────────────────────────────────────────────────
 
-export type ApiAssessmentStatus = "DRAFT" | "PUBLISHED" | "COMPLETED";
+export type ApiAssessmentStatus =
+  | "DRAFT"
+  | "PUBLISHED"
+  | "ONGOING"
+  | "COMPLETED"
+  | "ARCHIVED";
 export type ApiTerm = "FIRST" | "SECOND" | "THIRD";
-export type ApiTestType = "CONTINUOUS_ASSESSMENT" | "EXAMINATION";
+export type ApiTestType =
+  | "CONTINUOUS_ASSESSMENT"
+  | "EXAMINATION"
+  | "MOCK_EXAM"
+  | "PRACTICE_TEST";
+
+export type AssessmentMapping =
+  | "NONE_MANUAL_SCORING"
+  | "CONTINUOUS_ASSESSMENT_1_20_PERCENT"
+  | "CONTINUOUS_ASSESSMENT_2_20_PERCENT"
+  | "EXAMINATION_60_PERCENT"
+  | "CUSTOM"
+  | string;
+
+export interface SectionsSummary {
+  id: number;
+  name: string;
+  questionCount: number;
+}
 
 export interface ApiAssessment {
   id: number;
@@ -387,7 +410,7 @@ export interface ApiAssessment {
   branchId: number;
   term: ApiTerm;
   testType: ApiTestType;
-  assessmentMapping: string;
+  assessmentMapping: AssessmentMapping;
   durationMinutes: number;
   totalMarks: number;
   passingMarks: number;
@@ -400,6 +423,12 @@ export interface ApiAssessment {
   allowReview: boolean;
   status: ApiAssessmentStatus;
   questionCount: number;
+  sectionCount?: number;
+  sectionsSummary?: SectionsSummary[];
+}
+
+export interface ApiAssessmentDetail extends ApiAssessment {
+  sections?: ApiSection[];
 }
 
 export interface ApiAssessmentQuestion {
@@ -427,7 +456,7 @@ export interface CreateAssessmentPayload {
   branchId: number;
   term: ApiTerm;
   testType: ApiTestType;
-  assessmentMapping: string;
+  assessmentMapping: AssessmentMapping;
   durationMinutes: number;
   totalMarks: number;
   passingMarks: number;
@@ -450,14 +479,111 @@ export interface CreateSectionPayload {
   questionIds?: number[];
 }
 
+// PUT body shares the same shape; backend requires `name` + `sectionOrder` on every call.
+export interface UpdateSectionPayload {
+  name: string;
+  instructions?: string;
+  sectionOrder: number;
+  timeLimitMinutes?: number;
+  questionIds?: number[];
+}
+
 export interface GradeManuallyPayload {
   answerId: number;
   marksAwarded: number;
   feedback: string;
-  gradedBy: number;
+}
+
+// ─── Mapping options (FK source for assessmentMapping) ────────────────────────
+
+export interface AssessmentMappingOption {
+  assessmentSettingId: number;
+  name: string;
+  assessmentType: string;
+  weight: number;
+}
+
+export interface AssessmentMappingOptionsResponse {
+  data: AssessmentMappingOption[];
+  message: string;
+  status: string;
+}
+
+// ─── Enrollment ───────────────────────────────────────────────────────────────
+
+export interface AssessmentEnrollment {
+  studentId: number;
+  studentName: string;
+  studentAssessmentId: number | null;
+  attemptStatus:
+    | "NOT_STARTED"
+    | "IN_PROGRESS"
+    | "PENDING"
+    | "COMPLETED"
+    | "ABSENT"
+    | "TIMED_OUT";
+}
+
+export interface AssessmentEnrollmentResponse {
+  data: AssessmentEnrollment[];
+  message: string;
+  status: string;
+}
+
+// ─── Per-attempt answers (manual grader source) ───────────────────────────────
+
+export type GradingStatus =
+  | "PENDING"
+  | "AUTO_GRADED"
+  | "MANUALLY_GRADED"
+  | "REVIEW_REQUIRED";
+
+export interface StudentAttemptAnswer {
+  answerId: number;
+  assessmentQuestionId: number;
+  questionId: number;
+  questionText: string;
+  questionHtml?: string | null;
+  questionType: QuestionType;
+  maxMarks: number;
+  answerData?: string | null;
+  answerText?: string | null;
+  selectedOptionId?: number | null;
+  isCorrect?: boolean | null;
+  marksAwarded?: number | null;
+  gradingStatus: GradingStatus;
+  autoGraded: boolean;
+  feedback?: string | null;
+  timeSpentSeconds?: number | null;
+  flagged?: boolean | null;
+  answeredAt?: string | null;
+}
+
+export interface StudentAttemptAnswersResponse {
+  data: StudentAttemptAnswer[];
+  message: string;
+  status: string;
+}
+
+// ─── Teacher CBT overview (subjects-scoped) ───────────────────────────────────
+
+export interface TeacherCbtSubjectSummary {
+  classId: number;
+  className: string;
+  subjectId: number;
+  subjectName: string;
+  branchId: number;
+  branchName: string;
+  assessmentCount: number;
+  questionCount: number;
+}
+
+export interface TeacherCbtOverview {
+  subjects: TeacherCbtSubjectSummary[];
 }
 
 export type StudentResultStatus =
+  | "NOT_STARTED"
   | "IN_PROGRESS"
   | "COMPLETED"
   | "PENDING"
@@ -514,6 +640,12 @@ export interface AssessmentListResponse {
 
 export interface AssessmentResponse {
   data: ApiAssessment;
+  message: string;
+  status: string;
+}
+
+export interface AssessmentDetailResponse {
+  data: ApiAssessmentDetail;
   message: string;
   status: string;
 }

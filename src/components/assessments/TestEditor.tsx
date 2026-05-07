@@ -50,8 +50,10 @@ import {
   usePublishAssessment,
   useRemoveQuestionFromSection,
   useUpdateAssessment,
+  useUpdateSection,
 } from "@/hooks/queryHooks/useAssessment";
 import {
+  useDuplicateCbtQuestion,
   useGetQuestions,
   useGetTopics,
   useUpdateCbtQuestion,
@@ -90,10 +92,12 @@ interface SectionPanelProps {
   bankQuestions: Question[];
   subjectTopics: Topic[];
   onRenameSection: (newTitle: string) => void;
+  onUpdateInstructions: (instructions: string) => void;
   onDeleteSection: () => void;
   onAddFromBank: (questionIds: number[]) => void;
   onRemoveQuestion: (assessmentQuestionId: number) => void;
   onAddQuestion: (type: QuestionType, materialKind?: string) => void;
+  onDuplicateQuestion: (questionId: number, sectionId: number) => void;
   busy: boolean;
 }
 
@@ -105,10 +109,12 @@ const SectionPanel = ({
   bankQuestions,
   subjectTopics,
   onRenameSection,
+  onUpdateInstructions,
   onDeleteSection,
   onAddFromBank,
   onRemoveQuestion,
   onAddQuestion,
+  onDuplicateQuestion,
   busy,
 }: SectionPanelProps) => {
   const updateQuestion = useUpdateCbtQuestion();
@@ -116,6 +122,9 @@ const SectionPanel = ({
   const [showBankModal, setShowBankModal] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [instructionsDraft, setInstructionsDraft] = useState<string | null>(
+    null,
+  );
 
   const toggleExpand = (id: number) =>
     setExpandedIds((prev) => {
@@ -142,8 +151,9 @@ const SectionPanel = ({
             {section.name}
           </span>
           <span className="text-sm text-[var(--color-text-muted)]">
-            Instructions{" "}
-            <span className="text-[var(--color-text-muted)]">(optional)</span>
+            {section.instructions
+              ? section.instructions
+              : "Instructions (optional)"}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -180,6 +190,24 @@ const SectionPanel = ({
 
       {open && (
         <div className="border-t border-[var(--color-border-default)] px-4 py-3">
+          <div className="mb-3 space-y-1.5">
+            <Label className="text-xs">Instructions (optional)</Label>
+            <textarea
+              rows={2}
+              value={instructionsDraft ?? section.instructions ?? ""}
+              onChange={(e) => setInstructionsDraft(e.target.value)}
+              onBlur={() => {
+                if (instructionsDraft === null) return;
+                if (instructionsDraft !== (section.instructions ?? "")) {
+                  onUpdateInstructions(instructionsDraft);
+                }
+                setInstructionsDraft(null);
+              }}
+              placeholder="Anything candidates should know about this section…"
+              className="w-full rounded-md border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 py-2 text-sm focus:outline-none"
+            />
+          </div>
+
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Button size="sm" onClick={() => setShowAddItemModal(true)}>
               <Plus className="mr-1 h-3.5 w-3.5" />
@@ -272,11 +300,12 @@ const SectionPanel = ({
                             }),
                           });
                         }}
-                        onDuplicate={() => {
-                          toast.info(
-                            "Duplicate-question endpoint not yet exposed by backend",
-                          );
-                        }}
+                        onDuplicate={() =>
+                          onDuplicateQuestion(
+                            Number(fullQuestion.id),
+                            section.id,
+                          )
+                        }
                         onDelete={() =>
                           onRemoveQuestion(aq.assessmentQuestionId)
                         }
@@ -379,8 +408,13 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   const publishMutation = usePublishAssessment(assessmentId);
   const addSectionMutation = useAddSection(assessmentId);
   const deleteSectionMutation = useDeleteSection(assessmentId);
+  const updateSectionMutation = useUpdateSection(assessmentId);
   const addQuestionsToSectionMutation = useAddQuestionsToSection(assessmentId);
   const removeQuestionMutation = useRemoveQuestionFromSection(assessmentId);
+  const duplicateQuestionMutation = useDuplicateCbtQuestion({
+    classId,
+    subjectId,
+  });
 
   // ─── Local UI state for the title editor ─────────────────────────────────
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
@@ -700,11 +734,40 @@ export const TestEditor = ({ params }: TestEditorProps) => {
               addQuestionsToSectionMutation.isPending ||
               removeQuestionMutation.isPending
             }
-            onRenameSection={() => {
-              toast.info(
-                "Renaming sections is not supported by the backend yet",
-              );
-            }}
+            onRenameSection={(name) =>
+              updateSectionMutation.mutate(
+                {
+                  sectionId: section.id,
+                  payload: {
+                    name,
+                    instructions: section.instructions ?? "",
+                    sectionOrder: section.sectionOrder,
+                    timeLimitMinutes: section.timeLimitMinutes,
+                  },
+                },
+                {
+                  onSuccess: () => toast.success("Section renamed"),
+                  onError: () => toast.error("Failed to rename section"),
+                },
+              )
+            }
+            onUpdateInstructions={(instructions) =>
+              updateSectionMutation.mutate(
+                {
+                  sectionId: section.id,
+                  payload: {
+                    name: section.name,
+                    instructions,
+                    sectionOrder: section.sectionOrder,
+                    timeLimitMinutes: section.timeLimitMinutes,
+                  },
+                },
+                {
+                  onSuccess: () => toast.success("Instructions saved"),
+                  onError: () => toast.error("Failed to save instructions"),
+                },
+              )
+            }
             onDeleteSection={() =>
               deleteSectionMutation.mutate(section.id, {
                 onSuccess: () => toast.success("Section deleted"),
@@ -728,6 +791,28 @@ export const TestEditor = ({ params }: TestEditorProps) => {
             }
             onAddQuestion={(type, materialKind) =>
               handleAddQuestion(type, materialKind, section.id)
+            }
+            onDuplicateQuestion={(questionId, sectionId) =>
+              duplicateQuestionMutation.mutate(questionId, {
+                onSuccess: (res) => {
+                  const newId = res.data?.id;
+                  if (typeof newId === "number") {
+                    addQuestionsToSectionMutation.mutate(
+                      { sectionId, questionIds: [newId] },
+                      {
+                        onSuccess: () => toast.success("Question duplicated"),
+                        onError: () =>
+                          toast.error(
+                            "Duplicated question, but failed to attach to section",
+                          ),
+                      },
+                    );
+                  } else {
+                    toast.success("Question duplicated");
+                  }
+                },
+                onError: () => toast.error("Failed to duplicate question"),
+              })
             }
           />
         ))}
