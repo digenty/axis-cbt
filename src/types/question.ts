@@ -388,14 +388,6 @@ export type ApiTestType =
   | "MOCK_EXAM"
   | "PRACTICE_TEST";
 
-export type AssessmentMapping =
-  | "NONE_MANUAL_SCORING"
-  | "CONTINUOUS_ASSESSMENT_1_20_PERCENT"
-  | "CONTINUOUS_ASSESSMENT_2_20_PERCENT"
-  | "EXAMINATION_60_PERCENT"
-  | "CUSTOM"
-  | string;
-
 export interface SectionsSummary {
   id: number;
   name: string;
@@ -410,7 +402,7 @@ export interface ApiAssessment {
   branchId: number;
   term: ApiTerm;
   testType: ApiTestType;
-  assessmentMapping: AssessmentMapping;
+  assessmentSettingId: number | null;
   durationMinutes: number;
   totalMarks: number;
   passingMarks: number;
@@ -433,11 +425,25 @@ export interface ApiAssessmentDetail extends ApiAssessment {
 
 export interface ApiAssessmentQuestion {
   assessmentQuestionId: number;
-  questionId: number;
+  id: number;
   questionText: string;
   questionType: QuestionType;
   marks: number;
   displayOrder: number;
+
+  additionalData?: {
+    correctAnswer: boolean;
+  };
+  branchId: number;
+  classId: number;
+  difficultyLevel: "EASY" | "MEDIUM" | "HARD";
+  explanation: string | null;
+  imageUrl: string | null;
+  options: null;
+  questionHtml: string | null;
+  schoolId: number;
+  subjectId: number;
+  topicId: number;
 }
 
 export interface ApiSection {
@@ -456,7 +462,7 @@ export interface CreateAssessmentPayload {
   branchId: number;
   term: ApiTerm;
   testType: ApiTestType;
-  assessmentMapping: AssessmentMapping;
+  assessmentSettingId: number | null;
   durationMinutes: number;
   totalMarks: number;
   passingMarks: number;
@@ -492,21 +498,6 @@ export interface GradeManuallyPayload {
   answerId: number;
   marksAwarded: number;
   feedback: string;
-}
-
-// ─── Mapping options (FK source for assessmentMapping) ────────────────────────
-
-export interface AssessmentMappingOption {
-  assessmentSettingId: number;
-  name: string;
-  assessmentType: string;
-  weight: number;
-}
-
-export interface AssessmentMappingOptionsResponse {
-  data: AssessmentMappingOption[];
-  message: string;
-  status: string;
 }
 
 // ─── Enrollment ───────────────────────────────────────────────────────────────

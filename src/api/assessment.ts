@@ -4,7 +4,6 @@ import type {
   AssessmentDetailResponse,
   AssessmentEnrollmentResponse,
   AssessmentListResponse,
-  AssessmentMappingOptionsResponse,
   AssessmentResponse,
   AssessmentResultsResponse,
   AssessmentSettingsListResponse,
@@ -73,21 +72,6 @@ export const deleteAssessment = async (
 ): Promise<{ message: string; status: string }> => {
   try {
     const { data } = await api.delete(`/api/cbt/assessments/${assessmentId}`);
-    return data;
-  } catch (error: unknown) {
-    if (isAxiosError(error)) throw error.response?.data;
-    throw error;
-  }
-};
-
-export const getAssessmentMappingOptions = async (params: {
-  classId: number;
-  branchId: number;
-}): Promise<AssessmentMappingOptionsResponse> => {
-  try {
-    const { data } = await api.get(
-      `/api/cbt/assessments/mapping-options?classId=${params.classId}&branchId=${params.branchId}`,
-    );
     return data;
   } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;

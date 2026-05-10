@@ -7,7 +7,6 @@ import {
   deleteSection,
   getAssessment,
   getAssessmentEnrollment,
-  getAssessmentMappingOptions,
   getAssessmentResults,
   getAssessmentSections,
   getAssessmentSettingsByClass,
@@ -38,8 +37,6 @@ export const assessmentKeys = {
   results: (id: number) => ["assessments", id, "results"] as const,
   stats: (id: number) => ["assessments", id, "stats"] as const,
   enrollment: (id: number) => ["assessments", id, "enrollment"] as const,
-  mappingOptions: (classId: number, branchId: number) =>
-    ["assessments", "mapping-options", classId, branchId] as const,
   studentAttemptAnswers: (studentAssessmentId: number) =>
     [
       "assessments",
@@ -87,18 +84,6 @@ export const useGetAssessmentEnrollment = (assessmentId: number) => {
     queryFn: () => getAssessmentEnrollment(assessmentId),
     enabled: !!assessmentId,
     staleTime: 1000 * 60 * 2,
-  });
-};
-
-export const useGetAssessmentMappingOptions = (params: {
-  classId: number;
-  branchId: number;
-}) => {
-  return useQuery({
-    queryKey: assessmentKeys.mappingOptions(params.classId, params.branchId),
-    queryFn: () => getAssessmentMappingOptions(params),
-    enabled: !!params.classId && !!params.branchId,
-    staleTime: 1000 * 60 * 5,
   });
 };
 

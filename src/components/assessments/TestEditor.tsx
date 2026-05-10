@@ -3,6 +3,7 @@
 import { use, useMemo, useState } from "react";
 import {
   BookOpen,
+  Check,
   ChevronDown,
   Cloud,
   FileText,
@@ -19,14 +20,24 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PageHeader } from "@/components/common/PageHeader";
 import { QuestionTypeBadge } from "@/components/common/QuestionTypeBadge";
 import { EmptyState } from "@/components/common/EmptyState";
 import { QuestionBankModal } from "@/components/assessments/QuestionBankModal";
+import { DeleteSectionDialog } from "@/components/assessments/DeleteSectionDialog";
+import { RemoveQuestionDialog } from "@/components/assessments/RemoveQuestionDialog";
 import { AddAssessmentItemModal } from "@/components/question-bank/AddAssessmentItemModal";
 import { QuestionEditForm } from "@/components/question-bank/QuestionEditForm";
 import {
   apiQuestionToUI,
+  apiToKebabType,
   questionToCreatePayload,
 } from "@/types/question.mapper";
 import {
@@ -47,6 +58,7 @@ import {
   useDeleteSection,
   useGetAssessment,
   useGetAssessmentSections,
+  useGetAssessmentSettingsByClass,
   usePublishAssessment,
   useRemoveQuestionFromSection,
   useUpdateAssessment,
@@ -54,11 +66,12 @@ import {
 } from "@/hooks/queryHooks/useAssessment";
 import {
   useDuplicateCbtQuestion,
+  useGetQuestion,
   useGetQuestions,
   useGetTopics,
   useUpdateCbtQuestion,
 } from "@/hooks/queryHooks/useQuestionBank";
-import type { ApiSection } from "@/types/question";
+import type { ApiAssessmentQuestion, ApiSection } from "@/types/question";
 import type { Question, QuestionType, TermType, TestType } from "@/types";
 import type { ApiTopic } from "@/types/question";
 import type { Topic } from "@/types";
@@ -81,6 +94,109 @@ const apiTopicToUI = (t: ApiTopic): Topic => ({
   questions: [],
   createdAt: "",
 });
+
+// ─── Question row ─────────────────────────────────────────────────────────────
+
+interface QuestionRowProps {
+  aq: ApiAssessmentQuestion;
+  index: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+  classId: number;
+  subjectId: number;
+  topicId: number | null;
+  section: ApiSection;
+  updateQuestion: ReturnType<typeof useUpdateCbtQuestion>;
+  onDuplicateQuestion: (questionId: number, sectionId: number) => void;
+  onRemoveQuestion: (assessmentQuestionId: number) => void;
+}
+
+const QuestionRow = ({
+  aq,
+  index,
+  isExpanded,
+  onToggle,
+  classId,
+  subjectId,
+  topicId,
+  section,
+  updateQuestion,
+  onDuplicateQuestion,
+  onRemoveQuestion,
+}: QuestionRowProps) => {
+  const { data: individualRes, isLoading: questionLoading } = useGetQuestion(
+    isExpanded ? aq.id : 0,
+  );
+
+  const fullQuestion = individualRes?.data
+    ? apiQuestionToUI(individualRes.data)
+    : undefined;
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border transition-colors hover:bg-[var(--color-bg-state-soft)]",
+        isExpanded
+          ? "border-blue-500 ring-1 ring-blue-500/20"
+          : "border-[var(--color-border-default)]",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 px-3 py-4.5 text-left"
+      >
+        <GripVertical className="h-3.5 w-3.5 shrink-0 text-[var(--color-icon-default-muted)]" />
+        <span className="shrink-0 rounded bg-[var(--color-bg-badge-gray)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-subtle)]">
+          Q{index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm text-[var(--color-text-default)]">
+            {aq.questionText || "(untitled)"}
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            <QuestionTypeBadge type={apiToKebabType(aq.questionType)} />
+            <span className="text-[11px] text-[var(--color-text-muted)]">
+              • {aq.marks} mark{aq.marks === 1 ? "" : "s"}
+            </span>
+          </div>
+        </div>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 shrink-0 text-[var(--color-icon-default-muted)] transition-transform",
+            isExpanded && "rotate-180",
+          )}
+        />
+      </button>
+
+      {isExpanded &&
+        (fullQuestion ? (
+          <QuestionEditForm
+            question={fullQuestion}
+            onUpdate={(updated) => {
+              const targetTopicId = topicId ?? fullQuestion.topicId;
+              updateQuestion.mutate({
+                id: Number(updated.id),
+                payload: questionToCreatePayload(updated, {
+                  classId,
+                  subjectId,
+                  topicId: Number(targetTopicId),
+                }),
+              });
+            }}
+            onDuplicate={() =>
+              onDuplicateQuestion(Number(fullQuestion.id), section.id)
+            }
+            onDelete={() => onRemoveQuestion(aq.assessmentQuestionId)}
+          />
+        ) : questionLoading ? (
+          <div className="flex justify-center px-3 pb-4">
+            <Loader2 className="h-4 w-4 animate-spin text-[var(--color-icon-default-muted)]" />
+          </div>
+        ) : null)}
+    </div>
+  );
+};
 
 // ─── Section panel ────────────────────────────────────────────────────────────
 
@@ -126,6 +242,7 @@ const SectionPanel = ({
     null,
   );
 
+  console.log(section);
   const toggleExpand = (id: number) =>
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -135,7 +252,7 @@ const SectionPanel = ({
     });
 
   const alreadyAddedQuestionIds = useMemo(
-    () => section.questions.map((q) => String(q.questionId)),
+    () => section.questions.map((q) => String(q.id)),
     [section.questions],
   );
 
@@ -157,8 +274,8 @@ const SectionPanel = ({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          {/* <div
+            role="button"
             onClick={(e) => {
               e.stopPropagation();
               const name = window.prompt("Section name", section.name);
@@ -167,18 +284,18 @@ const SectionPanel = ({
             className="text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-default-subtle)]"
           >
             <Pencil className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
+          </div> */}
+          <div
+            role="button"
             onClick={(e) => {
               e.stopPropagation();
               onDeleteSection();
             }}
-            disabled={busy}
+            // disabled={busy}
             className="text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-destructive)]"
           >
             <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          </div>
           <ChevronDown
             className={cn(
               "h-4 w-4 text-[var(--color-icon-default-muted)] transition-transform",
@@ -241,79 +358,22 @@ const SectionPanel = ({
             />
           ) : (
             <div className="flex flex-col gap-2">
-              {section.questions.map((aq, i) => {
-                const isExpanded = expandedIds.has(aq.assessmentQuestionId);
-                const fullQuestion = bankQuestions.find(
-                  (q) => Number(q.id) === aq.questionId,
-                );
-                return (
-                  <div
-                    key={aq.assessmentQuestionId}
-                    className={cn(
-                      "rounded-lg border transition-colors hover:bg-[var(--color-bg-state-soft)]",
-                      isExpanded
-                        ? "border-blue-500 ring-1 ring-blue-500/20"
-                        : "border-[var(--color-border-default)]",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleExpand(aq.assessmentQuestionId)}
-                      className="flex w-full items-center gap-2 px-3 py-4.5 text-left"
-                    >
-                      <GripVertical className="h-3.5 w-3.5 shrink-0 text-[var(--color-icon-default-muted)]" />
-                      <span className="shrink-0 rounded bg-[var(--color-bg-badge-gray)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-subtle)]">
-                        Q{i + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm text-[var(--color-text-default)]">
-                          {aq.questionText || "(untitled)"}
-                        </div>
-                        <div className="mt-1 flex items-center gap-2">
-                          {fullQuestion ? (
-                            <QuestionTypeBadge type={fullQuestion.type} />
-                          ) : null}
-                          <span className="text-[11px] text-[var(--color-text-muted)]">
-                            • {aq.marks} mark{aq.marks === 1 ? "" : "s"}
-                          </span>
-                        </div>
-                      </div>
-                      <ChevronDown
-                        className={cn(
-                          "h-4 w-4 shrink-0 text-[var(--color-icon-default-muted)] transition-transform",
-                          isExpanded && "rotate-180",
-                        )}
-                      />
-                    </button>
-
-                    {isExpanded && fullQuestion && (
-                      <QuestionEditForm
-                        question={fullQuestion}
-                        onUpdate={(updated) => {
-                          const targetTopicId = topicId ?? fullQuestion.topicId;
-                          updateQuestion.mutate({
-                            id: Number(updated.id),
-                            payload: questionToCreatePayload(updated, {
-                              classId,
-                              subjectId,
-                              topicId: Number(targetTopicId),
-                            }),
-                          });
-                        }}
-                        onDuplicate={() =>
-                          onDuplicateQuestion(
-                            Number(fullQuestion.id),
-                            section.id,
-                          )
-                        }
-                        onDelete={() =>
-                          onRemoveQuestion(aq.assessmentQuestionId)
-                        }
-                      />
-                    )}
-                  </div>
-                );
-              })}
+              {section.questions.map((aq, i) => (
+                <QuestionRow
+                  key={aq.id}
+                  aq={aq}
+                  index={i}
+                  isExpanded={expandedIds.has(aq.assessmentQuestionId)}
+                  onToggle={() => toggleExpand(aq.assessmentQuestionId)}
+                  classId={classId}
+                  subjectId={subjectId}
+                  topicId={topicId}
+                  section={section}
+                  updateQuestion={updateQuestion}
+                  onDuplicateQuestion={onDuplicateQuestion}
+                  onRemoveQuestion={onRemoveQuestion}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -366,6 +426,11 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   } = useGetAssessment(assessmentId);
   const { data: sectionsRes, isLoading: sectionsLoading } =
     useGetAssessmentSections(assessmentId);
+  const { data: settingsRes } = useGetAssessmentSettingsByClass(classId);
+  const settings = useMemo(
+    () => settingsRes?.data?.assessments ?? [],
+    [settingsRes],
+  );
   const { data: topicsRes } = useGetTopics({ classId, subjectId });
   const { data: questionsRes } = useGetQuestions({ classId, subjectId });
 
@@ -417,8 +482,42 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   });
 
   // ─── Local UI state for the title editor ─────────────────────────────────
+  const [deleteSectionTargetId, setDeleteSectionTargetId] = useState<
+    number | null
+  >(null);
+  const [removeQuestionTargetId, setRemoveQuestionTargetId] = useState<
+    number | null
+  >(null);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
+
+  const handleConfirmDeleteSection = () => {
+    if (deleteSectionTargetId === null) return;
+    deleteSectionMutation.mutate(deleteSectionTargetId, {
+      onSuccess: () => {
+        toast.success("Section deleted");
+        setDeleteSectionTargetId(null);
+      },
+      onError: () => {
+        toast.error("Failed to delete section");
+        setDeleteSectionTargetId(null);
+      },
+    });
+  };
+
+  const handleConfirmRemoveQuestion = () => {
+    if (removeQuestionTargetId === null) return;
+    removeQuestionMutation.mutate(removeQuestionTargetId, {
+      onSuccess: () => {
+        toast.success("Question removed");
+        setRemoveQuestionTargetId(null);
+      },
+      onError: () => {
+        toast.error("Failed to remove question");
+        setRemoveQuestionTargetId(null);
+      },
+    });
+  };
 
   if (assessmentLoading || sectionsLoading) {
     return (
@@ -458,7 +557,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
         branchId: assessment.branchId,
         term: assessment.term,
         testType: assessment.testType,
-        assessmentMapping: assessment.assessmentMapping,
+        assessmentSettingId: assessment.assessmentSettingId,
         durationMinutes: assessment.durationMinutes,
         totalMarks: assessment.totalMarks,
         passingMarks: assessment.passingMarks,
@@ -544,37 +643,47 @@ export const TestEditor = ({ params }: TestEditorProps) => {
         backHref={`${baseUrl}/assessments`}
         right={
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditingDetails((v) => !v)}
-            >
-              <Pencil className="mr-1 h-3.5 w-3.5" />
-              Edit Details
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditingDetails((v) => !v)}
-            >
-              <Draft
-                fill="var(--color-icon-default-muted)"
-                className="mr-1 h-3.5 w-3.5"
-              />
-              Save as Draft
-            </Button>
-            <Button
-              size="sm"
-              onClick={handlePublish}
-              disabled={publishMutation.isPending}
-            >
-              {publishMutation.isPending ? (
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Cloud className="mr-1 h-3.5 w-3.5" />
-              )}
-              Publish Test
-            </Button>
+            {assessment.status === "DRAFT" ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingDetails((v) => !v)}
+                >
+                  <Pencil className="mr-1 h-3.5 w-3.5" />
+                  Edit Details
+                </Button>
+                <Button variant="outline" size="sm">
+                  <Draft
+                    fill="var(--color-icon-default-muted)"
+                    className="mr-1 h-3.5 w-3.5"
+                  />
+                  Save as Draft
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handlePublish}
+                  disabled={publishMutation.isPending}
+                >
+                  {publishMutation.isPending ? (
+                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Cloud className="mr-1 h-3.5 w-3.5" />
+                  )}
+                  Publish Test
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="sm"
+                disabled
+                className="bg-green-600 text-white opacity-100 hover:bg-green-600"
+              >
+                <Check className="mr-1 h-3.5 w-3.5" />
+                {assessment.status.charAt(0) +
+                  assessment.status.slice(1).toLowerCase()}
+              </Button>
+            )}
           </>
         }
       />
@@ -596,12 +705,18 @@ export const TestEditor = ({ params }: TestEditorProps) => {
           <Timer className="h-3 w-3" />
           {assessment.durationMinutes} minutes
         </span>
-        {assessment.assessmentMapping && (
-          <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-green)] px-2 py-1 h-7 border border-bg-basic-green-accent text-[11px] text-[var(--green-700)]">
-            <Tag className="h-3 w-3" />
-            {assessment.assessmentMapping}
-          </span>
-        )}
+        {(() => {
+          const matched = settings.find(
+            (s) => s.id === assessment.assessmentSettingId,
+          );
+          if (!matched) return null;
+          return (
+            <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-badge-green)] px-2 py-1 h-7 border border-bg-basic-green-accent text-[11px] text-[var(--green-700)]">
+              <Tag className="h-3 w-3" />
+              {matched.name} ({matched.weight}%)
+            </span>
+          );
+        })()}
       </div>
 
       {editingDetails && (
@@ -640,12 +755,30 @@ export const TestEditor = ({ params }: TestEditorProps) => {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Mapping</Label>
-              <Input
-                value={assessment.assessmentMapping}
-                onChange={(e) =>
-                  patchAssessment({ assessmentMapping: e.target.value })
+              <Select
+                value={
+                  assessment.assessmentSettingId == null
+                    ? "none"
+                    : String(assessment.assessmentSettingId)
                 }
-              />
+                onValueChange={(v) =>
+                  patchAssessment({
+                    assessmentSettingId: v === "none" ? null : Number(v),
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Map assessment" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None / Manual Scoring</SelectItem>
+                  {settings.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.name} ({s.weight}%)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Duration (minutes)</Label>
@@ -768,12 +901,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
                 },
               )
             }
-            onDeleteSection={() =>
-              deleteSectionMutation.mutate(section.id, {
-                onSuccess: () => toast.success("Section deleted"),
-                onError: () => toast.error("Failed to delete section"),
-              })
-            }
+            onDeleteSection={() => setDeleteSectionTargetId(section.id)}
             onAddFromBank={(ids) =>
               addQuestionsToSectionMutation.mutate(
                 { sectionId: section.id, questionIds: ids },
@@ -783,12 +911,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
                 },
               )
             }
-            onRemoveQuestion={(aqId) =>
-              removeQuestionMutation.mutate(aqId, {
-                onSuccess: () => toast.success("Question removed"),
-                onError: () => toast.error("Failed to remove question"),
-              })
-            }
+            onRemoveQuestion={(aqId) => setRemoveQuestionTargetId(aqId)}
             onAddQuestion={(type, materialKind) =>
               handleAddQuestion(type, materialKind, section.id)
             }
@@ -831,6 +954,24 @@ export const TestEditor = ({ params }: TestEditorProps) => {
           Add New Section
         </button>
       </div>
+
+      <DeleteSectionDialog
+        open={deleteSectionTargetId !== null}
+        setOpen={(open) => {
+          if (!open) setDeleteSectionTargetId(null);
+        }}
+        onConfirm={handleConfirmDeleteSection}
+        isLoading={deleteSectionMutation.isPending}
+      />
+
+      <RemoveQuestionDialog
+        open={removeQuestionTargetId !== null}
+        setOpen={(open) => {
+          if (!open) setRemoveQuestionTargetId(null);
+        }}
+        onConfirm={handleConfirmRemoveQuestion}
+        isLoading={removeQuestionMutation.isPending}
+      />
     </div>
   );
 };

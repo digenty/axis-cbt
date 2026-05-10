@@ -7,6 +7,7 @@ import { QuestionBankSidebar } from "./QuestionBankSidebar";
 import { QuestionListPanel } from "./QuestionListPanel";
 import { TopicFormDialog } from "./TopicFormDialog";
 import { DeleteTopicDialog } from "./DeleteTopicDialog";
+import { DeleteQuestionDialog } from "./DeleteQuestionDialog";
 import { AddAssessmentItemModal } from "./AddAssessmentItemModal";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -179,7 +180,14 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
 
   const handleDeleteTopic = (id: string) => {
     deleteTopic.mutate(Number(id), {
-      onSuccess: () => toast.success("Topic deleted"),
+      onSuccess: () => {
+        toast.success("Topic deleted");
+        setDeletingTopic(null);
+      },
+      onError: () => {
+        toast.error("Failed to delete topic");
+        setDeletingTopic(null);
+      },
     });
   };
 
@@ -263,9 +271,23 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
     });
   };
 
-  const handleDeleteQuestion = (id: string) => {
-    deleteQuestion.mutate(Number(id), {
-      onSuccess: () => toast.success("Question deleted"),
+  const [deleteQuestionTargetId, setDeleteQuestionTargetId] = useState<
+    string | null
+  >(null);
+
+  const handleDeleteQuestion = (id: string) => setDeleteQuestionTargetId(id);
+
+  const handleConfirmDeleteQuestion = () => {
+    if (!deleteQuestionTargetId) return;
+    deleteQuestion.mutate(Number(deleteQuestionTargetId), {
+      onSuccess: () => {
+        toast.success("Question deleted");
+        setDeleteQuestionTargetId(null);
+      },
+      onError: () => {
+        toast.error("Failed to delete question");
+        setDeleteQuestionTargetId(null);
+      },
     });
   };
 
@@ -402,8 +424,17 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
         }}
         onConfirm={() => {
           if (deletingTopic) handleDeleteTopic(deletingTopic.id);
-          setDeletingTopic(null);
         }}
+        isLoading={deleteTopic.isPending}
+      />
+
+      <DeleteQuestionDialog
+        open={deleteQuestionTargetId !== null}
+        setOpen={(open) => {
+          if (!open) setDeleteQuestionTargetId(null);
+        }}
+        onConfirm={handleConfirmDeleteQuestion}
+        isLoading={deleteQuestion.isPending}
       />
     </div>
   );

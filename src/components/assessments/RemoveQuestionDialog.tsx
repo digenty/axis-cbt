@@ -1,36 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { MobileDrawer } from "@/components/MobileDrawer";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
-interface DeleteTopicDialogProps {
+interface RemoveQuestionDialogProps {
   open: boolean;
   setOpen: (open: boolean) => void;
   onConfirm: () => void;
   isLoading?: boolean;
 }
 
-export const DeleteTopicDialog = ({
+export const RemoveQuestionDialog = ({
   open,
   setOpen,
   onConfirm,
   isLoading = false,
-}: DeleteTopicDialogProps) => {
-  const [acknowledged, setAcknowledged] = useState(false);
+}: RemoveQuestionDialogProps) => {
   const isMobile = useIsMobile();
 
-  const cancel = () => {
-    setAcknowledged(false);
-    setOpen(false);
-  };
+  const cancel = () => setOpen(false);
 
   const confirm = () => {
-    if (!acknowledged) return;
     onConfirm();
   };
 
@@ -40,31 +33,11 @@ export const DeleteTopicDialog = ({
   };
 
   const body = (
-    <div className="flex flex-col gap-4 px-4 py-4">
+    <div className="px-4 py-4">
       <p className="text-sm text-text-default">
-        Are you sure you want to permanently delete this topic? This action
-        cannot be undone.
+        Remove this question from the section? The question will remain in the
+        question bank and can be re-added at any time.
       </p>
-
-      <div className="flex items-start gap-3 rounded-md border border-border-amber bg-bg-badge-amber p-3">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-icon-warning" />
-        <p className="text-sm text-text-default">
-          Any questions under this topic will be permanently removed and cannot
-          be recovered.
-        </p>
-      </div>
-
-      <label className="flex cursor-pointer items-start gap-2 text-sm text-text-default">
-        <Checkbox
-          checked={acknowledged}
-          onCheckedChange={(value) => setAcknowledged(value === true)}
-          className="mt-0.5"
-        />
-        <span>
-          I understand that deleting this topic will permanently remove all
-          questions within it.
-        </span>
-      </label>
     </div>
   );
 
@@ -82,13 +55,13 @@ export const DeleteTopicDialog = ({
     <Button
       variant="destructive"
       onClick={confirm}
-      disabled={!acknowledged || isLoading}
+      disabled={isLoading}
       className="h-7 px-3 text-sm font-medium"
     >
       {isLoading ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
       ) : (
-        "Delete Topic"
+        "Remove Question"
       )}
     </Button>
   );
@@ -99,7 +72,7 @@ export const DeleteTopicDialog = ({
         <Modal
           open={open}
           setOpen={handleOpenChange}
-          title="Delete Topic?"
+          title="Remove Question?"
           cancelButton={cancelButton}
           ActionButton={actionButton}
         >
@@ -111,7 +84,7 @@ export const DeleteTopicDialog = ({
         <MobileDrawer
           open={open}
           setIsOpen={handleOpenChange}
-          title="Delete Topic?"
+          title="Remove Question?"
         >
           {body}
           <div className="flex items-center justify-between gap-2 border-t border-border-default p-4">

@@ -77,6 +77,7 @@ const uiOptionsToApi = (options: UIOption[]): OptionData[] =>
     optionLabel: o.id,
     optionText: o.text,
     isCorrect: o.isCorrect ?? false,
+    imageUrl: o.imageUrl,
   }));
 
 const apiOptionsToUI = (options: OptionData[] = []): UIOption[] =>
@@ -84,6 +85,7 @@ const apiOptionsToUI = (options: OptionData[] = []): UIOption[] =>
     id: o.optionLabel || generateId(),
     text: o.optionText ?? "",
     isCorrect: o.isCorrect,
+    imageUrl: o.imageUrl,
   }));
 
 const uiBlanksToApi = (blanks: UIBlank[]): BlankData[] =>
@@ -108,8 +110,8 @@ const apiBlanksToUI = (blanks: BlankData[] = []): UIBlank[] =>
   );
 
 const uiMatchToApi = (
-  items: { id: string; text: string }[] = [],
-  options: { id: string; text: string }[] = [],
+  items: { id: string; text: string; imageUrl?: string }[] = [],
+  options: { id: string; text: string; imageUrl?: string }[] = [],
 ): MatchPairData[] => {
   const len = Math.max(items.length, options.length);
   const pairs: MatchPairData[] = [];
@@ -117,6 +119,8 @@ const uiMatchToApi = (
     pairs.push({
       itemText: items[i]?.text ?? "",
       matchText: options[i]?.text ?? "",
+      itemImageUrl: items[i]?.imageUrl,
+      matchImageUrl: options[i]?.imageUrl,
     });
   }
   return pairs;
@@ -137,6 +141,7 @@ const buildPayloadTypeSpecificData = (
     | "matchItems"
     | "matchOptions"
     | "metadata"
+    | "stimulusImageUrl"
   >,
 ): PayloadTypeSpecificData => {
   const m = q.metadata ?? {};
@@ -228,6 +233,7 @@ const buildPayloadTypeSpecificData = (
         type: "QUESTION_GROUP",
         stimulusType: m.stimulusType,
         stimulusContent: q.passage || undefined,
+        stimulusImageUrl: q.stimulusImageUrl,
         subQuestions: (q.subQuestions ?? []).map(uiSubQuestionToPayload),
       };
     case "comprehension-passage":
@@ -235,6 +241,7 @@ const buildPayloadTypeSpecificData = (
         type: "COMPREHENSION",
         stimulusType: m.stimulusType ?? "comprehension-passage",
         stimulusContent: q.passage || undefined,
+        stimulusImageUrl: q.stimulusImageUrl,
         subQuestions: (q.subQuestions ?? []).map(uiSubQuestionToPayload),
       };
   }
@@ -253,6 +260,7 @@ const uiSubQuestionToPayload = (sq: UIQuestion): PayloadSubQuestion => {
     questionText: sq.text,
     marks: sq.marks,
     explanation: sq.instruction || undefined,
+    imageUrl: sq.imageUrl,
     questionType: subType,
     typeSpecificData: tsd,
   };
@@ -270,6 +278,7 @@ export const questionToCreatePayload = (
     questionText: q.text,
     marks: q.marks,
     explanation: q.instruction || undefined,
+    imageUrl: q.imageUrl,
     questionType: apiType,
     typeSpecificData: buildPayloadTypeSpecificData(q),
   };
@@ -291,6 +300,7 @@ const apiSubQuestionToUI = (sq: ResponseSubQuestion): UIQuestion => {
       text: sq.questionText,
       marks: sq.marks,
       instruction: sq.explanation,
+      imageUrl: sq.imageUrl,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -302,7 +312,6 @@ const tsdToUiFields = (
   base: UIQuestion,
   tsd: ResponseTypeSpecificData,
 ): UIQuestion => {
-  console.log(tsd, "@tsd");
   switch (tsd.questionType) {
     case "MULTIPLE_CHOICE":
       return { ...base, options: apiOptionsToUI(tsd.options) };
@@ -386,10 +395,12 @@ const tsdToUiFields = (
         matchItems: tsd.pairs.map((p) => ({
           id: generateId(),
           text: p.itemText ?? "",
+          imageUrl: p.itemImageUrl,
         })),
         matchOptions: tsd.pairs.map((p) => ({
           id: generateId(),
           text: p.matchText ?? "",
+          imageUrl: p.matchImageUrl,
         })),
         metadata: {
           marksForEach: tsd.marksForEach,
@@ -401,6 +412,7 @@ const tsdToUiFields = (
       return {
         ...base,
         passage: tsd.stimulusContent,
+        stimulusImageUrl: tsd.stimulusImageUrl,
         subQuestions: (tsd.subQuestions ?? []).map(apiSubQuestionToUI),
         metadata: { stimulusType: tsd.stimulusType },
       };
@@ -408,6 +420,7 @@ const tsdToUiFields = (
       return {
         ...base,
         passage: tsd.stimulusContent,
+        stimulusImageUrl: tsd.stimulusImageUrl,
         subQuestions: (tsd.subQuestions ?? []).map(apiSubQuestionToUI),
         metadata: { stimulusType: tsd.stimulusType },
       };
@@ -425,6 +438,7 @@ export const apiQuestionToUI = (api: ApiQuestion): UIQuestion => {
     text: api.questionText,
     marks: api.marks,
     instruction: api.explanation,
+    imageUrl: api.imageUrl,
     createdAt: api.createdAt ?? new Date().toISOString(),
     updatedAt: api.updatedAt ?? new Date().toISOString(),
   };

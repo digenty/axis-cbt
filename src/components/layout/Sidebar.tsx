@@ -38,6 +38,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Tooltip } from "../Tooltip";
 import { Button } from "../ui/button";
+import { deleteSession } from "@/lib/cookies";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -170,9 +171,7 @@ export const Sidebar = ({ isAdmin = false }: { isAdmin?: boolean }) => {
 
   const handleLogout = () => {
     queryClient.clear();
-    window.location.href = mainAppUrl
-      ? `${mainAppUrl}/auth/staff`
-      : "/auth-entry";
+    deleteSession();
   };
 
   const renderNavItems = (items: NavItem[], collapsed: boolean) =>

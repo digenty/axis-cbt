@@ -1,17 +1,16 @@
 "use client";
 
 import { use, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Box, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { TestCard } from "./TestCard";
 import { CreateTestModal } from "./CreateTestModal";
+import { DeleteTestDialog } from "./DeleteTestDialog";
 import {
   useGetClassDetails,
   useGetSubjectsByClassId,
-  useGetTeacherSubjects,
 } from "@/hooks/queryHooks/useSubjects";
 import {
   useDeleteAssessment,
@@ -28,12 +27,10 @@ export const TestListView = ({ params }: TestListViewProps) => {
   const { classId: classIdStr, subjectId: subjectIdStr } = use(params);
   const classId = Number(classIdStr);
   const subjectId = Number(subjectIdStr);
-  const router = useRouter();
-
   const [showModal, setShowModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const { data: classDetails } = useGetClassDetails(classId);
-  const { data: teacherSubjects } = useGetTeacherSubjects();
   const { data: classSubjects } = useGetSubjectsByClassId(classId);
 
   const branchId = useMemo(
@@ -58,24 +55,25 @@ export const TestListView = ({ params }: TestListViewProps) => {
 
   const deleteMutation = useDeleteAssessment(classId, subjectId, branchId ?? 0);
 
-  const handleDelete = (id: string) => {
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm("Delete this test? This cannot be undone.")
-    ) {
-      return;
-    }
-    deleteMutation.mutate(Number(id), {
-      onSuccess: () => toast.success("Test deleted"),
-      onError: () => toast.error("Failed to delete test"),
+  const handleDelete = (id: string) => setDeleteTargetId(id);
+
+  const handleConfirmDelete = () => {
+    if (!deleteTargetId) return;
+    deleteMutation.mutate(Number(deleteTargetId), {
+      onSuccess: () => {
+        toast.success("Test deleted");
+        setDeleteTargetId(null);
+      },
+      onError: () => {
+        toast.error("Failed to delete test");
+        setDeleteTargetId(null);
+      },
     });
   };
 
   const subjectName = useMemo(
-    () =>
-      teacherSubjects?.data?.find((s) => s.subjectId === subjectId)
-        ?.subjectName ?? "",
-    [teacherSubjects, subjectId],
+    () => classSubjects?.data?.find((s) => s.id === subjectId)?.name ?? "",
+    [classSubjects, subjectId],
   );
 
   const className = useMemo(() => {
@@ -155,7 +153,16 @@ export const TestListView = ({ params }: TestListViewProps) => {
         branchId={branchId}
         className={className}
         subjectName={subjectName}
-        onSuccess={(testId) => router.push(`${baseUrl}/assessments/${testId}`)}
+        onSuccess={() => {}}
+      />
+
+      <DeleteTestDialog
+        open={deleteTargetId !== null}
+        setOpen={(open) => {
+          if (!open) setDeleteTargetId(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        isLoading={deleteMutation.isPending}
       />
     </div>
   );

@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { ChevronDown, ImageIcon, Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { QuestionTypeBadge } from "@/components/common/QuestionTypeBadge";
@@ -13,6 +15,7 @@ import { ShortAnswerEditor } from "./ShortAnswerEditor";
 import { EssayEditor } from "./EssayEditor";
 import type { Question, QuestionType } from "@/types";
 import { cn } from "@/lib/utils";
+import { uploadImage } from "@/lib/uploads";
 
 const SUB_TYPES: QuestionType[] = [
   "multiple-choice",
@@ -38,6 +41,20 @@ export const SubQuestionRow = ({
   onDelete,
 }: SubQuestionRowProps) => {
   const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const url = await uploadImage(file, "cbt/sub-questions");
+      onChange({ ...question, imageUrl: url });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-default)]">
@@ -88,6 +105,69 @@ export const SubQuestionRow = ({
             onChange={(v) => onChange({ ...question, text: v })}
             minHeight="80px"
           />
+
+          <div className="flex flex-col gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) handleUpload(file);
+              }}
+            />
+            {question.imageUrl ? (
+              <div className="flex items-start gap-2">
+                <div className="relative h-24 w-32 overflow-hidden rounded-md bg-gray-100">
+                  <img
+                    src={question.imageUrl}
+                    alt="Sub-question"
+                    className="absolute inset-0 h-full w-full object-contain"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    "Replace"
+                  )}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...question, imageUrl: undefined })}
+                  className="text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-destructive)]"
+                  aria-label="Remove image"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 w-fit gap-1.5 px-2 text-xs"
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ImageIcon className="h-3.5 w-3.5" />
+                )}
+                Add Image
+              </Button>
+            )}
+          </div>
 
           {(question.type === "multiple-choice" ||
             question.type === "multiple-answers") && (

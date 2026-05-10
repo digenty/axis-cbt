@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Copy, ImageIcon, Trash2 } from "lucide-react";
+import { Copy, ImageIcon, Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { QuestionTypeSelector } from "./QuestionTypeSelector";
@@ -16,6 +17,7 @@ import { MultipleBlanksEditor } from "./answer-editors/MultipleBlanksEditor";
 import { QuestionGroupEditor } from "./answer-editors/QuestionGroupEditor";
 import type { MaterialKind } from "./answer-editors/QuestionGroupEditor";
 import { generateId } from "@/lib/utils";
+import { uploadImage } from "@/lib/uploads";
 import type { Question, QuestionType, Option, Blank } from "@/types";
 
 const SIMPLE_TYPES: QuestionType[] = [
@@ -53,6 +55,8 @@ type Patch = {
   subQuestions?: Question[];
   blanks?: Blank[];
   groupName?: string;
+  imageUrl?: string | null;
+  stimulusImageUrl?: string | null;
 };
 
 interface QuestionEditFormProps {
@@ -69,7 +73,13 @@ export const QuestionEditForm = ({
   onDelete,
 }: QuestionEditFormProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [questionImage, setQuestionImage] = useState<string | null>(null);
+  const [questionImage, setQuestionImage] = useState<string | null>(
+    question.imageUrl ?? null,
+  );
+  const [stimulusImage, setStimulusImage] = useState<string | null>(
+    question.stimulusImageUrl ?? null,
+  );
+  const [uploading, setUploading] = useState(false);
 
   const [type, setType] = useState<QuestionType>(question.type);
   const [text, setText] = useState(question.text ?? "");
@@ -131,6 +141,11 @@ export const QuestionEditForm = ({
     const p = patch.passage ?? passage;
     const sq = patch.subQuestions ?? subQuestions;
     const bl = patch.blanks ?? blanks;
+    const img = patch.imageUrl !== undefined ? patch.imageUrl : questionImage;
+    const stimImg =
+      patch.stimulusImageUrl !== undefined
+        ? patch.stimulusImageUrl
+        : stimulusImage;
 
     const base = {
       id: question.id,
@@ -140,6 +155,8 @@ export const QuestionEditForm = ({
       text: grouped ? gn : tx,
       marks: m,
       instruction: ins,
+      imageUrl: img ?? undefined,
+      stimulusImageUrl: stimImg ?? undefined,
       updatedAt: new Date().toISOString(),
     };
 
@@ -215,23 +232,36 @@ export const QuestionEditForm = ({
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) =>
-                  setQuestionImage(ev.target?.result as string);
-                reader.readAsDataURL(file);
                 e.target.value = "";
+                if (!file) return;
+                setUploading(true);
+                try {
+                  const url = await uploadImage(file, "cbt/questions");
+                  setQuestionImage(url);
+                  save({ imageUrl: url });
+                } catch (err) {
+                  toast.error(
+                    err instanceof Error ? err.message : "Upload failed",
+                  );
+                } finally {
+                  setUploading(false);
+                }
               }}
             />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-border-default)] text-[var(--color-icon-default-muted)] hover:bg-[var(--color-bg-state-soft-hover)]"
+              disabled={uploading}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-border-default)] text-[var(--color-icon-default-muted)] hover:bg-[var(--color-bg-state-soft-hover)] disabled:opacity-60"
               aria-label="Add image"
             >
-              <ImageIcon className="h-4 w-4" />
+              {uploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ImageIcon className="h-4 w-4" />
+              )}
             </button>
           </>
         )}
@@ -284,7 +314,10 @@ export const QuestionEditForm = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setQuestionImage(null)}
+                onClick={() => {
+                  setQuestionImage(null);
+                  save({ imageUrl: null });
+                }}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[var(--color-border-default)] text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-destructive)]"
                 aria-label="Remove image"
               >
@@ -421,6 +454,11 @@ export const QuestionEditForm = ({
             onChangeSubQuestions={(sq) => {
               setSubQuestions(sq);
               save({ subQuestions: sq });
+            }}
+            stimulusImageUrl={stimulusImage ?? undefined}
+            onChangeStimulusImage={(url) => {
+              setStimulusImage(url ?? null);
+              save({ stimulusImageUrl: url ?? null });
             }}
           />
         )}
