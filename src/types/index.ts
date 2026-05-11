@@ -184,9 +184,13 @@ export interface Question {
   instruction?: string;
   subQuestions?: Question[];
   /** For matching questions: left column items */
-  matchItems?: { id: string; text: string }[];
+  matchItems?: { id: string; text: string; imageUrl?: string }[];
   /** For matching questions: right column options */
-  matchOptions?: { id: string; text: string }[];
+  matchOptions?: { id: string; text: string; imageUrl?: string }[];
+  /** Main question image */
+  imageUrl?: string;
+  /** Stimulus image for question-group / comprehension-passage */
+  stimulusImageUrl?: string;
   /** Type-specific advanced metadata (round-tripped to API) */
   metadata?: QuestionMetadata;
   createdAt: string;
@@ -265,6 +269,7 @@ export interface Option {
   id: string;
   text: string;
   isCorrect?: boolean;
+  imageUrl?: string;
 }
 
 export interface Blank {
@@ -356,7 +361,6 @@ export type {
   TestStatus,
   TestType,
   TermType,
-  AssessmentMapping,
   StudentAttempt,
   StudentAnswer,
   AttemptStatus,

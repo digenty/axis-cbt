@@ -1,12 +1,13 @@
 "use client";
 
 import { use, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FolderOpen, Plus, Loader2 } from "lucide-react";
 import { QuestionBankSidebar } from "./QuestionBankSidebar";
 import { QuestionListPanel } from "./QuestionListPanel";
 import { TopicFormDialog } from "./TopicFormDialog";
 import { DeleteTopicDialog } from "./DeleteTopicDialog";
+import { DeleteQuestionDialog } from "./DeleteQuestionDialog";
 import { AddAssessmentItemModal } from "./AddAssessmentItemModal";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -25,11 +26,7 @@ import {
   useUpdateCbtQuestion,
   useUpdateCbtTopic,
 } from "@/hooks/queryHooks/useQuestionBank";
-import {
-  useGetClassDetails,
-  useGetSubjectsByClassId,
-  useGetTeacherSubjects,
-} from "@/hooks/queryHooks/useSubjects";
+import { useGetSubjectsByClassId } from "@/hooks/queryHooks/useSubjects";
 import {
   apiQuestionToUI,
   questionToCreatePayload,
@@ -59,9 +56,11 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   const router = useRouter();
   const baseUrl = `/classes/${classIdStr}/subjects/${subjectIdStr}`;
 
+  const searchParams = useSearchParams();
+  const classDisplayName = searchParams.get("className") ?? "";
+  const subjectName = searchParams.get("subjectName") ?? "Subject";
+
   // ─── Server data ──────────────────────────────────────────────────────────
-  const { data: classDetails } = useGetClassDetails(classId);
-  const { data: teacherSubjects } = useGetTeacherSubjects();
   const { data: classSubjects } = useGetSubjectsByClassId(classId);
   const {
     data: topicsRes,
@@ -102,24 +101,6 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   // ─── Stats card data (for header) ─────────────────────────────────────────
   useGetQuestionBankStats(classId, subjectId);
 
-  // ─── Header context (subject + class display names) ───────────────────────
-  const subject = useMemo(
-    () => teacherSubjects?.data?.find((s) => s.subjectId === subjectId),
-    [teacherSubjects, subjectId],
-  );
-  const subjectName = subject?.subjectName ?? "Subject";
-
-  const classDisplayName = useMemo(() => {
-    const raw = classDetails as
-      | { data?: { name?: string } }
-      | { name?: string }
-      | undefined;
-    if (!raw) return "";
-    if ("data" in raw && raw.data?.name) return raw.data.name;
-    if ("name" in raw && typeof raw.name === "string") return raw.name;
-    return "";
-  }, [classDetails]);
-
   // Resolve branchId for the current subject from /subjects/class/{classId}
   const branchId = useMemo(() => {
     const list = classSubjects?.data ?? [];
@@ -149,17 +130,12 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
 
   // ─── Topic handlers ───────────────────────────────────────────────────────
   const handleAddTopic = ({ name, description }: TopicFormDraft) => {
-    if (branchId === undefined) {
-      toast.error("Branch not resolved yet");
-      return;
-    }
     addTopic.mutate(
       {
         name,
         description,
         classId,
         subjectId,
-        branchId,
         displayOrder: apiTopics.length,
       },
       {
@@ -189,7 +165,6 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
           description,
           classId,
           subjectId,
-          branchId,
           displayOrder:
             apiTopics.find((t) => String(t.id) === topic.id)?.displayOrder ?? 0,
         },
@@ -205,12 +180,18 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
 
   const handleDeleteTopic = (id: string) => {
     deleteTopic.mutate(Number(id), {
-      onSuccess: () => toast.success("Topic deleted"),
+      onSuccess: () => {
+        toast.success("Topic deleted");
+        setDeletingTopic(null);
+      },
+      onError: () => {
+        toast.error("Failed to delete topic");
+        setDeletingTopic(null);
+      },
     });
   };
 
   const handleReorderTopics = async (orderedIds: string[]) => {
-    if (branchId === undefined) return;
     try {
       await Promise.all(
         orderedIds.map((tid, i) => {
@@ -223,7 +204,6 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
               description: t.description ?? "",
               classId,
               subjectId,
-              branchId,
               displayOrder: i,
             },
           });
@@ -291,9 +271,23 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
     });
   };
 
-  const handleDeleteQuestion = (id: string) => {
-    deleteQuestion.mutate(Number(id), {
-      onSuccess: () => toast.success("Question deleted"),
+  const [deleteQuestionTargetId, setDeleteQuestionTargetId] = useState<
+    string | null
+  >(null);
+
+  const handleDeleteQuestion = (id: string) => setDeleteQuestionTargetId(id);
+
+  const handleConfirmDeleteQuestion = () => {
+    if (!deleteQuestionTargetId) return;
+    deleteQuestion.mutate(Number(deleteQuestionTargetId), {
+      onSuccess: () => {
+        toast.success("Question deleted");
+        setDeleteQuestionTargetId(null);
+      },
+      onError: () => {
+        toast.error("Failed to delete question");
+        setDeleteQuestionTargetId(null);
+      },
     });
   };
 
@@ -430,8 +424,17 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
         }}
         onConfirm={() => {
           if (deletingTopic) handleDeleteTopic(deletingTopic.id);
-          setDeletingTopic(null);
         }}
+        isLoading={deleteTopic.isPending}
+      />
+
+      <DeleteQuestionDialog
+        open={deleteQuestionTargetId !== null}
+        setOpen={(open) => {
+          if (!open) setDeleteQuestionTargetId(null);
+        }}
+        onConfirm={handleConfirmDeleteQuestion}
+        isLoading={deleteQuestion.isPending}
       />
     </div>
   );

@@ -33,6 +33,7 @@ import {
   useGetTeacherSubjects,
 } from "@/hooks/queryHooks/useSubjects";
 import {
+  useGetAssessmentEnrollment,
   useGetAssessments,
   useGetAssessmentResults,
   useGetAssessmentStats,
@@ -41,8 +42,8 @@ import type {
   AssessmentStudentResult,
   StudentResultStatus,
 } from "@/types/question";
+import type { AttemptStatus as ApiAttemptStatus } from "@/types/student-api";
 import type { AttemptStatus as UiAttemptStatus } from "@/types/results";
-import { cn } from "@/lib/utils";
 import { IconBadge } from "../common/IconBadge";
 
 interface ResultsViewProps {
@@ -50,9 +51,10 @@ interface ResultsViewProps {
 }
 
 const apiResultStatusToUi = (
-  s: StudentResultStatus,
+  s: StudentResultStatus | ApiAttemptStatus,
   hasScore: boolean,
 ): UiAttemptStatus => {
+  if (s === "NOT_STARTED") return "not-started";
   if (s === "IN_PROGRESS") return "in-progress";
   if (s === "PENDING") return "submitted";
   if (s === "ABSENT" || s === "TIMED_OUT") return "missed";
@@ -116,7 +118,35 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
 
   const { data: resultsRes, isLoading: resultsLoading } =
     useGetAssessmentResults(activeTestId ?? 0);
-  const results = useMemo(() => resultsRes?.data ?? [], [resultsRes]);
+  const baseResults = useMemo(() => resultsRes?.data ?? [], [resultsRes]);
+
+  const { data: enrollmentRes } = useGetAssessmentEnrollment(activeTestId ?? 0);
+  const enrollment = useMemo(() => enrollmentRes?.data ?? [], [enrollmentRes]);
+
+  // Merge enrollment-only (NOT_STARTED) rows in so absentees / pending students
+  // show up alongside actual attempts.
+  const results = useMemo<AssessmentStudentResult[]>(() => {
+    if (enrollment.length === 0) return baseResults;
+    const seen = new Set(baseResults.map((r) => r.studentId));
+    const totalMarks = activeTest?.totalMarks ?? 0;
+    const synthetic: AssessmentStudentResult[] = enrollment
+      .filter((e) => !seen.has(e.studentId))
+      .map((e) => ({
+        studentAssessmentId: e.studentAssessmentId ?? 0,
+        studentId: e.studentId,
+        studentName: e.studentName,
+        admissionNumber: "",
+        className: "",
+        status: e.attemptStatus as StudentResultStatus,
+        score: null,
+        totalMarks,
+        percentage: null,
+        passed: null,
+        submissionTime: null,
+        timeSpentSeconds: null,
+      }));
+    return [...baseResults, ...synthetic];
+  }, [baseResults, enrollment, activeTest?.totalMarks]);
 
   const { data: statsRes } = useGetAssessmentStats(activeTestId ?? 0);
   const apiStats = statsRes?.data;

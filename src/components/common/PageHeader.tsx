@@ -15,8 +15,8 @@ interface PageHeaderProps {
 export const PageHeader = ({
   title,
   subtitle,
-  backHref,
   showBack,
+  backHref,
   right,
   className,
 }: PageHeaderProps) => (
@@ -29,7 +29,7 @@ export const PageHeader = ({
     <div className="flex flex-wrap items-center gap-3">
       {showBack && <BackButton href={backHref} />}
       <div className="flex items-baseline gap-3">
-        <h1 className="text-xl font-semibold text-[var(--color-text-default)]">
+        <h1 className="text-xl font-semibold capitalize text-[var(--color-text-default)]">
           {title}
         </h1>
         {subtitle && (

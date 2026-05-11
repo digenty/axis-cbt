@@ -16,6 +16,7 @@ import { MultipleBlanksEditor } from "./answer-editors/MultipleBlanksEditor";
 import { QuestionGroupEditor } from "./answer-editors/QuestionGroupEditor";
 import type { MaterialKind } from "./answer-editors/QuestionGroupEditor";
 import { generateId } from "@/lib/utils";
+import { uploadImage } from "@/lib/uploads";
 import { toast } from "sonner";
 import type { Question, QuestionType, Option, Blank } from "@/types";
 
@@ -57,6 +58,8 @@ export const InlineQuestionCard = ({
 }: InlineQuestionCardProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [questionImage, setQuestionImage] = useState<string | null>(null);
+  const [stimulusImage, setStimulusImage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const [type, setType] = useState<QuestionType>(initialType);
   const [text, setText] = useState("");
@@ -104,6 +107,8 @@ export const InlineQuestionCard = ({
       text,
       marks,
       instruction,
+      imageUrl: questionImage ?? undefined,
+      stimulusImageUrl: stimulusImage ?? undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -175,23 +180,35 @@ export const InlineQuestionCard = ({
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) =>
-                  setQuestionImage(ev.target?.result as string);
-                reader.readAsDataURL(file);
                 e.target.value = "";
+                if (!file) return;
+                setUploading(true);
+                try {
+                  const url = await uploadImage(file, "cbt/questions");
+                  setQuestionImage(url);
+                } catch (err) {
+                  toast.error(
+                    err instanceof Error ? err.message : "Upload failed",
+                  );
+                } finally {
+                  setUploading(false);
+                }
               }}
             />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-border-default)] text-[var(--color-icon-default-muted)] hover:bg-[var(--color-bg-state-soft-hover)]"
+              disabled={uploading}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-border-default)] text-[var(--color-icon-default-muted)] hover:bg-[var(--color-bg-state-soft-hover)] disabled:opacity-60"
               aria-label="Add image"
             >
-              <ImageIcon className="h-4 w-4" />
+              {uploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ImageIcon className="h-4 w-4" />
+              )}
             </button>
           </>
         )}
@@ -335,6 +352,8 @@ export const InlineQuestionCard = ({
             onChangeInstruction={setInstruction}
             subQuestions={subQuestions}
             onChangeSubQuestions={setSubQuestions}
+            stimulusImageUrl={stimulusImage ?? undefined}
+            onChangeStimulusImage={(url) => setStimulusImage(url ?? null)}
           />
         )}
         {type === "multiple-blanks" && (
@@ -375,7 +394,7 @@ export const InlineQuestionCard = ({
         <Button
           size="sm"
           onClick={handleSave}
-          disabled={loading}
+          disabled={loading || uploading}
           className="h-7 px-3 text-sm font-medium"
         >
           {loading && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}

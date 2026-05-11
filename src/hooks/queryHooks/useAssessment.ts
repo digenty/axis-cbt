@@ -3,23 +3,28 @@ import {
   addQuestionsToSection,
   addSection,
   createAssessment,
+  deleteAssessment,
   deleteSection,
   getAssessment,
+  getAssessmentEnrollment,
   getAssessmentResults,
   getAssessmentSections,
   getAssessmentSettingsByClass,
   getAssessmentStats,
   getAssessments,
+  getStudentAttemptAnswers,
   gradeManually,
   publishAssessment,
   removeQuestionFromSection,
   updateAssessment,
+  updateSection,
 } from "@/api/assessment";
 import type {
   CreateAssessmentPayload,
   CreateSectionPayload,
   GradeManuallyPayload,
   UpdateAssessmentPayload,
+  UpdateSectionPayload,
 } from "@/types/question";
 
 // ─── Query key factory ────────────────────────────────────────────────────────
@@ -31,6 +36,14 @@ export const assessmentKeys = {
   sections: (id: number) => ["assessments", id, "sections"] as const,
   results: (id: number) => ["assessments", id, "results"] as const,
   stats: (id: number) => ["assessments", id, "stats"] as const,
+  enrollment: (id: number) => ["assessments", id, "enrollment"] as const,
+  studentAttemptAnswers: (studentAssessmentId: number) =>
+    [
+      "assessments",
+      "student-attempts",
+      studentAssessmentId,
+      "answers",
+    ] as const,
   settingsByClass: (classId: number) =>
     ["assessment-settings", "class", classId] as const,
 };
@@ -50,18 +63,36 @@ export const useGetAssessmentSettingsByClass = (classId: number) => {
 
 export const useGetAssessments = (payload: {
   branchId: number;
-  classId: number;
-  subjectId: number;
+  classId?: number;
+  subjectId?: number;
 }) => {
   return useQuery({
     queryKey: assessmentKeys.list(
-      payload.classId,
-      payload.subjectId,
+      payload.classId ?? 0,
+      payload.subjectId ?? 0,
       payload.branchId,
     ),
     queryFn: () => getAssessments(payload),
-    enabled: !!payload.branchId && !!payload.classId && !!payload.subjectId,
+    enabled: !!payload.branchId,
     staleTime: 1000 * 60 * 5,
+  });
+};
+
+export const useGetAssessmentEnrollment = (assessmentId: number) => {
+  return useQuery({
+    queryKey: assessmentKeys.enrollment(assessmentId),
+    queryFn: () => getAssessmentEnrollment(assessmentId),
+    enabled: !!assessmentId,
+    staleTime: 1000 * 60 * 2,
+  });
+};
+
+export const useGetStudentAttemptAnswers = (studentAssessmentId: number) => {
+  return useQuery({
+    queryKey: assessmentKeys.studentAttemptAnswers(studentAssessmentId),
+    queryFn: () => getStudentAttemptAnswers(studentAssessmentId),
+    enabled: !!studentAssessmentId,
+    staleTime: 1000 * 30,
   });
 };
 
@@ -196,13 +227,60 @@ export const useRemoveQuestionFromSection = (assessmentId: number) => {
   });
 };
 
-export const useGradeManually = (assessmentId: number) => {
+export const useGradeManually = (
+  assessmentId: number,
+  studentAssessmentId?: number,
+) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: GradeManuallyPayload) => gradeManually(payload),
     onSuccess: () => {
       qc.invalidateQueries({
         queryKey: assessmentKeys.results(assessmentId),
+      });
+      if (studentAssessmentId !== undefined) {
+        qc.invalidateQueries({
+          queryKey: assessmentKeys.studentAttemptAnswers(studentAssessmentId),
+        });
+      }
+    },
+  });
+};
+
+export const useDeleteAssessment = (
+  classId: number,
+  subjectId: number,
+  branchId: number,
+) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (assessmentId: number) => deleteAssessment(assessmentId),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: assessmentKeys.list(classId, subjectId, branchId),
+      });
+      // Broad invalidation so other branch/class scopes refresh too.
+      qc.invalidateQueries({ queryKey: ["assessments"] });
+    },
+  });
+};
+
+export const useUpdateSection = (assessmentId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      sectionId,
+      payload,
+    }: {
+      sectionId: number;
+      payload: UpdateSectionPayload;
+    }) => updateSection(sectionId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: assessmentKeys.sections(assessmentId),
+      });
+      qc.invalidateQueries({
+        queryKey: assessmentKeys.detail(assessmentId),
       });
     },
   });

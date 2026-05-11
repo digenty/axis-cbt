@@ -8,6 +8,7 @@ import {
   submitAnswer,
   submitAssessment,
 } from "@/api/student";
+import { submitAnswersBatch } from "@/api/assessment";
 import type {
   StartAssessmentPayload,
   SubmitAnswerPayload,
@@ -62,6 +63,11 @@ export const useStartAssessment = () =>
 export const useSubmitAnswer = () =>
   useMutation({
     mutationFn: (payload: SubmitAnswerPayload) => submitAnswer(payload),
+  });
+
+export const useSubmitAnswersBatch = () =>
+  useMutation({
+    mutationFn: (payload: SubmitAnswerPayload[]) => submitAnswersBatch(payload),
   });
 
 export const useSubmitAssessment = () =>

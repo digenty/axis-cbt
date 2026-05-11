@@ -104,8 +104,8 @@ export const apiAssessmentToTest = (
     classId: String(a.classId),
     term: apiTermToUi(a.term),
     testType: apiTestTypeToUi(a.testType),
-    assessmentMapping: "",
-    mappingLabel: a.assessmentMapping ?? "",
+    assessmentSettingId: a.assessmentSettingId ?? null,
+    mappingLabel: "",
     testDate: split.testDate,
     startTime: `${split.startHour}:${split.startMinute}`,
     amPm: split.amPm,
@@ -123,5 +123,5 @@ export const apiSectionToTestSection = (s: ApiSection): TestSection => ({
   id: String(s.id),
   title: s.name,
   instruction: s.instructions ?? "",
-  questionIds: (s.questions ?? []).map((q) => String(q.questionId)),
+  questionIds: (s.questions ?? []).map((q) => String(q.id)),
 });

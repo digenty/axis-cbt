@@ -81,11 +81,6 @@ export interface Class {
 export type TestStatus = "draft" | "published" | "completed";
 export type TestType = "Continuous Assessment" | "Examination";
 export type TermType = "First Term" | "Second Term" | "Third Term";
-export type AssessmentMapping =
-  | "None ( Manual Sccoring)"
-  | "Continuous Assessment 1 (20%)"
-  | "Continuous Assessment 2 (20%)"
-  | "Examination (60%)";
 
 export interface TestSection {
   id: string;
@@ -101,7 +96,7 @@ export interface Test {
   classId: string;
   term: TermType;
   testType: TestType;
-  assessmentMapping: AssessmentMapping | "";
+  assessmentSettingId: number | null;
   mappingLabel: string;
   testDate: string;
   startTime: string;
@@ -118,6 +113,7 @@ export interface Test {
 // ─── Student Attempts & Results ───────────────────────────────────────────────
 
 export type AttemptStatus =
+  | "not-started"
   | "in-progress"
   | "submitted"
   | "missed"
@@ -154,7 +150,7 @@ export interface StudentAttempt {
   score?: number;
   totalMarks?: number;
   percentage?: number;
-  /** Weighted score after applying assessmentMapping weight */
+  /** Weighted score after applying the assessment setting weight */
   weightedScore?: number;
   feedback?: string;
   startedAt: string;

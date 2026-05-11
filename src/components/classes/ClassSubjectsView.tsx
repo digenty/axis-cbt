@@ -22,6 +22,7 @@ import type { ApiClassArmSubject } from "@/types/subjects";
 interface SubjectCardProps {
   sub: ApiClassArmSubject;
   armIdStr: string;
+  classId: number;
   className: string;
   isNotifying: boolean;
   onNotify: (subjectId: number, subjectName: string) => void;
@@ -33,7 +34,9 @@ function SubjectCard({
   className,
   isNotifying,
   onNotify,
+  classId,
 }: SubjectCardProps) {
+  console.log(className);
   const rows: { label: string; value: ReactNode }[] = [
     {
       label: "Subject",
@@ -100,7 +103,7 @@ function SubjectCard({
         >
           <Link
             href={{
-              pathname: `/classes/${armIdStr}/subjects/${sub.subjectId}`,
+              pathname: `/classes/${classId}/subjects/${sub.subjectId}`,
               query: { className, subjectName: sub.subjectName },
             }}
           >
@@ -133,6 +136,8 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
     () => subjectsRes?.data?.subjects ?? [],
     [subjectsRes],
   );
+
+  const classId = subjectsRes?.data?.classId ?? 0;
 
   const { mutate: notifyTeacher, isPending: isNotifying } =
     useNotifyTeacher(armId);
@@ -221,7 +226,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
             >
               <Link
                 href={{
-                  pathname: `/classes/${armIdStr}/subjects/${sub.subjectId}`,
+                  pathname: `/classes/${classId}/subjects/${sub.subjectId}`,
                   query: { className, subjectName: sub.subjectName },
                 }}
               >
@@ -286,6 +291,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
                   className={className}
                   isNotifying={isNotifying}
                   onNotify={handleNotify}
+                  classId={classId}
                 />
               ))}
             </div>

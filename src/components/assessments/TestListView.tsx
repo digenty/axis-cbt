@@ -1,20 +1,23 @@
 "use client";
 
 import { use, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Box, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { TestCard } from "./TestCard";
 import { CreateTestModal } from "./CreateTestModal";
+import { DeleteTestDialog } from "./DeleteTestDialog";
 import {
   useGetClassDetails,
   useGetSubjectsByClassId,
-  useGetTeacherSubjects,
 } from "@/hooks/queryHooks/useSubjects";
-import { useGetAssessments } from "@/hooks/queryHooks/useAssessment";
+import {
+  useDeleteAssessment,
+  useGetAssessments,
+} from "@/hooks/queryHooks/useAssessment";
 import { apiAssessmentToTest } from "@/types/assessment.mapper";
+import { toast } from "sonner";
 
 interface TestListViewProps {
   params: Promise<{ classId: string; subjectId: string }>;
@@ -24,12 +27,10 @@ export const TestListView = ({ params }: TestListViewProps) => {
   const { classId: classIdStr, subjectId: subjectIdStr } = use(params);
   const classId = Number(classIdStr);
   const subjectId = Number(subjectIdStr);
-  const router = useRouter();
-
   const [showModal, setShowModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const { data: classDetails } = useGetClassDetails(classId);
-  const { data: teacherSubjects } = useGetTeacherSubjects();
   const { data: classSubjects } = useGetSubjectsByClassId(classId);
 
   const branchId = useMemo(
@@ -52,11 +53,27 @@ export const TestListView = ({ params }: TestListViewProps) => {
     [assessmentsRes],
   );
 
+  const deleteMutation = useDeleteAssessment(classId, subjectId, branchId ?? 0);
+
+  const handleDelete = (id: string) => setDeleteTargetId(id);
+
+  const handleConfirmDelete = () => {
+    if (!deleteTargetId) return;
+    deleteMutation.mutate(Number(deleteTargetId), {
+      onSuccess: () => {
+        toast.success("Test deleted");
+        setDeleteTargetId(null);
+      },
+      onError: () => {
+        toast.error("Failed to delete test");
+        setDeleteTargetId(null);
+      },
+    });
+  };
+
   const subjectName = useMemo(
-    () =>
-      teacherSubjects?.data?.find((s) => s.subjectId === subjectId)
-        ?.subjectName ?? "",
-    [teacherSubjects, subjectId],
+    () => classSubjects?.data?.find((s) => s.id === subjectId)?.name ?? "",
+    [classSubjects, subjectId],
   );
 
   const className = useMemo(() => {
@@ -79,10 +96,7 @@ export const TestListView = ({ params }: TestListViewProps) => {
         showBack
         backHref={baseUrl}
         right={
-          <Button
-            onClick={() => setShowModal(true)}
-            // disabled={branchId === undefined}
-          >
+          <Button onClick={() => setShowModal(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" />
             Create New Test
           </Button>
@@ -111,7 +125,6 @@ export const TestListView = ({ params }: TestListViewProps) => {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowModal(true)}
-                // disabled={branchId === undefined}
               >
                 <Plus className="mr-1 h-3.5 w-3.5" />
                 Create New Test
@@ -126,6 +139,7 @@ export const TestListView = ({ params }: TestListViewProps) => {
               key={t.id}
               test={t}
               href={`${baseUrl}/assessments/${t.id}`}
+              onDelete={() => handleDelete(t.id)}
             />
           ))}
         </div>
@@ -139,7 +153,16 @@ export const TestListView = ({ params }: TestListViewProps) => {
         branchId={branchId}
         className={className}
         subjectName={subjectName}
-        onSuccess={(testId) => router.push(`${baseUrl}/assessments/${testId}`)}
+        onSuccess={() => {}}
+      />
+
+      <DeleteTestDialog
+        open={deleteTargetId !== null}
+        setOpen={(open) => {
+          if (!open) setDeleteTargetId(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        isLoading={deleteMutation.isPending}
       />
     </div>
   );

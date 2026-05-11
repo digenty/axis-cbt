@@ -52,11 +52,13 @@ interface CreateTestModalProps {
   onSuccess: (testId: string) => void;
 }
 
+const NONE_SETTING_VALUE = "none";
+
 const defaultForm = {
   title: "",
   term: "First Term" as TermType,
   testType: "Continuous Assessment" as TestType,
-  assessmentMapping: "",
+  assessmentSettingId: null as number | null,
   testDate: "",
   startHour: "00",
   startMinute: "00",
@@ -74,8 +76,8 @@ const FormBody = ({
   set,
   className,
   subjectName,
-  assessmentSettings,
-  assessmentSettingsLoading,
+  settings,
+  settingsLoading,
   onCancel,
   onSubmit,
   submitting,
@@ -85,8 +87,8 @@ const FormBody = ({
   set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
   className: string;
   subjectName: string;
-  assessmentSettings: AssessmentSetting[];
-  assessmentSettingsLoading: boolean;
+  settings: AssessmentSetting[];
+  settingsLoading: boolean;
   onCancel: () => void;
   onSubmit: () => void;
   submitting: boolean;
@@ -164,25 +166,31 @@ const FormBody = ({
     <div className="space-y-1.5">
       <Label className="text-sm font-medium">Assessment Mapping</Label>
       <Select
-        value={form.assessmentMapping}
-        onValueChange={(v: string) => set("assessmentMapping", v)}
-        disabled={assessmentSettingsLoading || assessmentSettings.length === 0}
+        value={
+          form.assessmentSettingId == null
+            ? NONE_SETTING_VALUE
+            : String(form.assessmentSettingId)
+        }
+        onValueChange={(v: string) =>
+          set(
+            "assessmentSettingId",
+            v === NONE_SETTING_VALUE ? null : Number(v),
+          )
+        }
+        disabled={settingsLoading}
       >
         <SelectTrigger className="w-full">
           <SelectValue
-            placeholder={
-              assessmentSettingsLoading
-                ? "Loading…"
-                : assessmentSettings.length === 0
-                  ? "No assessment mappings configured"
-                  : "Map assessment"
-            }
+            placeholder={settingsLoading ? "Loading…" : "Map assessment"}
           />
         </SelectTrigger>
         <SelectContent>
-          {assessmentSettings.map((a) => (
-            <SelectItem key={a.id} value={String(a.id)}>
-              {a.name} ({a.weight}%)
+          <SelectItem value={NONE_SETTING_VALUE}>
+            None / Manual Scoring
+          </SelectItem>
+          {settings.map((s) => (
+            <SelectItem key={s.id} value={String(s.id)}>
+              {s.name} ({s.weight}%)
             </SelectItem>
           ))}
         </SelectContent>
@@ -351,9 +359,10 @@ export const CreateTestModal = ({
   const isMobile = useIsMobile();
   const createMutation = useCreateAssessment();
 
-  const { data: settingsRes, isLoading: assessmentSettingsLoading } =
+  const { data: settingsRes, isLoading: settingsLoading } =
     useGetAssessmentSettingsByClass(Number(classId));
-  const assessmentSettings = settingsRes?.data?.assessments ?? [];
+  console.log(settingsRes);
+  const settings: AssessmentSetting[] = settingsRes?.data?.assessments ?? [];
 
   const handleSetOpen = (v: boolean) => {
     if (!v) setForm(defaultForm);
@@ -373,13 +382,6 @@ export const CreateTestModal = ({
       return;
     }
 
-    const selectedSetting = assessmentSettings.find(
-      (a) => String(a.id) === form.assessmentMapping,
-    );
-    const mappingLabel = selectedSetting
-      ? `${selectedSetting.name} (${selectedSetting.weight}%)`
-      : "";
-
     const startDateTime = composeStartDateTime({
       testDate: form.testDate,
       startHour: form.startHour,
@@ -395,8 +397,7 @@ export const CreateTestModal = ({
       branchId,
       term: uiTermToApi(form.term),
       testType: uiTestTypeToApi(form.testType),
-      // assessmentMapping: mappingLabel,
-      assessmentMapping: "NONE_MANUAL_SCORING",
+      assessmentSettingId: form.assessmentSettingId,
       durationMinutes: form.duration,
       totalMarks: 0,
       passingMarks: 0,
@@ -413,7 +414,7 @@ export const CreateTestModal = ({
       onSuccess: (res) => {
         toast.success("Test created");
         handleSetOpen(false);
-        onSuccess(String(res.data.id));
+        onSuccess(String(res.data));
       },
       onError: (err) => {
         const msg =
@@ -429,8 +430,8 @@ export const CreateTestModal = ({
     set,
     className,
     subjectName,
-    assessmentSettings,
-    assessmentSettingsLoading,
+    settings,
+    settingsLoading,
     onCancel: () => handleSetOpen(false),
     onSubmit: handleSubmit,
     submitting: createMutation.isPending,

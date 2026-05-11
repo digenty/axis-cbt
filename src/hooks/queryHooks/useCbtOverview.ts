@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { getCbtOverview, getMyAssessments } from "@/api/cbt-overview";
+import {
+  getCbtOverview,
+  getMyAssessments,
+  getMyCbtOverview,
+} from "@/api/cbt-overview";
 
 export const useGetCbtOverview = (params?: {
   branchId?: number;
@@ -17,4 +21,11 @@ export const useGetMyAssessments = () =>
     queryKey: ["my-assessments"],
     queryFn: getMyAssessments,
     staleTime: 1000 * 60 * 2,
+  });
+
+export const useGetMyCbtOverview = () =>
+  useQuery({
+    queryKey: ["cbt-overview", "my"],
+    queryFn: getMyCbtOverview,
+    staleTime: 1000 * 60 * 5,
   });
