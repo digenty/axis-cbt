@@ -134,27 +134,29 @@ export const TestListView = ({ params }: TestListViewProps) => {
         </div>
       ) : (
         <div className="mt-5 flex flex-col gap-3">
-          {tests.map((t) => (
+          {tests.map((test) => (
             <TestCard
-              key={t.id}
-              test={t}
-              href={`${baseUrl}/assessments/${t.id}`}
-              onDelete={() => handleDelete(t.id)}
+              key={test.id}
+              test={test}
+              href={`${baseUrl}/assessments/${test.id}`}
+              onDelete={() => handleDelete(test.id)}
             />
           ))}
         </div>
       )}
 
-      <CreateTestModal
-        open={showModal}
-        setOpen={setShowModal}
-        classId={classIdStr}
-        subjectId={subjectIdStr}
-        branchId={branchId}
-        className={className}
-        subjectName={subjectName}
-        onSuccess={() => {}}
-      />
+      {showModal && (
+        <CreateTestModal
+          open={showModal}
+          setOpen={setShowModal}
+          classId={classIdStr}
+          subjectId={subjectIdStr}
+          branchId={branchId}
+          className={className}
+          subjectName={subjectName}
+          onSuccess={() => {}}
+        />
+      )}
 
       <DeleteTestDialog
         open={deleteTargetId !== null}

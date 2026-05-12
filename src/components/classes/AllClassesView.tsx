@@ -56,7 +56,6 @@ export const AllClassesView = () => {
     search: debouncedSearchQuery || undefined,
   });
 
-  console.log(levels, "levels");
   useEffect(() => {
     if (termsRes?.data?.terms && termSelected === null) {
       const active = termsRes.data.terms.find((t) => t.isActiveTerm);

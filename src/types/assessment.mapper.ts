@@ -108,6 +108,7 @@ export const apiAssessmentToTest = (
     mappingLabel: "",
     testDate: split.testDate,
     startTime: `${split.startHour}:${split.startMinute}`,
+    questionCount: a.questionCount,
     amPm: split.amPm,
     duration: a.durationMinutes,
     studentResultAccess: a.showResultsImmediately ?? false,

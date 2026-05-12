@@ -361,7 +361,6 @@ export const CreateTestModal = ({
 
   const { data: settingsRes, isLoading: settingsLoading } =
     useGetAssessmentSettingsByClass(Number(classId));
-  console.log(settingsRes);
   const settings: AssessmentSetting[] = settingsRes?.data?.assessments ?? [];
 
   const handleSetOpen = (v: boolean) => {
