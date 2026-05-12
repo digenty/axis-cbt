@@ -1,4 +1,4 @@
-import api from "@/lib/axios-auth";
+import studentApi, { publicStudentApi } from "@/lib/axios-student";
 import { isAxiosError } from "axios";
 import type {
   ApiStudentDashboard,
@@ -7,6 +7,7 @@ import type {
   ApiStudentPaper,
   ApiStartedAssessment,
   StartAssessmentPayload,
+  StudentLoginResponse,
   SubmitAnswerPayload,
 } from "@/types/student-api";
 
@@ -15,9 +16,24 @@ const handleError = (error: unknown): never => {
   throw error;
 };
 
+export const studentLogin = async (
+  admissionNumber: string,
+  passcode: string,
+): Promise<StudentLoginResponse> => {
+  try {
+    const { data } = await publicStudentApi.post("/auth/student/login", {
+      admissionNumber,
+      passcode,
+    });
+    return data;
+  } catch (e) {
+    return handleError(e);
+  }
+};
+
 export const getStudentDashboard = async (): Promise<ApiStudentDashboard> => {
   try {
-    const { data } = await api.get("/cbt/student/dashboard");
+    const { data } = await studentApi.get("/cbt/student/dashboard");
     return data;
   } catch (e) {
     return handleError(e);
@@ -26,9 +42,9 @@ export const getStudentDashboard = async (): Promise<ApiStudentDashboard> => {
 
 export const getAssessmentPreview = async (
   assessmentId: number,
-): Promise<ApiAssessmentPreview> => {
+): Promise<{ data: ApiAssessmentPreview }> => {
   try {
-    const { data } = await api.get(
+    const { data } = await studentApi.get(
       `/cbt/student/assessments/${assessmentId}/preview`,
     );
     return data;
@@ -41,7 +57,7 @@ export const getStudentResult = async (
   studentAssessmentId: number,
 ): Promise<ApiStudentResult> => {
   try {
-    const { data } = await api.get(
+    const { data } = await studentApi.get(
       `/cbt/student/results/${studentAssessmentId}`,
     );
     return data;
@@ -52,9 +68,12 @@ export const getStudentResult = async (
 
 export const startAssessment = async (
   payload: StartAssessmentPayload,
-): Promise<ApiStartedAssessment> => {
+): Promise<{ data: ApiStartedAssessment }> => {
   try {
-    const { data } = await api.post("/api/cbt/assessments/start", payload);
+    const { data } = await studentApi.post(
+      "/api/cbt/assessments/start",
+      payload,
+    );
     return data;
   } catch (e) {
     return handleError(e);
@@ -63,9 +82,9 @@ export const startAssessment = async (
 
 export const getAssessmentPaper = async (
   studentAssessmentId: number,
-): Promise<ApiStudentPaper> => {
+): Promise<{ data: ApiStudentPaper }> => {
   try {
-    const { data } = await api.get(
+    const { data } = await studentApi.get(
       `/api/cbt/assessments/paper/${studentAssessmentId}`,
     );
     return data;
@@ -78,7 +97,7 @@ export const submitAnswer = async (
   payload: SubmitAnswerPayload,
 ): Promise<void> => {
   try {
-    await api.post("/api/cbt/assessments/answers", payload);
+    await studentApi.post("/api/cbt/assessments/answers", payload);
   } catch (e) {
     return handleError(e);
   }
@@ -88,7 +107,7 @@ export const submitAssessment = async (
   studentAssessmentId: number,
 ): Promise<ApiStartedAssessment> => {
   try {
-    const { data } = await api.post(
+    const { data } = await studentApi.post(
       `/api/cbt/assessments/submit/${studentAssessmentId}`,
     );
     return data;

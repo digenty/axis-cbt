@@ -3,7 +3,7 @@
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AxisLogo } from "@/components/layout/AxisLogo";
-import { toast } from "sonner";
+import { clearStudentSession } from "@/lib/auth-session";
 
 interface StudentShellProps {
   children: React.ReactNode;
@@ -23,11 +23,7 @@ export const StudentShell = ({ children, hideHeader }: StudentShellProps) => (
         <Button
           variant="outline"
           size="sm"
-          onClick={() =>
-            toast.info("Logout", {
-              description: "Auth flow isn't part of the CBT preview.",
-            })
-          }
+          onClick={() => clearStudentSession()}
         >
           <LogOut className="mr-1 h-3.5 w-3.5" />
           Log out

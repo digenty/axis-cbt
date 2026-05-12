@@ -1,3 +1,11 @@
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export interface StudentLoginResponse {
+  data: { token: string; assessmentId: number };
+  message: string;
+  status: string;
+}
+
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 export type AttemptStatus =

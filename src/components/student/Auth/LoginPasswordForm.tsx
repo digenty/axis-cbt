@@ -1,24 +1,26 @@
 "use client";
-// import { createSession } from "@/app/actions/auth";
+
+import { createStudentSession } from "@/lib/auth-session";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-// import { useLogin } from "@/hooks/queryHooks/useAuth";
+import { useStudentLogin } from "@/hooks/queryHooks/useStudentCBT";
+import { studentLoginSchema } from "@/schema/studentAuth";
 import { cn } from "@/lib/utils";
-// import { authSchema } from "@/schema/auth";
-// import { useFormik } from "formik";
+import { useFormik } from "formik";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 import { LegalModal } from "./LegalModal";
 import { PRIVACY_POLICY, TERMS_AND_CONDITIONS } from "./legal";
 
 export const LoginPasswordForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  // const { mutate, isPending } = useLogin();
+  const { mutate, isPending } = useStudentLogin();
+
   const [legalModal, setLegalModal] = useState<{
     open: boolean;
     title: string;
@@ -29,57 +31,96 @@ export const LoginPasswordForm = () => {
     content: "",
   });
 
-  const toggleShowPassword = () => {
-    setShowPassword((prev) => !prev);
-  };
+  const formik = useFormik({
+    initialValues: { admissionNumber: "", passcode: "" },
+    validationSchema: studentLoginSchema,
+    onSubmit: (values: { admissionNumber: string; passcode: string }) => {
+      const { admissionNumber, passcode } = values;
+      mutate(
+        { admissionNumber, passcode },
+        {
+          onSuccess: async (data) => {
+            const token = data?.data?.token;
+            const assessmentId = data?.data?.assessmentId;
+            const redirectTo = assessmentId
+              ? `/student/cbt/${assessmentId}`
+              : "/student/cbt";
+            await createStudentSession(token, redirectTo);
+          },
+
+          onError: (error: unknown) => {
+            const message =
+              (error as { message?: string })?.message ??
+              "Invalid credentials. Please try again.";
+            toast.error("Login failed", { description: message });
+          },
+        },
+      );
+    },
+  });
+
+  const toggleShowPassword = () => setShowPassword((prev) => !prev);
 
   return (
-    <form noValidate className="w-full space-y-6">
+    <form
+      noValidate
+      onSubmit={formik.handleSubmit}
+      className="w-full space-y-6"
+    >
       <div className="space-y-2">
         <Label
-          htmlFor="email"
+          htmlFor="admissionNumber"
           className="text-text-default text-sm font-medium"
         >
-          Email Address
+          Admission Number
         </Label>
         <Input
-          id="email"
-          // onChange={formik.handleChange}
+          id="admissionNumber"
+          name="admissionNumber"
+          onChange={formik.handleChange}
+          onBlur={formik.handleBlur}
+          value={formik.values.admissionNumber}
           autoFocus
-          placeholder="0142562"
-          // onBlur={formik.handleBlur}
-          // value={formik.values.email}
+          placeholder="OWN20260000110"
           type="text"
           className={cn(
             "text-text-muted bg-bg-input-soft! w-full rounded-lg border-none text-sm font-normal",
-            // formik.errors.email && formik.touched.email && "border-border-destructive border",
+            formik.errors.admissionNumber &&
+              formik.touched.admissionNumber &&
+              "border-border-destructive border",
           )}
         />
-        {/* {formik.touched.email && formik.errors.email && <p className="text-text-destructive text-xs font-light">{formik.errors.email}</p>} */}
+        {formik.touched.admissionNumber && formik.errors.admissionNumber && (
+          <p className="text-text-destructive text-xs font-light">
+            {formik.errors.admissionNumber}
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
         <Label
-          htmlFor="password"
+          htmlFor="passcode"
           className="text-text-default text-sm font-medium"
         >
-          Password
+          Passcode
         </Label>
 
         <div
           className={cn(
             "focus-within:border-ring focus-within:ring-border-highlight text-text-muted bg-bg-input-soft flex w-full items-center rounded-lg border border-none pr-2 text-sm font-normal focus-within:ring-2 focus-within:ring-offset-2",
-            // formik.errors.password && formik.touched.password && "border-border-destructive border",
+            formik.errors.passcode &&
+              formik.touched.passcode &&
+              "border-border-destructive border",
           )}
         >
           <Input
-            id="password"
-            autoFocus
-            // onChange={formik.handleChange}
-            // onBlur={formik.handleBlur}
-            // value={formik.values.password}
+            id="passcode"
+            name="passcode"
+            onChange={formik.handleChange}
+            onBlur={formik.handleBlur}
+            value={formik.values.passcode}
             type={showPassword ? "text" : "password"}
-            placeholder="Enter Password"
+            placeholder="Enter Passcode"
             className="text-text-muted flex-1 rounded-l-lg rounded-r-none border-none text-sm font-light shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           />
           {showPassword ? (
@@ -94,15 +135,34 @@ export const LoginPasswordForm = () => {
             />
           )}
         </div>
-        {/* {formik.touched.password && formik.errors.password && <p className="text-text-destructive text-xs font-light">{formik.errors.password}</p>} */}
+        {formik.touched.passcode && formik.errors.passcode && (
+          <p className="text-text-destructive text-xs font-light">
+            {formik.errors.passcode}
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="rememberMe"
+          checked={rememberMe}
+          onCheckedChange={(checked) => setRememberMe(!!checked)}
+        />
+        <Label
+          htmlFor="rememberMe"
+          className="text-text-muted text-sm font-normal cursor-pointer"
+        >
+          Remember me
+        </Label>
       </div>
 
       <div className="mt-8 space-y-4">
         <Button
-          // disabled={!formik.values.email || !formik.values.password}
+          type="submit"
+          disabled={isPending || !formik.isValid || !formik.dirty}
           className="bg-bg-state-primary disabled:bg-bg-state-primary-hover disabled:text-text-white-default hover:bg-bg-state-primary-hover! text-text-white-default h-10 w-full"
         >
-          {/* {isPending && <Spinner className="text-text-white-default" />} */}
+          {isPending && <Spinner className="text-text-white-default" />}
           Log In
         </Button>
 

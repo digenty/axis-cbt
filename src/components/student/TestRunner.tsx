@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Clock, Flag, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,7 @@ import type {
 } from "@/types/student-api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useLoggedInUser } from "@/hooks/useLoggedInUser";
 
 interface TestRunnerProps {
   // The route segment is named [testId] but the value is `assessmentId`.
@@ -57,8 +59,11 @@ const buildAnswerData = (
   a: AnswerState,
 ): Record<string, unknown> => {
   const t = q.questionType.toUpperCase();
-  if (t === "MULTIPLE_CHOICE" || t === "TRUE_FALSE") {
+  if (t === "TRUE_FALSE") {
     return { selectedOptionId: a.selectedOptionIds[0] ?? null };
+  }
+  if (t === "MULTIPLE_CHOICE") {
+    return { selectedOptionIds: a.selectedOptionIds };
   }
   if (t === "MULTIPLE_ANSWERS") {
     return { selectedOptionIds: a.selectedOptionIds };
@@ -79,9 +84,9 @@ const renderAnswerInput = (
   const t = q.questionType.toUpperCase();
   const options = getOptions(q);
 
-  if (t === "MULTIPLE_CHOICE" || t === "TRUE_FALSE") {
+  if (t === "TRUE_FALSE") {
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-2 gap-3">
         {options.map((opt) => {
           const picked = answer.selectedOptionIds.includes(opt.id);
           return (
@@ -112,6 +117,42 @@ const renderAnswerInput = (
               </span>
               {opt.optionText}
             </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (t === "MULTIPLE_CHOICE") {
+    return (
+      <div className="flex flex-col gap-4">
+        {options.map((opt, i) => {
+          const picked = answer.selectedOptionIds.includes(opt.id);
+          const letter = String.fromCharCode(65 + i);
+          return (
+            <label
+              key={opt.id}
+              className={cn(
+                "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-3.5 text-sm text-text-dark-default",
+                picked
+                  ? "border-2 border-[var(--blue-500)] ring-offset-1 ring-2 ring-border-informative/30"
+                  : "border-[var(--color-border-default)] hover:bg-[var(--color-bg-state-soft-hover)]",
+              )}
+            >
+              <span className="w-5 shrink-0 font-medium">{letter}.</span>
+              <input
+                type="checkbox"
+                checked={picked}
+                onChange={() => {
+                  const next = picked
+                    ? answer.selectedOptionIds.filter((id) => id !== opt.id)
+                    : [...answer.selectedOptionIds, opt.id];
+                  onChange({ selectedOptionIds: next, textAnswer: "" });
+                }}
+                className="h-3.5 w-3.5 accent-(--blue-500) border rounded-lg border-border-darker"
+              />
+              {opt.optionText}
+            </label>
           );
         })}
       </div>
@@ -192,6 +233,7 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
   const assessmentId = Number(testId);
 
   // ─── Lifecycle: start the attempt on mount ──────────────────────────────
+  const { id: studentId, isUserLoading } = useLoggedInUser();
   const startMutation = useStartAssessment();
   const [studentAssessmentId, setStudentAssessmentId] = useState<number | null>(
     null,
@@ -200,31 +242,58 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
 
   useEffect(() => {
     if (startedRef.current || studentAssessmentId !== null) return;
+    if (isUserLoading) return;
+
     startedRef.current = true;
-    startMutation.mutate(
-      { assessmentId },
-      {
-        onSuccess: (res) => {
-          setStudentAssessmentId(res.id);
+
+    const browserInfo = navigator.userAgent;
+
+    const doStart = async () => {
+      let ipAddress: string | undefined;
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        try {
+          const res = await fetch("https://api.ipify.org?format=json", {
+            signal: controller.signal,
+          });
+          const json = await res.json();
+          ipAddress = json.ip as string;
+        } finally {
+          clearTimeout(timeout);
+        }
+      } catch {
+        // non-critical — proceed without IP if fetch fails or times out
+      }
+
+      startMutation.mutate(
+        { assessmentId, studentId, ipAddress, browserInfo },
+        {
+          onSuccess: (res) => {
+            setStudentAssessmentId(res?.data?.id);
+          },
+          onError: () => {
+            toast.error("Failed to start the assessment");
+          },
         },
-        onError: () => {
-          toast.error("Failed to start the assessment");
-        },
-      },
-    );
+      );
+    };
+
+    doStart();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assessmentId]);
+  }, [assessmentId, isUserLoading]);
 
   // ─── Paper fetch ────────────────────────────────────────────────────────
   const { data: paper, isLoading: paperLoading } = useGetAssessmentPaper(
     studentAssessmentId ?? 0,
   );
+  console.log(paper, studentAssessmentId);
 
   const orderedQuestions = useMemo<OrderedQuestion[]>(() => {
     if (!paper) return [];
     const out: OrderedQuestion[] = [];
     let idx = 0;
-    for (const section of paper.sections ?? []) {
+    for (const section of paper?.data?.sections ?? []) {
       for (const question of section.questions ?? []) {
         out.push({ section, question, globalIndex: idx });
         idx++;
@@ -242,7 +311,12 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
   // Initialize timer once paper is loaded
   useEffect(() => {
     if (paper && secondsLeft === null) {
-      setSecondsLeft(paper.timeRemainingSeconds ?? paper.durationMinutes * 60);
+      setSecondsLeft(
+        paper?.data?.timeRemainingSeconds &&
+          paper?.data?.timeRemainingSeconds > 0
+          ? paper.data.timeRemainingSeconds!
+          : (paper?.data?.durationMinutes ?? 0) * 60,
+      );
     }
   }, [paper, secondsLeft]);
 
@@ -341,7 +415,6 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
   const activeAnswer = answers[activeQ.assessmentQuestionId] ?? emptyAnswer();
   const minutes = Math.floor((secondsLeft ?? 0) / 60);
   const seconds = (secondsLeft ?? 0) % 60;
-
   const answeredCount = orderedQuestions.filter((oq) =>
     isAnswered(answers[oq.question.assessmentQuestionId]),
   ).length;
@@ -350,7 +423,7 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
     <div className="flex h-screen flex-col bg-[var(--color-bg-default)]">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-4 md:px-6">
         <h1 className="text-base font-semibold text-[var(--color-text-default)]">
-          {paper.assessmentName}
+          {paper?.data?.assessmentName}
         </h1>
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-bg-state-soft)] px-3 py-1 text-sm font-medium text-[var(--color-text-default)]">
@@ -372,7 +445,7 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
           <div className="text-xs font-medium text-[var(--color-text-muted)]">
             Question Navigator
           </div>
-          {paper.sections.map((s) => (
+          {paper?.data?.sections.map((s) => (
             <div key={s.sectionId} className="mt-4">
               <div className="text-xs font-medium text-[var(--blue-600)]">
                 {s.name}
@@ -411,33 +484,48 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
         </aside>
 
         <main className="flex-1 overflow-y-auto px-4 py-5 md:px-8">
-          <div className="mx-auto max-w-3xl">
-            <div className="flex items-center gap-3">
-              <span className="flex h-7 w-9 items-center justify-center rounded-full bg-[var(--color-bg-state-gray)] text-xs font-medium text-white">
-                {activeIdx + 1}
-              </span>
-              <span className="text-xs text-[var(--color-text-muted)]">
-                {activeQ.marks} marks
-              </span>
-              <button
-                type="button"
-                className="ml-auto text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-warning)]"
-              >
-                <Flag className="h-4 w-4" />
-              </button>
-            </div>
+          <div className="mx-auto ">
+            <div className="border border-border-default rounded-lg p-6">
+              <div className="flex items-center gap-3">
+                <span className="flex size-7 items-center justify-center rounded-full bg-bg-basic-gray-accent text-xs font-medium text-white">
+                  {activeIdx + 1}
+                </span>
+                <span className="text-xs text-[var(--color-text-muted)]">
+                  {activeQ.marks} mark{activeQ.marks === 1 ? "" : "s"}
+                </span>
+                <button
+                  type="button"
+                  className="ml-auto text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-warning)] bg-bg-state-soft p-1.5 rounded-sm cursor-pointer"
+                >
+                  <Flag className="h-4 w-4" />
+                </button>
+              </div>
 
-            <div
-              className="mt-3 rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4 text-sm text-[var(--color-text-default)]"
-              dangerouslySetInnerHTML={{
-                __html: activeQ.questionHtml || activeQ.questionText,
-              }}
-            />
+              <div
+                className=" rounded-lg bg-[var(--color-bg-card)] py-4 text-lg font-medium text-[var(--color-text-default)]"
+                dangerouslySetInnerHTML={{
+                  __html: activeQ.questionHtml || activeQ.questionText,
+                }}
+              />
 
-            <div className="mt-4">
-              {renderAnswerInput(activeQ, activeAnswer, (next) =>
-                setAnswer(activeQ, next),
+              {activeQ.imageUrl && (
+                <div className=" relative mt-3 max-h-80 overflow-hidden rounded-lg ">
+                  <Image
+                    src={activeQ.imageUrl}
+                    height={80}
+                    width={200}
+                    alt="Question image"
+                    // fill
+                    className="rounded-lg"
+                  />
+                </div>
               )}
+
+              <div className="mt-4">
+                {renderAnswerInput(activeQ, activeAnswer, (next) =>
+                  setAnswer(activeQ, next),
+                )}
+              </div>
             </div>
 
             <div className="mt-6 flex items-center justify-between">
@@ -466,7 +554,8 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
 
       <footer className="flex shrink-0 items-center justify-between border-t border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-4 py-2 text-xs text-[var(--color-text-muted)] md:px-6">
         <span>
-          Section {activeOQ.section.sectionOrder} of {paper.sections.length}
+          Section {activeOQ.section.sectionOrder} of{" "}
+          {paper?.data?.sections.length}
         </span>
         <span className="text-[var(--blue-600)]">
           {answeredCount} / {orderedQuestions.length} answered

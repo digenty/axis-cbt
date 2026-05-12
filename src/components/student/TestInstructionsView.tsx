@@ -1,18 +1,18 @@
 "use client";
 
-import {
-  BookOpen,
-  Clock,
-  FileText,
-  GraduationCap,
-  Info,
-  Loader2,
-  Star,
-} from "lucide-react";
+import { BookMinus, Info, Loader2, Star } from "lucide-react";
 import { useGetAssessmentPreview } from "@/hooks/queryHooks/useStudentCBT";
 import { BackButton } from "@/components/common/BackButton";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
+import { StatCard } from "../common/StatCard";
+import { IconBadge } from "../common/IconBadge";
+import {
+  BookOpen,
+  GraduationCapFill,
+  TimeFill,
+  QuestionFill,
+} from "@digenty/icons";
 
 interface TestInstructionsViewProps {
   // The route segment is named [testId] but the value is `assessmentId`.
@@ -43,7 +43,14 @@ export const TestInstructionsView = ({
     );
   }
 
-  const preview = data;
+  const preview = data?.data;
+  if (!preview) {
+    return (
+      <div className="px-6 py-12">
+        <EmptyState title="Test not found" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-8">
@@ -54,59 +61,91 @@ export const TestInstructionsView = ({
           {preview.name}
         </h1>
       </div>
-      <span className="mt-2 inline-flex items-center gap-1 rounded-md border border-[var(--amber-300)] bg-[var(--color-bg-badge-amber)] px-2 py-0.5 text-[11px] text-[var(--amber-700)]">
-        <Star className="h-3 w-3" />
+      <span className="mt-2 inline-flex items-center gap-1 rounded-md border border-[var(--amber-300)] bg-[var(--color-bg-badge-amber)] px-2 py-1.5 text-[11px] text-text-default">
+        <Star className="h-3 w-3 text-bg-basic-amber-strong" />
         {preview.totalMarks} marks
       </span>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
-          <div className="flex items-center gap-2 text-xs text-[var(--color-text-subtle)]">
-            <GraduationCap className="h-3.5 w-3.5" />
-            Class
-          </div>
-          <div className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
-            {preview.className || "-"}
-          </div>
-        </div>
-        <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
-          <div className="flex items-center gap-2 text-xs text-[var(--color-text-subtle)]">
-            <BookOpen className="h-3.5 w-3.5" />
-            Subject
-          </div>
-          <div className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
-            {preview.subjectName || "-"}
-          </div>
-        </div>
-        <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
-          <div className="flex items-center gap-2 text-xs text-[var(--color-text-subtle)]">
-            <Clock className="h-3.5 w-3.5" />
-            Duration
-          </div>
-          <div className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
-            {preview.durationMinutes} minutes
-          </div>
-        </div>
-        <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
-          <div className="flex items-center gap-2 text-xs text-[var(--color-text-subtle)]">
-            <FileText className="h-3.5 w-3.5" />
-            Questions
-          </div>
-          <div className="mt-2 text-sm font-semibold text-[var(--color-text-default)]">
-            {preview.questionCount}
-          </div>
-        </div>
+        <StatCard
+          icon={
+            <IconBadge
+              color="--color-bg-basic-teal-subtle"
+              className="border-bg-basic-teal-accent border rounded-xs"
+            >
+              <GraduationCapFill
+                fill="var(--color-text-default)"
+                className="size-2.5"
+              />
+            </IconBadge>
+          }
+          label="Class"
+          value={
+            <span className="text-xl font-medium">
+              {preview.className || "-"}
+            </span>
+          }
+        />
+        <StatCard
+          icon={
+            <IconBadge
+              color="--color-bg-basic-blue-subtle"
+              className="border-bg-basic-blue-accent border rounded-xs"
+            >
+              <BookOpen fill="var(--color-text-default)" className="size-2.5" />
+            </IconBadge>
+          }
+          label="Subject"
+          value={
+            <span className="text-xl font-medium capitalize">
+              {preview.subjectName.toLowerCase() || "-"}
+            </span>
+          }
+        />
+        <StatCard
+          icon={
+            <IconBadge
+              color="--color-bg-basic-orange-subtle"
+              className="border-bg-basic-orange-accent border rounded-xs"
+            >
+              <TimeFill fill="var(--color-text-default)" className="size-2.5" />
+            </IconBadge>
+          }
+          label="Duration"
+          value={
+            <span className="text-xl font-medium">
+              {preview.durationMinutes} minutes
+            </span>
+          }
+        />
+        <StatCard
+          icon={
+            <IconBadge
+              color="--color-bg-basic-purple-subtle"
+              className="border-bg-basic-purple-accent border rounded-xs"
+            >
+              <QuestionFill
+                fill="var(--color-text-default)"
+                className="size-2.5"
+              />
+            </IconBadge>
+          }
+          label="Questions"
+          value={
+            <span className="text-xl font-medium">{preview.questionCount}</span>
+          }
+        />
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)]">
-        <header className="flex items-center gap-2 border-b border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-4 py-2.5">
-          <BookOpen className="h-3.5 w-3.5 text-[var(--color-icon-default-subtle)]" />
+      <div className="mt-5 overflow-hidden rounded-xl p-1 bg-bg-muted">
+        <header className="flex items-center gap-2 px-4 py-2.5">
+          <BookMinus className="size-3 text-text-default" />
           <span className="text-sm font-semibold text-[var(--color-text-default)]">
             Instructions
           </span>
         </header>
-        <div className="px-4 py-4 text-sm text-[var(--color-text-default)] whitespace-pre-line">
-          {preview.instructions ?? (
+        <div className="rounded-md px-4 py-4 text-sm text-[var(--color-text-default)] whitespace-pre-line bg-bg-default">
+          {preview.instructions || (
             <span className="text-[var(--color-text-muted)]">
               No specific instructions were provided for this test.
             </span>
@@ -116,12 +155,12 @@ export const TestInstructionsView = ({
 
       <div className="mt-3 rounded-xl border border-[var(--color-border-warning)] bg-[var(--color-bg-badge-orange)] p-4">
         <div className="flex items-center gap-2">
-          <Info className="h-3.5 w-3.5 text-[var(--orange-600)]" />
-          <span className="text-sm font-semibold text-[var(--orange-700)]">
+          <Info className="h-3.5 w-3.5 text-text-warning" />
+          <span className="text-base font-medium text-text-warning">
             Important Notes
           </span>
         </div>
-        <ul className="mt-2 space-y-1 text-xs text-[var(--orange-800)]">
+        <ul className="mt-2 space-y-1 text-sm text-text-default">
           <li>
             • Once you start the assessment, the timer will begin automatically
           </li>
