@@ -29,6 +29,7 @@ export interface BlankData {
   marks?: number;
   answerType?: "SHORT_ANSWER" | "MULTIPLE_CHOICE";
   correctAnswers?: string[];
+  options?: OptionData[];
 }
 
 export interface MatchPairData {
@@ -62,19 +63,23 @@ export type ResponseTypeSpecificData =
     }
   | {
       questionType: "SHORT_ANSWER";
-      correctAnswers?: string[];
-      caseSensitive?: boolean;
-      exactMatch?: boolean;
-      maxLength?: number;
+      additionalData?: {
+        correctAnswers?: string[];
+        caseSensitive?: boolean;
+        exactMatch?: boolean;
+        maxLength?: number;
+      };
     }
   | {
       questionType: "NUMERIC_ANSWER";
-      correctAnswer?: number;
-      tolerance?: number;
-      minValue?: number;
-      maxValue?: number;
-      unit?: string;
-      decimalPlaces?: number;
+      additionalData: {
+        correctAnswer?: number;
+        tolerance?: number;
+        minValue?: number;
+        maxValue?: number;
+        unit?: string;
+        decimalPlaces?: number;
+      };
     }
   | {
       questionType: "FILL_IN_THE_BLANK";
@@ -109,16 +114,24 @@ export type ResponseTypeSpecificData =
     };
 
 export interface ResponseSubQuestion {
+  id?: number;
   questionText: string;
-  questionHtml?: string;
-  imageUrl?: string;
+  questionHtml?: string | null;
+  imageUrl?: string | null;
   marks: number;
-  explanation?: string;
-  questionType: Exclude<QuestionType, "QUESTION_GROUP" | "COMPREHENSION">;
-  typeSpecificData: Exclude<
+  explanation?: string | null;
+  questionOrder?: number;
+  // Nested format (original)
+  questionType?: Exclude<QuestionType, "QUESTION_GROUP" | "COMPREHENSION">;
+  typeSpecificData?: Exclude<
     ResponseTypeSpecificData,
     { questionType: "QUESTION_GROUP" } | { questionType: "COMPREHENSION" }
   >;
+  // Flat format (actual API response)
+  type?: QuestionType;
+  options?: OptionData[];
+  correctOptionId?: number | null;
+  additionalData?: Record<string, unknown> | null;
 }
 
 // ─── PayloadTypeSpecificData ──────────────────────────────────────────────────
@@ -250,6 +263,7 @@ export interface ApiQuestion {
   difficultyLevel?: string;
   questionType: QuestionType;
   typeSpecificData: ResponseTypeSpecificData;
+  additionalData?: Record<string, unknown> | null;
   options?: OptionData[];
   blanks?: BlankData[];
   pairs?: MatchPairData[];

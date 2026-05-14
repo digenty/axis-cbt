@@ -25,11 +25,13 @@ import type {
   ApiStudentOption,
   ApiStudentQuestion,
   ApiStudentSection,
+  ApiSubQuestion,
   SubmitAnswerPayload,
 } from "@/types/student-api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLoggedInUser } from "@/hooks/useLoggedInUser";
+import { RichTextEditor } from "@/components/question-bank/RichTextEditor";
 
 interface TestRunnerProps {
   // The route segment is named [testId] but the value is `assessmentId`.
@@ -37,22 +39,48 @@ interface TestRunnerProps {
   studentName: string;
 }
 
-interface AnswerState {
+interface SubAnswer {
   selectedOptionIds: number[];
   textAnswer: string;
 }
 
+interface AnswerState {
+  selectedOptionIds: number[];
+  textAnswer: string;
+  subAnswers: Record<number, SubAnswer>;
+}
+
+const emptySubAnswer = (): SubAnswer => ({
+  selectedOptionIds: [],
+  textAnswer: "",
+});
+
 const emptyAnswer = (): AnswerState => ({
   selectedOptionIds: [],
   textAnswer: "",
+  subAnswers: {},
 });
 
 const isAnswered = (a: AnswerState | undefined): boolean => {
   if (!a) return false;
   if (a.selectedOptionIds.length > 0) return true;
   if (a.textAnswer.trim().length > 0) return true;
+  if (
+    Object.values(a.subAnswers).some(
+      (s) => s.selectedOptionIds.length > 0 || s.textAnswer.trim().length > 0,
+    )
+  )
+    return true;
   return false;
 };
+
+interface QuestionGroupTypeData {
+  stimulusType?: string;
+  stimulusContent?: string;
+  stimulusHtml?: string;
+  stimulusImageUrl?: string;
+  subQuestions?: ApiSubQuestion[];
+}
 
 const buildAnswerData = (
   q: ApiStudentQuestion,
@@ -68,6 +96,27 @@ const buildAnswerData = (
   if (t === "MULTIPLE_ANSWERS") {
     return { selectedOptionIds: a.selectedOptionIds };
   }
+  if (t === "QUESTION_GROUP") {
+    const td = q.typeData as QuestionGroupTypeData;
+    const subAnswerData: Record<number, unknown> = {};
+    for (const sq of td?.subQuestions ?? []) {
+      const sa = a.subAnswers[sq.subQuestionId];
+      if (!sa) continue;
+      const st = sq.questionType.toUpperCase();
+      if (st === "TRUE_FALSE") {
+        subAnswerData[sq.subQuestionId] = {
+          selectedOptionId: sa.selectedOptionIds[0] ?? null,
+        };
+      } else if (st === "MULTIPLE_CHOICE" || st === "MULTIPLE_ANSWERS") {
+        subAnswerData[sq.subQuestionId] = {
+          selectedOptionIds: sa.selectedOptionIds,
+        };
+      } else {
+        subAnswerData[sq.subQuestionId] = { answerText: sa.textAnswer };
+      }
+    }
+    return { subAnswers: subAnswerData };
+  }
   return { answerText: a.textAnswer };
 };
 
@@ -76,19 +125,40 @@ const getOptions = (q: ApiStudentQuestion): ApiStudentOption[] => {
   return td?.options ?? [];
 };
 
-const renderAnswerInput = (
-  q: ApiStudentQuestion,
-  answer: AnswerState,
-  onChange: (a: AnswerState) => void,
+const TRUE_FALSE_OPTIONS: ApiStudentOption[] = [
+  {
+    id: 1,
+    optionText: "True",
+    optionHtml: null,
+    optionLabel: "a",
+    optionOrder: 0,
+    imageUrl: null,
+  },
+  {
+    id: 2,
+    optionText: "False",
+    optionHtml: null,
+    optionLabel: "b",
+    optionOrder: 1,
+    imageUrl: null,
+  },
+];
+
+// ─── Sub-question input (used inside QUESTION_GROUP) ─────────────────────────
+
+const renderSubQuestionInput = (
+  sq: ApiSubQuestion,
+  ans: SubAnswer,
+  onChange: (a: SubAnswer) => void,
 ) => {
-  const t = q.questionType.toUpperCase();
-  const options = getOptions(q);
+  const t = sq.questionType.toUpperCase();
+  const options = sq.options ?? [];
 
   if (t === "TRUE_FALSE") {
     return (
-      <div className="grid grid-cols-2 gap-3">
-        {options.map((opt) => {
-          const picked = answer.selectedOptionIds.includes(opt.id);
+      <div className="grid grid-cols-2 gap-2 mt-2">
+        {TRUE_FALSE_OPTIONS.map((opt) => {
+          const picked = ans.selectedOptionIds.includes(opt.id);
           return (
             <button
               key={opt.id}
@@ -97,17 +167,17 @@ const renderAnswerInput = (
                 onChange({ selectedOptionIds: [opt.id], textAnswer: "" })
               }
               className={cn(
-                "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
+                "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm",
                 picked
-                  ? "border-[var(--blue-500)] bg-[var(--color-bg-badge-blue)] text-[var(--blue-700)]"
+                  ? "border-2 border-[var(--blue-500)] ring-offset-1 ring-2 ring-border-informative/30"
                   : "border-[var(--color-border-default)] hover:bg-[var(--color-bg-state-soft-hover)]",
               )}
             >
               <span
                 className={cn(
-                  "flex h-3.5 w-3.5 items-center justify-center rounded-full border",
+                  "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border",
                   picked
-                    ? "border-[var(--blue-500)] bg-[var(--blue-500)]"
+                    ? "border-2 border-[var(--blue-500)] ring-offset-1 ring-2 ring-border-informative/30"
                     : "border-[var(--color-border-strong)]",
                 )}
               >
@@ -123,17 +193,17 @@ const renderAnswerInput = (
     );
   }
 
-  if (t === "MULTIPLE_CHOICE") {
+  if (t === "MULTIPLE_ANSWERS") {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2 mt-2">
         {options.map((opt, i) => {
-          const picked = answer.selectedOptionIds.includes(opt.id);
+          const picked = ans.selectedOptionIds.includes(opt.id);
           const letter = String.fromCharCode(65 + i);
           return (
             <label
               key={opt.id}
               className={cn(
-                "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-3.5 text-sm text-text-dark-default",
+                "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm text-text-dark-default",
                 picked
                   ? "border-2 border-[var(--blue-500)] ring-offset-1 ring-2 ring-border-informative/30"
                   : "border-[var(--color-border-default)] hover:bg-[var(--color-bg-state-soft-hover)]",
@@ -145,8 +215,8 @@ const renderAnswerInput = (
                 checked={picked}
                 onChange={() => {
                   const next = picked
-                    ? answer.selectedOptionIds.filter((id) => id !== opt.id)
-                    : [...answer.selectedOptionIds, opt.id];
+                    ? ans.selectedOptionIds.filter((id) => id !== opt.id)
+                    : [...ans.selectedOptionIds, opt.id];
                   onChange({ selectedOptionIds: next, textAnswer: "" });
                 }}
                 className="h-3.5 w-3.5 accent-(--blue-500) border rounded-lg border-border-darker"
@@ -159,31 +229,28 @@ const renderAnswerInput = (
     );
   }
 
-  if (t === "MULTIPLE_ANSWERS") {
+  if (t === "MULTIPLE_CHOICE") {
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 mt-2">
         {options.map((opt) => {
-          const picked = answer.selectedOptionIds.includes(opt.id);
+          const picked = ans.selectedOptionIds.includes(opt.id);
           return (
             <button
               key={opt.id}
               type="button"
-              onClick={() => {
-                const next = picked
-                  ? answer.selectedOptionIds.filter((id) => id !== opt.id)
-                  : [...answer.selectedOptionIds, opt.id];
-                onChange({ selectedOptionIds: next, textAnswer: "" });
-              }}
+              onClick={() =>
+                onChange({ selectedOptionIds: [opt.id], textAnswer: "" })
+              }
               className={cn(
-                "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
+                "flex items-center gap-2 rounded-lg border px-3 py-3.5 text-sm",
                 picked
-                  ? "border-[var(--blue-500)] bg-[var(--color-bg-badge-blue)] text-[var(--blue-700)]"
+                  ? "border-2 border-[var(--blue-500)] ring-offset-1 ring-2 ring-border-informative/30"
                   : "border-[var(--color-border-default)] hover:bg-[var(--color-bg-state-soft-hover)]",
               )}
             >
               <span
                 className={cn(
-                  "flex h-3.5 w-3.5 items-center justify-center rounded border",
+                  "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border",
                   picked
                     ? "border-[var(--blue-500)] bg-[var(--blue-500)]"
                     : "border-[var(--color-border-strong)]",
@@ -209,15 +276,266 @@ const renderAnswerInput = (
     );
   }
 
+  if (t === "FILL_IN_THE_BLANK") {
+    return (
+      <textarea
+        value={ans.textAnswer}
+        onChange={(e) =>
+          onChange({ selectedOptionIds: [], textAnswer: e.target.value })
+        }
+        placeholder="Type your answer here"
+        rows={1}
+        className="mt-2 w-full rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 py-2 text-sm text-[var(--color-text-default)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+      />
+    );
+  }
+
   return (
-    <textarea
+    <div className="mt-2">
+      <RichTextEditor
+        value={ans.textAnswer}
+        onChange={(v) => onChange({ selectedOptionIds: [], textAnswer: v })}
+        placeholder="Type your answer here"
+      />
+    </div>
+  );
+};
+
+// ─── Top-level answer input ───────────────────────────────────────────────────
+
+const renderAnswerInput = (
+  q: ApiStudentQuestion,
+  answer: AnswerState,
+  onChange: (a: AnswerState) => void,
+) => {
+  const t = q.questionType.toUpperCase();
+  const options = getOptions(q);
+
+  if (t === "TRUE_FALSE") {
+    return (
+      <div className="grid grid-cols-2 gap-3">
+        {TRUE_FALSE_OPTIONS.map((opt) => {
+          const picked = answer.selectedOptionIds.includes(opt.id);
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...answer,
+                  selectedOptionIds: [opt.id],
+                  textAnswer: "",
+                })
+              }
+              className={cn(
+                "flex items-center gap-2 rounded-lg border px-3 py-3.5 text-sm",
+                picked
+                  ? "border-2 border-[var(--blue-500)] ring-offset-1 ring-2 ring-border-informative/30"
+                  : "border-[var(--color-border-default)] hover:bg-[var(--color-bg-state-soft-hover)]",
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-3.5 w-3.5 items-center justify-center rounded-full border",
+                  picked
+                    ? "border-2 border-[var(--blue-500)] ring-offset-1 ring-2 ring-border-informative/30"
+                    : "border-[var(--color-border-strong)]",
+                )}
+              >
+                {picked && (
+                  <span className="block h-1.5 w-1.5 rounded-full bg-white" />
+                )}
+              </span>
+              {opt.optionText}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (t === "MULTIPLE_ANSWERS") {
+    return (
+      <div className="flex flex-col gap-4">
+        {options.map((opt, i) => {
+          const picked = answer.selectedOptionIds.includes(opt.id);
+          const letter = String.fromCharCode(65 + i);
+          return (
+            <label
+              key={opt.id}
+              className={cn(
+                "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-3.5 text-sm text-text-dark-default",
+                picked
+                  ? "border-2 border-[var(--blue-500)] ring-offset-1 ring-2 ring-border-informative/30"
+                  : "border-[var(--color-border-default)] hover:bg-[var(--color-bg-state-soft-hover)]",
+              )}
+            >
+              <span className="w-5 shrink-0 font-medium">{letter}.</span>
+              <input
+                type="checkbox"
+                checked={picked}
+                onChange={() => {
+                  const next = picked
+                    ? answer.selectedOptionIds.filter((id) => id !== opt.id)
+                    : [...answer.selectedOptionIds, opt.id];
+                  onChange({
+                    ...answer,
+                    selectedOptionIds: next,
+                    textAnswer: "",
+                  });
+                }}
+                className="h-3.5 w-3.5 accent-(--blue-500) border rounded-lg border-border-darker"
+              />
+              {opt.optionText}
+            </label>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (t === "MULTIPLE_CHOICE") {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {options.map((opt) => {
+          const picked = answer.selectedOptionIds.includes(opt.id);
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => {
+                onChange({
+                  ...answer,
+                  selectedOptionIds: [opt.id],
+                  textAnswer: "",
+                });
+              }}
+              className={cn(
+                "flex items-center gap-2 rounded-lg border px-3 py-3.5 text-sm",
+                picked
+                  ? "border-[var(--blue-500)] bg-[var(--color-bg-badge-blue)] text-[var(--blue-700)]"
+                  : "border-[var(--color-border-default)] hover:bg-[var(--color-bg-state-soft-hover)]",
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-3.5 w-3.5 items-center justify-center rounded-full border",
+                  picked
+                    ? "border-[var(--blue-500)] bg-[var(--blue-500)]"
+                    : "border-[var(--color-border-strong)]",
+                )}
+              >
+                {picked && (
+                  <svg
+                    className="h-2.5 w-2.5 text-white"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M2 6l3 3 5-6" />
+                  </svg>
+                )}
+              </span>
+              {opt.optionText}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (t === "FILL_IN_THE_BLANK") {
+    return (
+      <textarea
+        value={answer.textAnswer}
+        onChange={(e) =>
+          onChange({
+            ...answer,
+            selectedOptionIds: [],
+            textAnswer: e.target.value,
+          })
+        }
+        placeholder="Type your answer here"
+        rows={1}
+        className="w-full rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 py-2 text-sm text-[var(--color-text-default)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+      />
+    );
+  }
+
+  if (t === "QUESTION_GROUP") {
+    const td = q.typeData as QuestionGroupTypeData;
+    const subQuestions = td?.subQuestions ?? [];
+    const stimulusContent = td?.stimulusHtml || td?.stimulusContent || "";
+    const stimulusImageUrl = td?.stimulusImageUrl || "";
+
+    return (
+      <div className="grid h-[664px] grid-cols-1 gap-6 md:grid-cols-2">
+        {/* Left: stimulus */}
+        <div className="overflow-y-auto rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] p-4 text-sm text-[var(--color-text-default)] leading-relaxed">
+          {stimulusImageUrl && (
+            <div className="mb-3">
+              <Image
+                src={stimulusImageUrl}
+                alt="Stimulus"
+                width={500}
+                height={300}
+                className="rounded-lg w-full object-contain"
+              />
+            </div>
+          )}
+          {stimulusContent && (
+            <div dangerouslySetInnerHTML={{ __html: stimulusContent }} />
+          )}
+        </div>
+
+        {/* Right: sub-questions */}
+        <div className="flex flex-col gap-5 overflow-y-auto">
+          <p className="text-sm font-medium text-[var(--color-text-muted)]">
+            Answer the following questions
+          </p>
+          {subQuestions.map((sq, i) => {
+            const subAns =
+              answer.subAnswers[sq.subQuestionId] ?? emptySubAnswer();
+            return (
+              <div key={sq.subQuestionId} className="flex flex-col gap-1">
+                <div className="flex items-start gap-2">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-subtle)] text-xs font-medium text-[var(--color-text-muted)]">
+                    {i + 1}
+                  </span>
+                  <div
+                    className="text-sm font-medium text-[var(--color-text-default)] leading-snug"
+                    dangerouslySetInnerHTML={{
+                      __html: sq.questionHtml || sq.questionText,
+                    }}
+                  />
+                </div>
+                <div className="pl-7">
+                  {renderSubQuestionInput(sq, subAns, (sa) =>
+                    onChange({
+                      ...answer,
+                      subAnswers: {
+                        ...answer.subAnswers,
+                        [sq.subQuestionId]: sa,
+                      },
+                    }),
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <RichTextEditor
       value={answer.textAnswer}
-      onChange={(e) =>
-        onChange({ selectedOptionIds: [], textAnswer: e.target.value })
+      onChange={(v) =>
+        onChange({ ...answer, selectedOptionIds: [], textAnswer: v })
       }
-      rows={4}
       placeholder="Type your answer here"
-      className="w-full rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 py-2 text-sm text-[var(--color-text-default)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
     />
   );
 };
@@ -287,8 +605,6 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
   const { data: paper, isLoading: paperLoading } = useGetAssessmentPaper(
     studentAssessmentId ?? 0,
   );
-  console.log(paper, studentAssessmentId);
-
   const orderedQuestions = useMemo<OrderedQuestion[]>(() => {
     if (!paper) return [];
     const out: OrderedQuestion[] = [];
@@ -304,7 +620,7 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
 
   // ─── Answer state per assessmentQuestionId ─────────────────────────────
   const [answers, setAnswers] = useState<Record<number, AnswerState>>({});
-  const [activeIdx, setActiveIdx] = useState(0);
+  const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
 
@@ -410,9 +726,9 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
     );
   }
 
-  const activeOQ = orderedQuestions[activeIdx];
-  const activeQ = activeOQ.question;
-  const activeAnswer = answers[activeQ.assessmentQuestionId] ?? emptyAnswer();
+  const sections = paper?.data?.sections ?? [];
+  const activeSection = sections[activeSectionIdx];
+  console.log(activeSection, "444");
   const minutes = Math.floor((secondsLeft ?? 0) / 60);
   const seconds = (secondsLeft ?? 0) % 60;
   const answeredCount = orderedQuestions.filter((oq) =>
@@ -422,7 +738,7 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
   return (
     <div className="flex h-screen flex-col bg-[var(--color-bg-default)]">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-4 md:px-6">
-        <h1 className="text-base font-semibold text-[var(--color-text-default)]">
+        <h1 className="text-xl font-semibold text-[var(--color-text-default)]">
           {paper?.data?.assessmentName}
         </h1>
         <div className="flex items-center gap-3">
@@ -458,13 +774,22 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
                       q.assessmentQuestionId,
                   );
                   if (idx === -1) return null;
-                  const isActive = idx === activeIdx;
+                  const isActive =
+                    orderedQuestions[idx]?.section.sectionId ===
+                    activeSection?.sectionId;
                   const answered = isAnswered(answers[q.assessmentQuestionId]);
                   return (
                     <button
                       key={q.assessmentQuestionId}
                       type="button"
-                      onClick={() => setActiveIdx(idx)}
+                      onClick={() => {
+                        const sIdx = sections.findIndex(
+                          (sec) =>
+                            sec.sectionId ===
+                            orderedQuestions[idx]?.section.sectionId,
+                        );
+                        if (sIdx !== -1) setActiveSectionIdx(sIdx);
+                      }}
                       className={cn(
                         "flex h-7 w-7 items-center justify-center rounded-md text-xs font-medium",
                         isActive
@@ -484,68 +809,90 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
         </aside>
 
         <main className="flex-1 overflow-y-auto px-4 py-5 md:px-8">
-          <div className="mx-auto ">
-            <div className="border border-border-default rounded-lg p-6">
-              <div className="flex items-center gap-3">
-                <span className="flex size-7 items-center justify-center rounded-full bg-bg-basic-gray-accent text-xs font-medium text-white">
-                  {activeIdx + 1}
-                </span>
-                <span className="text-xs text-[var(--color-text-muted)]">
-                  {activeQ.marks} mark{activeQ.marks === 1 ? "" : "s"}
-                </span>
-                <button
-                  type="button"
-                  className="ml-auto text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-warning)] bg-bg-state-soft p-1.5 rounded-sm cursor-pointer"
-                >
-                  <Flag className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div
-                className=" rounded-lg bg-[var(--color-bg-card)] py-4 text-lg font-medium text-[var(--color-text-default)]"
-                dangerouslySetInnerHTML={{
-                  __html: activeQ.questionHtml || activeQ.questionText,
-                }}
-              />
-
-              {activeQ.imageUrl && (
-                <div className=" relative mt-3 max-h-80 overflow-hidden rounded-lg ">
-                  <Image
-                    src={activeQ.imageUrl}
-                    height={80}
-                    width={200}
-                    alt="Question image"
-                    // fill
-                    className="rounded-lg"
-                  />
-                </div>
-              )}
-
-              <div className="mt-4">
-                {renderAnswerInput(activeQ, activeAnswer, (next) =>
-                  setAnswer(activeQ, next),
-                )}
-              </div>
+          <div className="mx-auto space-y-5">
+            <div>
+              <h3 className="text-xl font-semibold text-(--color-text-default)">
+                {activeSection?.name}
+              </h3>
+              <p className="text-text-muted text-sm">
+                {activeSection?.instructions}
+              </p>
             </div>
+
+            {activeSection?.questions.map((q) => {
+              const globalIdx = orderedQuestions.findIndex(
+                (oq) =>
+                  oq.question.assessmentQuestionId === q.assessmentQuestionId,
+              );
+              const answer = answers[q.assessmentQuestionId] ?? emptyAnswer();
+              return (
+                <div
+                  key={q.assessmentQuestionId}
+                  className="border border-border-default rounded-lg p-6"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-7 items-center justify-center rounded-full bg-bg-basic-gray-accent text-xs font-medium text-white">
+                      {globalIdx + 1}
+                    </span>
+                    <span className="text-xs text-(--color-text-muted)">
+                      {q.marks} mark{q.marks === 1 ? "" : "s"}
+                    </span>
+                    <button
+                      type="button"
+                      className="ml-auto text-(--color-icon-default-muted) hover:text-(--color-icon-warning) bg-bg-state-soft p-1.5 rounded-sm cursor-pointer"
+                    >
+                      <Flag className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {q.questionType.toUpperCase() !== "QUESTION_GROUP" && (
+                    <>
+                      <div
+                        className="rounded-lg bg-(--color-bg-card) py-4 text-lg font-medium text-(--color-text-default)"
+                        dangerouslySetInnerHTML={{
+                          __html: q.questionHtml || q.questionText,
+                        }}
+                      />
+
+                      {q.imageUrl && (
+                        <div className="relative mt-3 max-h-80 overflow-hidden rounded-lg">
+                          <Image
+                            src={q.imageUrl}
+                            height={80}
+                            width={200}
+                            alt="Question image"
+                            className="rounded-lg"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <div className="mt-4">
+                    {renderAnswerInput(q, answer, (next) => setAnswer(q, next))}
+                  </div>
+                </div>
+              );
+            })}
 
             <div className="mt-6 flex items-center justify-between">
               <Button
                 variant="outline"
-                disabled={activeIdx === 0}
-                onClick={() => setActiveIdx((i) => Math.max(0, i - 1))}
+                disabled={activeSectionIdx === 0}
+                onClick={() => setActiveSectionIdx((i) => Math.max(0, i - 1))}
               >
-                Previous Question
+                Previous Section
               </Button>
               <Button
                 onClick={() => {
-                  if (activeIdx === orderedQuestions.length - 1)
+                  if (activeSectionIdx === sections.length - 1)
                     setSubmitOpen(true);
-                  else setActiveIdx((i) => i + 1);
+                  else setActiveSectionIdx((i) => i + 1);
                 }}
               >
-                {activeIdx === orderedQuestions.length - 1
+                {activeSectionIdx === sections.length - 1
                   ? "Submit"
-                  : "Next Question"}
+                  : "Next Section"}
               </Button>
             </div>
           </div>
@@ -554,8 +901,7 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
 
       <footer className="flex shrink-0 items-center justify-between border-t border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-4 py-2 text-xs text-[var(--color-text-muted)] md:px-6">
         <span>
-          Section {activeOQ.section.sectionOrder} of{" "}
-          {paper?.data?.sections.length}
+          Section {activeSectionIdx + 1} of {sections.length}
         </span>
         <span className="text-[var(--blue-600)]">
           {answeredCount} / {orderedQuestions.length} answered

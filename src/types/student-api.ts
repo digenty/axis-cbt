@@ -151,6 +151,7 @@ export interface ApiSubQuestion {
   questionHtml: string | null;
   marks: number;
   questionType: string;
+  options?: ApiStudentOption[];
 }
 
 export interface ApiStudentQuestion {

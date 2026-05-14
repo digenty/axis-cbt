@@ -1,6 +1,41 @@
 "use client";
 
 import { BookMinus, Info, Loader2, Star } from "lucide-react";
+
+// ─── Instruction renderer ─────────────────────────────────────────────────────
+
+function applyBold(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={i}>{part.slice(2, -2)}</strong>
+    ) : (
+      part
+    ),
+  );
+}
+
+function renderInstructions(text: string): React.ReactNode {
+  const lines = text.split("\n");
+  const nodes: React.ReactNode[] = [];
+
+  lines.forEach((line, i) => {
+    if (line.startsWith("→ ")) {
+      nodes.push(
+        <div key={i} className="flex items-start gap-2">
+          <span className="mt-0.5 shrink-0">→</span>
+          <span>{applyBold(line.slice(2))}</span>
+        </div>,
+      );
+    } else if (line.trim() === "") {
+      nodes.push(<div key={i} className="h-2" />);
+    } else {
+      nodes.push(<p key={i}>{applyBold(line)}</p>);
+    }
+  });
+
+  return <div className="space-y-1">{nodes}</div>;
+}
 import { useGetAssessmentPreview } from "@/hooks/queryHooks/useStudentCBT";
 import { BackButton } from "@/components/common/BackButton";
 import { Button } from "@/components/ui/button";
@@ -144,9 +179,11 @@ export const TestInstructionsView = ({
             Instructions
           </span>
         </header>
-        <div className="rounded-md px-4 py-4 text-sm text-[var(--color-text-default)] whitespace-pre-line bg-bg-default">
-          {preview.instructions || (
-            <span className="text-[var(--color-text-muted)]">
+        <div className="rounded-md px-4 py-4 text-sm text-text-default bg-bg-default">
+          {preview.instructions ? (
+            renderInstructions(preview.instructions)
+          ) : (
+            <span className="text-text-muted">
               No specific instructions were provided for this test.
             </span>
           )}

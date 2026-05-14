@@ -18,21 +18,14 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { PageHeader } from "@/components/common/PageHeader";
 import { QuestionTypeBadge } from "@/components/common/QuestionTypeBadge";
 import { EmptyState } from "@/components/common/EmptyState";
 import { QuestionBankModal } from "@/components/assessments/QuestionBankModal";
 import { DeleteSectionDialog } from "@/components/assessments/DeleteSectionDialog";
 import { RemoveQuestionDialog } from "@/components/assessments/RemoveQuestionDialog";
+import { EditTestDetailsModal } from "@/components/assessments/EditTestDetailsModal";
 import { AddAssessmentItemModal } from "@/components/question-bank/AddAssessmentItemModal";
 import { QuestionEditForm } from "@/components/question-bank/QuestionEditForm";
 import {
@@ -40,13 +33,6 @@ import {
   apiToKebabType,
   questionToCreatePayload,
 } from "@/types/question.mapper";
-import {
-  addMinutes,
-  composeStartDateTime,
-  splitStartDateTime,
-  uiTermToApi,
-  uiTestTypeToApi,
-} from "@/types/assessment.mapper";
 import {
   useGetClassDetails,
   useGetSubjectsByClassId,
@@ -72,7 +58,7 @@ import {
   useUpdateCbtQuestion,
 } from "@/hooks/queryHooks/useQuestionBank";
 import type { ApiAssessmentQuestion, ApiSection } from "@/types/question";
-import type { Question, QuestionType, TermType, TestType } from "@/types";
+import type { Question, QuestionType } from "@/types";
 import type { ApiTopic } from "@/types/question";
 import type { Topic } from "@/types";
 import { cn } from "@/lib/utils";
@@ -94,6 +80,81 @@ const apiTopicToUI = (t: ApiTopic): Topic => ({
   questions: [],
   createdAt: "",
 });
+
+// ─── Question group read-only preview ────────────────────────────────────────
+
+const QuestionGroupPreview = ({
+  question,
+  onDelete,
+}: {
+  question: Question;
+  onDelete: () => void;
+}) => (
+  <div className="flex flex-col gap-4 border-t border-[var(--color-border-default)] px-4 py-4">
+    {question.passage && (
+      <div
+        className="rounded-md bg-[var(--color-bg-subtle)] px-3 py-2 text-sm text-[var(--color-text-default)] [&_*]:!m-0 [&_*]:!p-0"
+        dangerouslySetInnerHTML={{ __html: question.passage }}
+      />
+    )}
+
+    {(question.subQuestions ?? []).map((sq, i) => (
+      <div key={sq.id} className="flex flex-col gap-1.5">
+        <div className="flex items-start gap-2">
+          <span className="shrink-0 rounded bg-[var(--color-bg-badge-gray)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-subtle)]">
+            {i + 1}
+          </span>
+          <div
+            className="flex-1 text-sm text-[var(--color-text-default)] [&_*]:!inline [&_*]:!m-0 [&_*]:!p-0"
+            dangerouslySetInnerHTML={{ __html: sq.text }}
+          />
+          <span className="shrink-0 text-[11px] text-[var(--color-text-muted)]">
+            {sq.marks} mark{sq.marks === 1 ? "" : "s"}
+          </span>
+        </div>
+        {(sq.type === "multiple-choice" || sq.type === "multiple-answers") &&
+          sq.options &&
+          sq.options.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-[var(--color-text-muted)]">
+                Options
+              </span>
+              {sq.options.map((opt, j) => (
+                <div
+                  key={opt.id}
+                  className="flex items-center gap-3 rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-input-soft)] px-3 py-2.5"
+                >
+                  <input
+                    type="checkbox"
+                    disabled
+                    className="h-4 w-4 shrink-0"
+                  />
+                  <span className="shrink-0 text-sm font-medium text-[var(--color-text-subtle)]">
+                    {String.fromCharCode(65 + j)}.
+                  </span>
+                  <span
+                    className="flex-1 text-sm text-[var(--color-text-default)] [&_*]:!inline [&_*]:!m-0 [&_*]:!p-0"
+                    dangerouslySetInnerHTML={{ __html: opt.text }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+      </div>
+    ))}
+
+    <div className="flex items-center justify-end border-t border-[var(--color-border-default)] pt-3">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onDelete}
+        className="text-[var(--color-text-destructive)] hover:bg-[var(--color-bg-destructive-soft)]"
+      >
+        Remove
+      </Button>
+    </div>
+  </div>
+);
 
 // ─── Question row ─────────────────────────────────────────────────────────────
 
@@ -132,6 +193,7 @@ const QuestionRow = ({
     ? apiQuestionToUI(individualRes.data)
     : undefined;
 
+  console.log(fullQuestion, individualRes?.data);
   return (
     <div
       className={cn(
@@ -151,9 +213,12 @@ const QuestionRow = ({
           Q{index + 1}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm text-[var(--color-text-default)]">
-            {aq.questionText || "(untitled)"}
-          </div>
+          <div
+            className="truncate text-sm text-[var(--color-text-default)] [&_*]:!inline [&_*]:!m-0 [&_*]:!p-0"
+            dangerouslySetInnerHTML={{
+              __html: aq.questionText || "(untitled)",
+            }}
+          />
           <div className="mt-1 flex items-center gap-2">
             <QuestionTypeBadge type={apiToKebabType(aq.questionType)} />
             <span className="text-[11px] text-[var(--color-text-muted)]">
@@ -171,24 +236,31 @@ const QuestionRow = ({
 
       {isExpanded &&
         (fullQuestion ? (
-          <QuestionEditForm
-            question={fullQuestion}
-            onUpdate={(updated) => {
-              const targetTopicId = topicId ?? fullQuestion.topicId;
-              updateQuestion.mutate({
-                id: Number(updated.id),
-                payload: questionToCreatePayload(updated, {
-                  classId,
-                  subjectId,
-                  topicId: Number(targetTopicId),
-                }),
-              });
-            }}
-            onDuplicate={() =>
-              onDuplicateQuestion(Number(fullQuestion.id), section.id)
-            }
-            onDelete={() => onRemoveQuestion(aq.assessmentQuestionId)}
-          />
+          aq.questionType === "QUESTION_GROUP" ? (
+            <QuestionGroupPreview
+              question={fullQuestion}
+              onDelete={() => onRemoveQuestion(aq.assessmentQuestionId)}
+            />
+          ) : (
+            <QuestionEditForm
+              question={fullQuestion}
+              onUpdate={(updated) => {
+                const targetTopicId = topicId ?? fullQuestion.topicId;
+                updateQuestion.mutate({
+                  id: Number(updated.id),
+                  payload: questionToCreatePayload(updated, {
+                    classId,
+                    subjectId,
+                    topicId: Number(targetTopicId),
+                  }),
+                });
+              }}
+              onDuplicate={() =>
+                onDuplicateQuestion(Number(fullQuestion.id), section.id)
+              }
+              onDelete={() => onRemoveQuestion(aq.assessmentQuestionId)}
+            />
+          )
         ) : questionLoading ? (
           <div className="flex justify-center px-3 pb-4">
             <Loader2 className="h-4 w-4 animate-spin text-[var(--color-icon-default-muted)]" />
@@ -242,7 +314,6 @@ const SectionPanel = ({
     null,
   );
 
-  console.log(section);
   const toggleExpand = (id: number) =>
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -360,11 +431,11 @@ const SectionPanel = ({
             <div className="flex flex-col gap-2">
               {section.questions.map((aq, i) => (
                 <QuestionRow
-                  key={aq.id}
+                  key={aq.assessmentQuestionId ?? aq.id}
                   aq={aq}
                   index={i}
-                  isExpanded={expandedIds.has(aq.assessmentQuestionId)}
-                  onToggle={() => toggleExpand(aq.assessmentQuestionId)}
+                  isExpanded={expandedIds.has(aq.id)}
+                  onToggle={() => toggleExpand(aq.id)}
                   classId={classId}
                   subjectId={subjectId}
                   topicId={topicId}
@@ -426,7 +497,8 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   } = useGetAssessment(assessmentId);
   const { data: sectionsRes, isLoading: sectionsLoading } =
     useGetAssessmentSections(assessmentId);
-  const { data: settingsRes } = useGetAssessmentSettingsByClass(classId);
+  const { data: settingsRes, isLoading: settingsLoading } =
+    useGetAssessmentSettingsByClass(classId);
   const settings = useMemo(
     () => settingsRes?.data?.assessments ?? [],
     [settingsRes],
@@ -539,8 +611,6 @@ export const TestEditor = ({ params }: TestEditorProps) => {
     );
   }
 
-  const startSplit = splitStartDateTime(assessment.startDateTime);
-
   const totalMarks = sections
     .flatMap((s) => s.questions)
     .reduce((acc, q) => acc + q.marks, 0);
@@ -610,18 +680,6 @@ export const TestEditor = ({ params }: TestEditorProps) => {
       searchParams.set("sectionId", String(sectionId));
     router.push(`${baseUrl}/question-bank/new?${searchParams}`);
   };
-
-  // Map UI term/type labels for the selects
-  const uiTerm: TermType =
-    assessment.term === "FIRST"
-      ? "First Term"
-      : assessment.term === "SECOND"
-        ? "Second Term"
-        : "Third Term";
-  const uiTestType: TestType =
-    assessment.testType === "EXAMINATION"
-      ? "Examination"
-      : "Continuous Assessment";
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
@@ -718,139 +776,6 @@ export const TestEditor = ({ params }: TestEditorProps) => {
           );
         })()}
       </div>
-
-      {editingDetails && (
-        <div className="mt-3 rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Test type</Label>
-              <select
-                value={uiTestType}
-                onChange={(e) =>
-                  patchAssessment({
-                    testType: uiTestTypeToApi(e.target.value as TestType),
-                  })
-                }
-                className="h-9 w-full rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 text-sm focus:outline-none"
-              >
-                <option>Continuous Assessment</option>
-                <option>Examination</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Term</Label>
-              <select
-                value={uiTerm}
-                onChange={(e) =>
-                  patchAssessment({
-                    term: uiTermToApi(e.target.value as TermType),
-                  })
-                }
-                className="h-9 w-full rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 text-sm focus:outline-none"
-              >
-                <option>First Term</option>
-                <option>Second Term</option>
-                <option>Third Term</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Mapping</Label>
-              <Select
-                value={
-                  assessment.assessmentSettingId == null
-                    ? "none"
-                    : String(assessment.assessmentSettingId)
-                }
-                onValueChange={(v) =>
-                  patchAssessment({
-                    assessmentSettingId: v === "none" ? null : Number(v),
-                  })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Map assessment" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None / Manual Scoring</SelectItem>
-                  {settings.map((s) => (
-                    <SelectItem key={s.id} value={String(s.id)}>
-                      {s.name} ({s.weight}%)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Duration (minutes)</Label>
-              <Input
-                type="number"
-                value={assessment.durationMinutes}
-                onChange={(e) => {
-                  const minutes = Number(e.target.value) || 0;
-                  patchAssessment({
-                    durationMinutes: minutes,
-                    endDateTime: addMinutes(assessment.startDateTime, minutes),
-                  });
-                }}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Test date</Label>
-              <Input
-                type="date"
-                value={startSplit.testDate}
-                onChange={(e) => {
-                  const newStart = composeStartDateTime({
-                    testDate: e.target.value,
-                    startHour: startSplit.startHour,
-                    startMinute: startSplit.startMinute,
-                    amPm: startSplit.amPm,
-                  });
-                  patchAssessment({
-                    startDateTime: newStart,
-                    endDateTime: addMinutes(
-                      newStart,
-                      assessment.durationMinutes,
-                    ),
-                  });
-                }}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Start time (24h)</Label>
-              <Input
-                type="time"
-                value={`${startSplit.amPm === "PM" && Number(startSplit.startHour) !== 12 ? Number(startSplit.startHour) + 12 : startSplit.amPm === "AM" && Number(startSplit.startHour) === 12 ? 0 : Number(startSplit.startHour)}:${startSplit.startMinute}`}
-                onChange={(e) => {
-                  const [hh, mm] = e.target.value.split(":");
-                  const h24 = Number(hh);
-                  const newStart = composeStartDateTime({
-                    testDate: startSplit.testDate,
-                    startHour: String(h24 % 12 === 0 ? 12 : h24 % 12).padStart(
-                      2,
-                      "0",
-                    ),
-                    startMinute: mm,
-                    amPm: h24 >= 12 ? "PM" : "AM",
-                  });
-                  patchAssessment({
-                    startDateTime: newStart,
-                    endDateTime: addMinutes(
-                      newStart,
-                      assessment.durationMinutes,
-                    ),
-                  });
-                }}
-              />
-            </div>
-          </div>
-          {branchId === undefined && (
-            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-              Branch is being resolved…
-            </p>
-          )}
-        </div>
-      )}
 
       <div className="mt-5 flex flex-col gap-3">
         {sections.map((section) => (
@@ -971,6 +896,29 @@ export const TestEditor = ({ params }: TestEditorProps) => {
         }}
         onConfirm={handleConfirmRemoveQuestion}
         isLoading={removeQuestionMutation.isPending}
+      />
+
+      <EditTestDetailsModal
+        open={editingDetails}
+        setOpen={setEditingDetails}
+        assessment={assessment}
+        classId={classId}
+        subjectId={subjectId}
+        branchId={branchId}
+        className={className}
+        subjectName={subjectName}
+        settings={settings}
+        settingsLoading={settingsLoading}
+        onSave={(patch) =>
+          updateMutation.mutate(patch, {
+            onSuccess: () => {
+              toast.success("Test updated");
+              setEditingDetails(false);
+            },
+            onError: () => toast.error("Failed to update test"),
+          })
+        }
+        saving={updateMutation.isPending}
       />
     </div>
   );
