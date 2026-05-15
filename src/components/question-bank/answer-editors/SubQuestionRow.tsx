@@ -66,9 +66,10 @@ export const SubQuestionRow = ({
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-state-soft)] text-xs font-medium">
           Q{index + 1}
         </span>
-        <div className="flex-1 truncate text-sm text-[var(--color-text-default)]">
-          {question.text || "(untitled)"}
-        </div>
+        <div
+          className="flex-1 truncate text-sm text-[var(--color-text-default)]"
+          dangerouslySetInnerHTML={{ __html: question.text || "(untitled)" }}
+        />
         <QuestionTypeBadge type={question.type} />
         <button
           type="button"

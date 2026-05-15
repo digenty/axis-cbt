@@ -5,6 +5,7 @@ import {
   getStudentDashboard,
   getStudentResult,
   startAssessment,
+  studentLogin,
   submitAnswer,
   submitAssessment,
 } from "@/api/student";
@@ -74,4 +75,15 @@ export const useSubmitAssessment = () =>
   useMutation({
     mutationFn: (studentAssessmentId: number) =>
       submitAssessment(studentAssessmentId),
+  });
+
+export const useStudentLogin = () =>
+  useMutation({
+    mutationFn: ({
+      admissionNumber,
+      passcode,
+    }: {
+      admissionNumber: string;
+      passcode: string;
+    }) => studentLogin(admissionNumber, passcode),
   });

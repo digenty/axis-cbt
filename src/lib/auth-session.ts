@@ -65,3 +65,50 @@ export async function clearCBTSession(): Promise<void> {
   cookieStore.delete("cbt_token");
   redirect(`${MAIN_APP_URL}${MAIN_APP_LOGIN_PATH}`);
 }
+
+// ─── Student session ──────────────────────────────────────────────────────────
+
+async function writeStudentTokenCookies(verifiedToken: string): Promise<void> {
+  const cookieStore = await cookies();
+  const serialised = JSON.stringify(verifiedToken);
+  const shared = {
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: COOKIE_MAX_AGE,
+    secure: process.env.NODE_ENV === "production",
+  };
+  cookieStore.set("student_token", serialised, { ...shared, httpOnly: true });
+  cookieStore.set("cbt_student_token", serialised, {
+    ...shared,
+    httpOnly: false,
+  });
+}
+
+export async function getStudentSessionToken(): Promise<{ token: string }> {
+  const cookieStore = await cookies();
+  const raw = cookieStore.get("student_token")?.value;
+
+  if (!raw) redirect("/student/login");
+
+  try {
+    return { token: JSON.parse(raw!) as string };
+  } catch {
+    redirect("/student/login");
+  }
+}
+
+export async function createStudentSession(
+  token: string,
+  redirectTo?: string,
+): Promise<void> {
+  if (!token) redirect("/student/login");
+  await writeStudentTokenCookies(token);
+  redirect(redirectTo ?? "/student/cbt");
+}
+
+export async function clearStudentSession(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete("student_token");
+  cookieStore.delete("cbt_student_token");
+  redirect("/student/login");
+}

@@ -32,7 +32,7 @@ const KEBAB_TO_API: Record<UIQuestionType, ApiQuestionType> = {
   "fill-in-blank": "FILL_IN_THE_BLANK",
   matching: "MATCH",
   "question-group": "QUESTION_GROUP",
-  "comprehension-passage": "COMPREHENSION",
+  "comprehension-passage": "QUESTION_GROUP",
   "multiple-blanks": "FILL_IN_THE_BLANK",
 };
 
@@ -95,6 +95,10 @@ const uiBlanksToApi = (blanks: UIBlank[]): BlankData[] =>
     answerType:
       b.answerType === "multiple-choice" ? "MULTIPLE_CHOICE" : "SHORT_ANSWER",
     correctAnswers: b.answers,
+    options:
+      b.answerType === "multiple-choice" && b.options?.length
+        ? uiOptionsToApi(b.options)
+        : undefined,
   }));
 
 const apiBlanksToUI = (blanks: BlankData[] = []): UIBlank[] =>
@@ -106,6 +110,7 @@ const apiBlanksToUI = (blanks: BlankData[] = []): UIBlank[] =>
       answerType:
         b.answerType === "MULTIPLE_CHOICE" ? "multiple-choice" : "short-answer",
       answers: b.correctAnswers ?? [],
+      options: b.options?.length ? apiOptionsToUI(b.options) : undefined,
     }),
   );
 
@@ -238,7 +243,7 @@ const buildPayloadTypeSpecificData = (
       };
     case "comprehension-passage":
       return {
-        type: "COMPREHENSION",
+        type: "QUESTION_GROUP",
         stimulusType: m.stimulusType ?? "comprehension-passage",
         stimulusContent: q.passage || undefined,
         stimulusImageUrl: q.stimulusImageUrl,
@@ -286,26 +291,70 @@ export const questionToCreatePayload = (
 
 // ─── API ApiQuestion → UI Question ───────────────────────────────────────────
 
+const buildTsdFromFlatSubQuestion = (
+  sq: ResponseSubQuestion,
+  questionType: ApiQuestionType,
+): ResponseTypeSpecificData | undefined => {
+  switch (questionType) {
+    case "MULTIPLE_CHOICE":
+      return { questionType: "MULTIPLE_CHOICE", options: sq.options ?? [] };
+    case "MULTIPLE_ANSWERS":
+      return { questionType: "MULTIPLE_ANSWERS", options: sq.options ?? [] };
+    case "TRUE_FALSE":
+      return {
+        questionType: "TRUE_FALSE",
+        correctAnswer: (sq.additionalData?.correctAnswer as boolean) ?? false,
+      };
+    case "SHORT_ANSWER":
+      return {
+        questionType: "SHORT_ANSWER",
+        additionalData: sq.additionalData as never,
+      };
+    case "NUMERIC_ANSWER":
+      return {
+        questionType: "NUMERIC_ANSWER",
+        additionalData: {
+          correctAnswer: sq.additionalData?.correctAnswer as number | undefined,
+        },
+      };
+    case "ESSAY":
+      return { questionType: "ESSAY" };
+    case "FILL_IN_THE_BLANK":
+      return { questionType: "FILL_IN_THE_BLANK" };
+    default:
+      return undefined;
+  }
+};
+
 const apiSubQuestionToUI = (sq: ResponseSubQuestion): UIQuestion => {
+  const questionType = (sq.questionType ?? sq.type) as ApiQuestionType;
+  const tsd: ResponseTypeSpecificData | undefined =
+    sq.typeSpecificData ?? buildTsdFromFlatSubQuestion(sq, questionType);
+
   const blanksCount =
-    sq.typeSpecificData.questionType === "FILL_IN_THE_BLANK"
-      ? (sq.typeSpecificData.blanks?.length ?? 0)
+    tsd?.questionType === "FILL_IN_THE_BLANK"
+      ? ((tsd as { blanks?: unknown[] }).blanks?.length ?? 0)
       : 0;
-  const uiType = apiToKebabType(sq.questionType, blanksCount);
-  return tsdToUiFields(
-    {
-      id: generateId(),
-      topicId: 0,
-      type: uiType,
-      text: sq.questionText,
-      marks: sq.marks,
-      instruction: sq.explanation,
-      imageUrl: sq.imageUrl,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    sq.typeSpecificData,
+  const uiType = apiToKebabType(
+    questionType as Exclude<
+      ApiQuestionType,
+      "QUESTION_GROUP" | "COMPREHENSION"
+    >,
+    blanksCount,
   );
+  const base: UIQuestion = {
+    id: generateId(),
+    topicId: 0,
+    type: uiType,
+    text: sq.questionText,
+    marks: sq.marks,
+    instruction: sq.explanation || undefined,
+    imageUrl: sq.imageUrl || undefined,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  return tsd ? tsdToUiFields(base, tsd) : base;
 };
 
 const tsdToUiFields = (
@@ -351,24 +400,26 @@ const tsdToUiFields = (
     case "SHORT_ANSWER":
       return {
         ...base,
-        correctAnswer: tsd.correctAnswers ?? [],
+        correctAnswer: tsd.additionalData?.correctAnswers ?? [],
         metadata: {
-          caseSensitive: tsd.caseSensitive,
-          exactMatch: tsd.exactMatch,
-          maxLength: tsd.maxLength,
+          caseSensitive: tsd.additionalData?.caseSensitive,
+          exactMatch: tsd.additionalData?.exactMatch,
+          maxLength: tsd?.additionalData?.maxLength,
         },
       };
     case "NUMERIC_ANSWER":
       return {
         ...base,
         correctAnswer:
-          tsd.correctAnswer !== undefined ? String(tsd.correctAnswer) : "",
+          tsd?.additionalData?.correctAnswer !== undefined
+            ? String(tsd?.additionalData?.correctAnswer)
+            : "",
         metadata: {
-          tolerance: tsd.tolerance,
-          minValue: tsd.minValue,
-          maxValue: tsd.maxValue,
-          unit: tsd.unit,
-          decimalPlaces: tsd.decimalPlaces,
+          tolerance: tsd?.additionalData?.tolerance,
+          minValue: tsd?.additionalData.minValue,
+          maxValue: tsd?.additionalData.maxValue,
+          unit: tsd?.additionalData?.unit,
+          decimalPlaces: tsd?.additionalData?.decimalPlaces,
         },
       };
     case "FILL_IN_THE_BLANK": {
@@ -442,7 +493,93 @@ export const apiQuestionToUI = (api: ApiQuestion): UIQuestion => {
     createdAt: api.createdAt ?? new Date().toISOString(),
     updatedAt: api.updatedAt ?? new Date().toISOString(),
   };
-  return tsdToUiFields(base, api as unknown as ResponseTypeSpecificData);
+  // Some API endpoints omit the `questionType` discriminant from typeSpecificData.
+  // Inject it from the parent field so tsdToUiFields can match the correct case.
+  const rawTsd = api.typeSpecificData;
+  const tsd: ResponseTypeSpecificData = (() => {
+    if (rawTsd?.questionType) return rawTsd;
+    if (rawTsd)
+      return {
+        ...(rawTsd as unknown as Record<string, unknown>),
+        questionType: api.questionType,
+      } as ResponseTypeSpecificData;
+    // QUESTION_GROUP: backend puts stimulusContent / subQuestions inside additionalData
+    if (api.questionType === "QUESTION_GROUP" && api.additionalData) {
+      return {
+        ...api.additionalData,
+        questionType: api.questionType,
+      } as ResponseTypeSpecificData;
+    }
+    const ad = (api.additionalData ?? {}) as Record<string, unknown>;
+    switch (api.questionType) {
+      case "MULTIPLE_CHOICE":
+        return { questionType: "MULTIPLE_CHOICE", options: api.options ?? [] };
+      case "MULTIPLE_ANSWERS":
+        return {
+          questionType: "MULTIPLE_ANSWERS",
+          options: api.options ?? [],
+          minSelections: ad.minSelections as number | undefined,
+          maxSelections: ad.maxSelections as number | undefined,
+          partialCredit: ad.partialCredit as boolean | undefined,
+        };
+      case "TRUE_FALSE":
+        return {
+          questionType: "TRUE_FALSE",
+          correctAnswer: (ad.correctAnswer as boolean) ?? false,
+        };
+      case "ESSAY":
+        return {
+          questionType: "ESSAY",
+          rubric: ad.rubric as string | undefined,
+          modelAnswer: ad.modelAnswer as string | undefined,
+          minWords: ad.minWords as number | undefined,
+          maxWords: ad.maxWords as number | undefined,
+        };
+      case "SHORT_ANSWER":
+        return {
+          questionType: "SHORT_ANSWER",
+          additionalData: {
+            correctAnswers: ad.correctAnswers as string[] | undefined,
+            caseSensitive: ad.caseSensitive as boolean | undefined,
+            exactMatch: ad.exactMatch as boolean | undefined,
+            maxLength: ad.maxLength as number | undefined,
+          },
+        };
+      case "NUMERIC_ANSWER":
+        return {
+          questionType: "NUMERIC_ANSWER",
+          additionalData: {
+            correctAnswer: ad.correctAnswer as number | undefined,
+            tolerance: ad.tolerance as number | undefined,
+            minValue: ad.minValue as number | undefined,
+            maxValue: ad.maxValue as number | undefined,
+            unit: ad.unit as string | undefined,
+            decimalPlaces: ad.decimalPlaces as number | undefined,
+          },
+        };
+      case "FILL_IN_THE_BLANK":
+        return {
+          questionType: "FILL_IN_THE_BLANK",
+          blanks: api.blanks ?? (ad.blanks as BlankData[] | undefined),
+          caseSensitive: ad.caseSensitive as boolean | undefined,
+          instruction: ad.instruction as string | undefined,
+        };
+      case "MATCH":
+        return {
+          questionType: "MATCH",
+          pairs: api.pairs ?? (ad.pairs as MatchPairData[] | undefined) ?? [],
+          marksForEach: ad.marksForEach as number | undefined,
+          shuffleItems: ad.shuffleItems as boolean | undefined,
+          partialCredit: ad.partialCredit as boolean | undefined,
+        };
+      default:
+        return {
+          ...(api as unknown as Record<string, unknown>),
+          questionType: api.questionType,
+        } as ResponseTypeSpecificData;
+    }
+  })();
+  return tsdToUiFields(base, tsd);
 };
 
 // ─── Multiple-Blanks form-state mapper (kept for existing callers) ───────────

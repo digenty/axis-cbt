@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { format } from "date-fns";
 import { CalendarIcon, Loader2 } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,50 +25,70 @@ import { Modal } from "@/components/Modal";
 import { MobileDrawer } from "@/components/MobileDrawer";
 import type { TermType, TestType } from "@/types";
 import type {
+  ApiAssessment,
   AssessmentSetting,
-  CreateAssessmentPayload,
+  UpdateAssessmentPayload,
 } from "@/types/question";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import {
-  useCreateAssessment,
-  useGetAssessmentSettingsByClass,
-} from "@/hooks/queryHooks/useAssessment";
-import {
   addMinutes,
+  apiTermToUi,
+  apiTestTypeToUi,
   composeStartDateTime,
+  splitStartDateTime,
   uiTermToApi,
   uiTestTypeToApi,
 } from "@/types/assessment.mapper";
 
-interface CreateTestModalProps {
+interface EditTestDetailsModalProps {
   open: boolean;
   setOpen: (v: boolean) => void;
-  classId: string;
-  subjectId: string;
+  assessment: ApiAssessment;
+  classId: number;
+  subjectId: number;
   branchId?: number;
   className: string;
   subjectName: string;
-  onSuccess: (testId: string) => void;
+  settings: AssessmentSetting[];
+  settingsLoading: boolean;
+  onSave: (patch: UpdateAssessmentPayload) => void;
+  saving: boolean;
 }
 
 const NONE_SETTING_VALUE = "none";
 
-const defaultForm = {
-  title: "",
-  term: "First Term" as TermType,
-  testType: "Continuous Assessment" as TestType,
-  assessmentSettingId: null as number | null,
-  testDate: "",
-  startHour: "00",
-  startMinute: "00",
-  amPm: "AM" as "AM" | "PM",
-  duration: 60,
-  studentResultAccess: false,
-};
+interface FormState {
+  title: string;
+  term: TermType;
+  testType: TestType;
+  assessmentSettingId: number | null;
+  testDate: string;
+  startHour: string;
+  startMinute: string;
+  amPm: "AM" | "PM";
+  duration: number;
+  studentResultAccess: boolean;
+  instructions: string;
+}
 
-type FormState = typeof defaultForm;
+function assessmentToForm(a: ApiAssessment): FormState {
+  const split = splitStartDateTime(a.startDateTime);
+  return {
+    title: a.name,
+    term: apiTermToUi(a.term),
+    testType: apiTestTypeToUi(a.testType),
+    assessmentSettingId: a.assessmentSettingId ?? null,
+    testDate: split.testDate,
+    startHour: split.startHour,
+    startMinute: split.startMinute,
+    amPm: split.amPm,
+    duration: a.durationMinutes,
+    studentResultAccess: a.showResultsImmediately ?? false,
+    instructions: a.instructions ?? "",
+  };
+}
 
-// ─── Form Body ────────────────────────────────────────────────────────────────
+// ─── Form body ────────────────────────────────────────────────────────────────
 
 const FormBody = ({
   form,
@@ -308,6 +327,34 @@ const FormBody = ({
       />
     </div>
 
+    {/* Instructions */}
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium">
+        Instructions{" "}
+        <span className="font-normal text-[var(--color-text-muted)]">
+          (optional)
+        </span>
+      </Label>
+      <textarea
+        rows={5}
+        value={form.instructions}
+        onChange={(e) => set("instructions", e.target.value)}
+        placeholder={
+          "This test covers chapters 1-5.\n\nRules:\n→ You have 45 minutes to complete this test\n→ No **negative marking**"
+        }
+        className="w-full rounded-md border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 py-2 text-sm focus:outline-none resize-none"
+      />
+      <p className="text-xs text-[var(--color-text-muted)]">
+        Use{" "}
+        <code className="rounded bg-[var(--color-bg-subtle)] px-1">
+          **text**
+        </code>{" "}
+        for bold,{" "}
+        <code className="rounded bg-[var(--color-bg-subtle)] px-1">→ item</code>{" "}
+        for bullet points
+      </p>
+    </div>
+
     {/* Student result access */}
     <div className="flex items-start gap-3 border-t border-[var(--color-border-default)] pt-4">
       <Switch
@@ -337,7 +384,7 @@ const FormBody = ({
       </Button>
       <Button onClick={onSubmit} disabled={submitting}>
         {submitting && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-        Save &amp; Continue
+        Save Changes
       </Button>
     </div>
   </div>
@@ -345,41 +392,34 @@ const FormBody = ({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export const CreateTestModal = ({
+export const EditTestDetailsModal = ({
   open,
   setOpen,
-  classId,
-  subjectId,
+  assessment,
   branchId,
   className,
   subjectName,
-  onSuccess,
-}: CreateTestModalProps) => {
-  const [form, setForm] = useState<FormState>(defaultForm);
+  settings,
+  settingsLoading,
+  onSave,
+  saving,
+}: EditTestDetailsModalProps) => {
+  const [form, setForm] = useState<FormState>(() =>
+    assessmentToForm(assessment),
+  );
   const isMobile = useIsMobile();
-  const createMutation = useCreateAssessment();
 
-  const { data: settingsRes, isLoading: settingsLoading } =
-    useGetAssessmentSettingsByClass(Number(classId));
-  const settings: AssessmentSetting[] = settingsRes?.data?.assessments ?? [];
-
-  const handleSetOpen = (v: boolean) => {
-    if (!v) setForm(defaultForm);
-    setOpen(v);
-  };
+  // Re-sync form whenever the modal opens with fresh assessment data
+  useEffect(() => {
+    if (open) startTransition(() => setForm(assessmentToForm(assessment)));
+  }, [open, assessment]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   const handleSubmit = () => {
-    if (!form.testDate) {
-      toast.error("Please pick a test date");
-      return;
-    }
-    if (branchId === undefined) {
-      toast.error("Branch could not be resolved for this subject");
-      return;
-    }
+    if (!form.testDate) return;
+    if (branchId === undefined) return;
 
     const startDateTime = composeStartDateTime({
       testDate: form.testDate,
@@ -387,40 +427,25 @@ export const CreateTestModal = ({
       startMinute: form.startMinute,
       amPm: form.amPm,
     });
-    const endDateTime = addMinutes(startDateTime, form.duration);
 
-    const payload: CreateAssessmentPayload = {
-      name: form.title.trim() || "Untitled Test",
-      classId: Number(classId),
-      subjectId: Number(subjectId),
+    onSave({
+      name: form.title.trim() || assessment.name,
+      classId: assessment.classId,
+      subjectId: assessment.subjectId,
       branchId,
       term: uiTermToApi(form.term),
       testType: uiTestTypeToApi(form.testType),
       assessmentSettingId: form.assessmentSettingId,
       durationMinutes: form.duration,
-      totalMarks: 0,
-      passingMarks: 0,
+      totalMarks: assessment.totalMarks,
+      passingMarks: assessment.passingMarks,
       startDateTime,
-      endDateTime,
-      instructions: "",
-      shuffleQuestions: false,
-      shuffleOptions: false,
+      endDateTime: addMinutes(startDateTime, form.duration),
+      instructions: form.instructions,
+      shuffleQuestions: assessment.shuffleQuestions,
+      shuffleOptions: assessment.shuffleOptions,
       showResultsImmediately: form.studentResultAccess,
       allowReview: form.studentResultAccess,
-    };
-
-    createMutation.mutate(payload, {
-      onSuccess: (res) => {
-        toast.success("Test created");
-        handleSetOpen(false);
-        onSuccess(String(res.data));
-      },
-      onError: (err) => {
-        const msg =
-          (err as { message?: string } | undefined)?.message ??
-          "Failed to create test";
-        toast.error(msg);
-      },
     });
   };
 
@@ -431,40 +456,38 @@ export const CreateTestModal = ({
     subjectName,
     settings,
     settingsLoading,
-    onCancel: () => handleSetOpen(false),
+    onCancel: () => setOpen(false),
     onSubmit: handleSubmit,
-    submitting: createMutation.isPending,
+    submitting: saving,
   };
 
   const modalTitle = (
     <>
-      <span className="block">Create Test</span>
+      <span className="block">Edit Test Details</span>
       <span className="block text-xs font-normal text-[var(--color-text-muted)]">
-        Set up the basic details. You&apos;ll add questions in the next step.
+        Update the settings for this assessment.
       </span>
     </>
   );
 
   return (
     <>
-      {/* Desktop modal */}
       {!isMobile && (
         <Modal
           open={open}
-          setOpen={handleSetOpen}
+          setOpen={setOpen}
           title={modalTitle}
           showFooter={false}
           className="max-h-[90vh] overflow-y-auto"
         >
-          <FormBody {...formProps} idPrefix="modal" />
+          <FormBody {...formProps} idPrefix="edit-modal" />
         </Modal>
       )}
 
-      {/* Mobile drawer */}
       {isMobile && (
-        <MobileDrawer open={open} setIsOpen={handleSetOpen} title="Create Test">
+        <MobileDrawer open={open} setIsOpen={setOpen} title="Edit Test Details">
           <div className="max-h-[80vh] overflow-y-auto">
-            <FormBody {...formProps} idPrefix="drawer" />
+            <FormBody {...formProps} idPrefix="edit-drawer" />
           </div>
         </MobileDrawer>
       )}

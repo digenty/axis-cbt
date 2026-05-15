@@ -206,7 +206,7 @@ export const QuestionGroupEditor = ({
                   ) : (
                     <ImageIcon className="h-3.5 w-3.5" />
                   )}
-                  Add Stimulus Image
+                  Add Image
                 </Button>
               )}
             </div>

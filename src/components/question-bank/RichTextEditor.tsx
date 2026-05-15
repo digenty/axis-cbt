@@ -187,7 +187,7 @@ export const RichTextEditor = ({
         contentEditable
         suppressContentEditableWarning
         role="textbox"
-        className="w-full px-3 py-2.5 text-sm text-[var(--color-text-default)] focus:outline-none [&:empty]:before:text-[var(--color-text-muted)] [&:empty]:before:content-[attr(data-placeholder)]"
+        className="w-full px-3 py-2.5 text-sm text-[var(--color-text-default)] focus:outline-none [&:empty]:before:text-[var(--color-text-muted)] [&:empty]:before:content-[attr(data-placeholder)] [&_*]:![font-size:inherit] [&_*]:![font-family:inherit]"
         style={{ minHeight }}
         data-placeholder={placeholder}
         onInput={(e) => onChange((e.target as HTMLDivElement).innerHTML)}

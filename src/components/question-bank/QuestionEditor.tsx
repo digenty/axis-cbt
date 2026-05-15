@@ -1,8 +1,8 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { ImageIcon, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +40,7 @@ import {
   apiQuestionToUI,
   questionToCreatePayload,
 } from "@/types/question.mapper";
+import { uploadImage } from "@/lib/uploads";
 
 interface QuestionEditorProps {
   params: Promise<{ classId: string; subjectId: string; questionId?: string }>;
@@ -228,6 +229,14 @@ const QuestionEditorBody = ({
   const [metadata, setMetadata] = useState<QuestionMetadata>(
     () => existing?.metadata ?? {},
   );
+  const [stimulusImageUrl, setStimulusImageUrl] = useState<string | undefined>(
+    () => existing?.stimulusImageUrl ?? undefined,
+  );
+  const [questionImageUrl, setQuestionImageUrl] = useState<string | undefined>(
+    () => existing?.imageUrl ?? undefined,
+  );
+  const [imageUploading, setImageUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = () => {
     if (!topicId) {
@@ -276,8 +285,13 @@ const QuestionEditorBody = ({
         type === "comprehension-passage" || type === "question-group"
           ? subQuestions
           : undefined,
+      imageUrl: !isGrouped ? questionImageUrl : undefined,
       matchItems: type === "matching" ? matchItems : undefined,
       matchOptions: type === "matching" ? matchOptions : undefined,
+      stimulusImageUrl:
+        type === "question-group" || type === "comprehension-passage"
+          ? stimulusImageUrl
+          : undefined,
       metadata:
         type === "question-group" || type === "comprehension-passage"
           ? { ...metadata, stimulusType: materialKind }
@@ -377,17 +391,84 @@ const QuestionEditorBody = ({
                 <Label className="text-sm font-medium text-[var(--color-text-default)]">
                   Question text
                 </Label>
-                <QuestionTypeSelector
-                  value={type}
-                  onChange={setType}
-                  options={ALL_TYPES}
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      setImageUploading(true);
+                      try {
+                        const url = await uploadImage(file, "cbt/questions");
+                        setQuestionImageUrl(url);
+                      } catch (err) {
+                        toast.error(
+                          err instanceof Error ? err.message : "Upload failed",
+                        );
+                      } finally {
+                        setImageUploading(false);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={imageUploading}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border-default)] text-[var(--color-icon-default-muted)] hover:bg-[var(--color-bg-state-soft-hover)] disabled:opacity-60"
+                    aria-label="Add image"
+                  >
+                    {imageUploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ImageIcon className="h-4 w-4" />
+                    )}
+                  </button>
+                  <QuestionTypeSelector
+                    value={type}
+                    onChange={setType}
+                    options={ALL_TYPES}
+                  />
+                </div>
               </div>
               <RichTextEditor
                 value={text}
                 onChange={setText}
                 placeholder="Type or paste your question"
               />
+              {questionImageUrl && (
+                <div className="flex flex-col gap-2">
+                  <div className="relative h-44 w-64 overflow-hidden rounded-lg bg-gray-100">
+                    <img
+                      src={questionImageUrl}
+                      alt="Question"
+                      className="absolute inset-0 h-full w-full object-contain"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuestionImageUrl(undefined)}
+                      className="flex h-8 w-8 items-center justify-center rounded-md border border-[var(--color-border-default)] text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-destructive)]"
+                      aria-label="Remove image"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3 text-sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Replace
+                    </Button>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -475,6 +556,8 @@ const QuestionEditorBody = ({
               onChangeInstruction={setInstruction}
               subQuestions={subQuestions}
               onChangeSubQuestions={setSubQuestions}
+              stimulusImageUrl={stimulusImageUrl}
+              onChangeStimulusImage={setStimulusImageUrl}
             />
           )}
           {type === "multiple-blanks" && (

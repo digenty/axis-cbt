@@ -102,6 +102,7 @@ export interface Test {
   startTime: string;
   amPm: "AM" | "PM";
   duration: number;
+  questionCount: number;
   studentResultAccess: boolean;
   status: TestStatus;
   sections: TestSection[];

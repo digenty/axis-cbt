@@ -1,3 +1,11 @@
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export interface StudentLoginResponse {
+  data: { token: string; assessmentId: number };
+  message: string;
+  status: string;
+}
+
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 export type AttemptStatus =
@@ -143,6 +151,7 @@ export interface ApiSubQuestion {
   questionHtml: string | null;
   marks: number;
   questionType: string;
+  options?: ApiStudentOption[];
 }
 
 export interface ApiStudentQuestion {

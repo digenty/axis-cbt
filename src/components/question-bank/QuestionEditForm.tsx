@@ -16,6 +16,7 @@ import { ComprehensionPassageEditor } from "./answer-editors/ComprehensionPassag
 import { MultipleBlanksEditor } from "./answer-editors/MultipleBlanksEditor";
 import { QuestionGroupEditor } from "./answer-editors/QuestionGroupEditor";
 import type { MaterialKind } from "./answer-editors/QuestionGroupEditor";
+import { RichTextEditor } from "@/components/question-bank/RichTextEditor";
 import { generateId } from "@/lib/utils";
 import { uploadImage } from "@/lib/uploads";
 import type { Question, QuestionType, Option, Blank } from "@/types";
@@ -123,8 +124,21 @@ export const QuestionEditForm = ({
     question.subQuestions ?? [],
   );
   const [blanks, setBlanks] = useState<Blank[]>(question.blanks ?? []);
-  const [groupName, setGroupName] = useState(question.text ?? "");
-  const [materialKind, setMaterialKind] = useState<MaterialKind>("diagram");
+  const [groupName, setGroupName] = useState(
+    (question.text ?? "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+  const [materialKind, setMaterialKind] = useState<MaterialKind>(() => {
+    const st = question.metadata?.stimulusType?.toUpperCase();
+    if (st === "TABLE") return "table";
+    if (st === "CHART") return "chart";
+    if (st === "COMPREHENSION" || st === "COMPREHENSION_PASSAGE")
+      return "comprehension-passage";
+    if (st === "MULTIPLE_BLANKS") return "multiple-blanks";
+    return "diagram";
+  });
 
   const save = (patch: Patch = {}) => {
     const t = patch.type ?? type;
@@ -269,26 +283,27 @@ export const QuestionEditForm = ({
 
       {/* ─── Content ─── */}
       <div className="flex flex-col gap-4 border-t border-[var(--color-border-default)] px-4 py-4">
-        {type !== "multiple-blanks" && (
-          <Input
-            value={isGrouped ? groupName : text}
-            onChange={(e) =>
-              isGrouped ? setGroupName(e.target.value) : setText(e.target.value)
-            }
-            onBlur={(e) =>
-              isGrouped
-                ? save({ groupName: e.target.value })
-                : save({ text: e.target.value })
-            }
-            placeholder={
-              type === "comprehension-passage"
-                ? "Passage title (optional)"
-                : type === "question-group"
-                  ? "Group name (optional)"
-                  : "Type your question"
-            }
-          />
-        )}
+        {type !== "multiple-blanks" &&
+          (isGrouped ? (
+            <Input
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              onBlur={(e) => save({ groupName: e.target.value })}
+              placeholder={
+                type === "comprehension-passage"
+                  ? "Passage title (optional)"
+                  : "Group name (optional)"
+              }
+            />
+          ) : (
+            <div onBlur={() => save({ text })}>
+              <RichTextEditor
+                value={text}
+                onChange={setText}
+                placeholder="Type your question"
+              />
+            </div>
+          ))}
 
         {type === "comprehension-passage" && (
           <textarea

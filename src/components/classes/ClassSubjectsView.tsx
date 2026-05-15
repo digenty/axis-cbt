@@ -276,7 +276,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
               description="Subjects you add to this class will show up here."
               buttonText="Add subjects"
               onClick={() => {
-                window.location.href = `${process.env.NEXT_PUBLIC_MAIN_APP_URL}staff/settings/academic`;
+                window.location.href = `${process.env.NEXT_PUBLIC_MAIN_APP_URL}/staff/settings/academic`;
               }}
             />
           </div>

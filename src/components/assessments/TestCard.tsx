@@ -38,8 +38,7 @@ export const TestCard = ({ test, href, onDelete }: TestCardProps) => (
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-subtle)]">
           <span className="inline-flex items-center gap-1">
             <FileText className="h-3 w-3" />
-            {test.sections.reduce((n, s) => n + s.questionIds.length, 0)}{" "}
-            questions
+            {test.questionCount} questions
           </span>
           <span className="inline-flex items-center gap-1">
             <Star className="h-3 w-3 text-[var(--amber-500)]" />
