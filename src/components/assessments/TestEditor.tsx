@@ -193,7 +193,6 @@ const QuestionRow = ({
     ? apiQuestionToUI(individualRes.data)
     : undefined;
 
-  console.log(fullQuestion, individualRes?.data);
   return (
     <div
       className={cn(
