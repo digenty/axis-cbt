@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Cloud,
+  Download,
   FileText,
   GripVertical,
   Loader2,
@@ -64,6 +65,15 @@ import type { Topic } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Draft } from "@digenty/icons";
+import { utils as xlsxUtils, writeFile } from "xlsx";
+import jsPDF from "jspdf";
+import { getAssessmentPasscodes } from "@/api/assessment";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface TestEditorProps {
   params: Promise<{
@@ -561,6 +571,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   >(null);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
+  const [isExportingPasscodes, setIsExportingPasscodes] = useState(false);
 
   const handleConfirmDeleteSection = () => {
     if (deleteSectionTargetId === null) return;
@@ -680,6 +691,86 @@ export const TestEditor = ({ params }: TestEditorProps) => {
     router.push(`${baseUrl}/question-bank/new?${searchParams}`);
   };
 
+  type PasscodeRow = {
+    "S/N": number;
+    "Student Name": string;
+    "Admission Number": string;
+    Passcode: string;
+  };
+
+  const fetchPasscodeRows = async (): Promise<PasscodeRow[]> => {
+    const response = await getAssessmentPasscodes(assessmentId);
+    const raw = Array.isArray(response)
+      ? response
+      : Array.isArray((response as Record<string, unknown>)?.data)
+        ? ((response as Record<string, unknown>).data as unknown[])
+        : [];
+    return (raw as Record<string, unknown>[]).map((row, i) => ({
+      "S/N": i + 1,
+      "Student Name": String(row.studentName ?? ""),
+      "Admission Number": String(row.admissionNumber ?? ""),
+      Passcode: String(row.passcode ?? ""),
+    }));
+  };
+
+  const handleExportExcel = async () => {
+    setIsExportingPasscodes(true);
+    try {
+      const rows = await fetchPasscodeRows();
+      if (rows.length === 0) {
+        toast.info("No passcodes found for this assessment.");
+        return;
+      }
+      const ws = xlsxUtils.json_to_sheet(rows);
+      const wb = xlsxUtils.book_new();
+      xlsxUtils.book_append_sheet(wb, ws, "Passcodes");
+      writeFile(wb, `passcodes-assessment-${assessmentId}.xlsx`);
+    } catch {
+      toast.error("Failed to export passcodes. Please try again.");
+    } finally {
+      setIsExportingPasscodes(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setIsExportingPasscodes(true);
+    try {
+      const rows = await fetchPasscodeRows();
+      if (rows.length === 0) {
+        toast.info("No passcodes found for this assessment.");
+        return;
+      }
+      const doc = new jsPDF();
+      const headers: (keyof PasscodeRow)[] = [
+        "S/N",
+        "Student Name",
+        "Admission Number",
+        "Passcode",
+      ];
+      const colX = [10, 30, 100, 160];
+      let y = 20;
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      headers.forEach((h, i) => doc.text(h, colX[i], y));
+      y += 8;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      for (const row of rows) {
+        if (y > 280) {
+          doc.addPage();
+          y = 20;
+        }
+        headers.forEach((h, i) => doc.text(String(row[h] ?? ""), colX[i], y));
+        y += 7;
+      }
+      doc.save(`passcodes-assessment-${assessmentId}.pdf`);
+    } catch {
+      toast.error("Failed to export passcodes. Please try again.");
+    } finally {
+      setIsExportingPasscodes(false);
+    }
+  };
+
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
       <PageHeader
@@ -700,6 +791,32 @@ export const TestEditor = ({ params }: TestEditorProps) => {
         backHref={`${baseUrl}/assessments`}
         right={
           <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isExportingPasscodes}
+                  className="text-text-default"
+                >
+                  {isExportingPasscodes ? (
+                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="mr-1 h-3.5 w-3.5" />
+                  )}
+                  Export Student Passcodes
+                  <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportExcel}>
+                  Export as Excel
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPdf}>
+                  Export as PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {assessment.status === "DRAFT" ? (
               <>
                 <Button

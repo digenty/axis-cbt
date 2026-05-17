@@ -3,17 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Clock, Flag, Loader2 } from "lucide-react";
+import { Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/common/EmptyState";
+import { SubmitTestDialog } from "@/components/student/SubmitTestDialog";
 import {
   useGetAssessmentPaper,
   useStartAssessment,
@@ -546,6 +539,52 @@ interface OrderedQuestion {
   globalIndex: number;
 }
 
+// ─── Question row ─────────────────────────────────────────────────────────────
+
+interface QuestionRowProps {
+  q: ApiStudentQuestion;
+  globalIdx: number;
+  answer: AnswerState;
+  onAnswer: (q: ApiStudentQuestion, next: AnswerState) => void;
+}
+
+const QuestionRow = ({ q, globalIdx, answer, onAnswer }: QuestionRowProps) => (
+  <div className="border border-border-default rounded-lg p-6">
+    <div className="flex items-center gap-3">
+      <span className="flex size-7 items-center justify-center rounded-full bg-bg-basic-gray-accent text-xs font-medium text-white">
+        {globalIdx + 1}
+      </span>
+      <span className="text-xs text-(--color-text-muted)">
+        {q.marks} mark{q.marks === 1 ? "" : "s"}
+      </span>
+    </div>
+
+    {q.questionType.toUpperCase() !== "QUESTION_GROUP" && (
+      <>
+        <div
+          className="rounded-lg bg-(--color-bg-card) py-4 text-lg font-medium text-(--color-text-default)"
+          dangerouslySetInnerHTML={{ __html: q.questionHtml || q.questionText }}
+        />
+        {q.imageUrl && (
+          <div className="relative mt-3 max-h-80 overflow-hidden rounded-lg">
+            <Image
+              src={q.imageUrl}
+              height={80}
+              width={200}
+              alt="Question image"
+              className="rounded-lg"
+            />
+          </div>
+        )}
+      </>
+    )}
+
+    <div className="mt-4">
+      {renderAnswerInput(q, answer, (next) => onAnswer(q, next))}
+    </div>
+  </div>
+);
+
 export const TestRunner = ({ testId }: TestRunnerProps) => {
   const router = useRouter();
   const assessmentId = Number(testId);
@@ -626,14 +665,13 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
 
   // Initialize timer once paper is loaded
   useEffect(() => {
-    if (paper && secondsLeft === null) {
-      setSecondsLeft(
-        paper?.data?.timeRemainingSeconds &&
-          paper?.data?.timeRemainingSeconds > 0
-          ? paper.data.timeRemainingSeconds!
-          : (paper?.data?.durationMinutes ?? 0) * 60,
-      );
-    }
+    if (!paper || secondsLeft !== null) return;
+    const initial =
+      paper.data?.timeRemainingSeconds && paper.data.timeRemainingSeconds > 0
+        ? paper.data.timeRemainingSeconds
+        : (paper.data?.durationMinutes ?? 0) * 60;
+    const id = setTimeout(() => setSecondsLeft(initial), 0);
+    return () => clearTimeout(id);
   }, [paper, secondsLeft]);
 
   // Tick timer
@@ -826,52 +864,13 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
               );
               const answer = answers[q.assessmentQuestionId] ?? emptyAnswer();
               return (
-                <div
+                <QuestionRow
                   key={q.assessmentQuestionId}
-                  className="border border-border-default rounded-lg p-6"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex size-7 items-center justify-center rounded-full bg-bg-basic-gray-accent text-xs font-medium text-white">
-                      {globalIdx + 1}
-                    </span>
-                    <span className="text-xs text-(--color-text-muted)">
-                      {q.marks} mark{q.marks === 1 ? "" : "s"}
-                    </span>
-                    <button
-                      type="button"
-                      className="ml-auto text-(--color-icon-default-muted) hover:text-(--color-icon-warning) bg-bg-state-soft p-1.5 rounded-sm cursor-pointer"
-                    >
-                      <Flag className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  {q.questionType.toUpperCase() !== "QUESTION_GROUP" && (
-                    <>
-                      <div
-                        className="rounded-lg bg-(--color-bg-card) py-4 text-lg font-medium text-(--color-text-default)"
-                        dangerouslySetInnerHTML={{
-                          __html: q.questionHtml || q.questionText,
-                        }}
-                      />
-
-                      {q.imageUrl && (
-                        <div className="relative mt-3 max-h-80 overflow-hidden rounded-lg">
-                          <Image
-                            src={q.imageUrl}
-                            height={80}
-                            width={200}
-                            alt="Question image"
-                            className="rounded-lg"
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  <div className="mt-4">
-                    {renderAnswerInput(q, answer, (next) => setAnswer(q, next))}
-                  </div>
-                </div>
+                  q={q}
+                  globalIdx={globalIdx}
+                  answer={answer}
+                  onAnswer={setAnswer}
+                />
               );
             })}
 
@@ -908,31 +907,14 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
         </span>
       </footer>
 
-      <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Submit your test?</DialogTitle>
-            <DialogDescription>
-              You answered {answeredCount} out of {orderedQuestions.length}{" "}
-              questions. Submitted answers can&apos;t be changed.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitOpen(false)}>
-              Keep going
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={submitAssessmentMutation.isPending}
-            >
-              {submitAssessmentMutation.isPending && (
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-              )}
-              Submit
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SubmitTestDialog
+        open={submitOpen}
+        setOpen={setSubmitOpen}
+        onConfirm={handleSubmit}
+        isLoading={submitAssessmentMutation.isPending}
+        answeredCount={answeredCount}
+        totalQuestions={orderedQuestions.length}
+      />
     </div>
   );
 };

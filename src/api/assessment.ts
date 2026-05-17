@@ -289,6 +289,20 @@ export const getAssessmentStats = async (
   }
 };
 
+export const getAssessmentPasscodes = async (
+  assessmentId: number,
+): Promise<unknown> => {
+  try {
+    const { data } = await api.get(
+      `/api/cbt/assessments/${assessmentId}/passcodes`,
+    );
+    return data;
+  } catch (error: unknown) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
+
 export const gradeManually = async (
   payload: GradeManuallyPayload,
 ): Promise<{ message: string; status: string }> => {
