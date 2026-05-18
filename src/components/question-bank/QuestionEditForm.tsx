@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Copy, ImageIcon, Loader2, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { QuestionTypeSelector } from "./QuestionTypeSelector";
@@ -256,9 +256,10 @@ export const QuestionEditForm = ({
                   setQuestionImage(url);
                   save({ imageUrl: url });
                 } catch (err) {
-                  toast.error(
-                    err instanceof Error ? err.message : "Upload failed",
-                  );
+                  toast({
+                    title: err instanceof Error ? err.message : "Upload failed",
+                    type: "error",
+                  });
                 } finally {
                   setUploading(false);
                 }

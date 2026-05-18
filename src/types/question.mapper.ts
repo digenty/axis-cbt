@@ -150,6 +150,7 @@ const buildPayloadTypeSpecificData = (
   >,
 ): PayloadTypeSpecificData => {
   const m = q.metadata ?? {};
+  console.log(q.metadata, "@@@@");
   switch (q.type) {
     case "multiple-choice":
       return {
@@ -244,7 +245,7 @@ const buildPayloadTypeSpecificData = (
     case "comprehension-passage":
       return {
         type: "QUESTION_GROUP",
-        stimulusType: m.stimulusType ?? "comprehension-passage",
+        stimulusType: m.stimulusType ?? "COMPREHENSION_PASSAGE",
         stimulusContent: q.passage || undefined,
         stimulusImageUrl: q.stimulusImageUrl,
         subQuestions: (q.subQuestions ?? []).map(uiSubQuestionToPayload),

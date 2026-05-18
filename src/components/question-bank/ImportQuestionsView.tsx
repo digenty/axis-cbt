@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import { useImportQuestions } from "@/hooks/queryHooks/useQuestionBank";
 import type { ImportQuestionsResult } from "@/types/question";
 
@@ -82,8 +82,10 @@ export const ImportQuestionsView = ({ params }: ImportQuestionsViewProps) => {
 
   const handleFile = (f: File) => {
     if (f.size > 40 * 1024 * 1024) {
-      toast.error("File too large", {
+      toast({
+        title: "File too large",
         description: "Maximum file size is 40MB",
+        type: "error",
       });
       return;
     }
@@ -96,8 +98,10 @@ export const ImportQuestionsView = ({ params }: ImportQuestionsViewProps) => {
     importMutation.mutate(file, {
       onSuccess: (res) => {
         setResult(res.data);
-        toast.success("Import complete", {
+        toast({
+          title: "Import complete",
           description: `${res.data.imported} imported, ${res.data.failed} failed.`,
+          type: "success",
         });
       },
     });

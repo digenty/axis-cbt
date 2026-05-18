@@ -1,8 +1,9 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { TestInstructionsView } from "./TestInstructionsView";
-import { TestRunner } from "./TestRunner";
+import { useGetAssessmentPreview } from "@/hooks/queryHooks/useStudentCBT";
 
 interface StudentTestPageProps {
   params: Promise<{ testId: string }>;
@@ -10,13 +11,26 @@ interface StudentTestPageProps {
 
 export const StudentTestPage = ({ params }: StudentTestPageProps) => {
   const { testId } = use(params);
-  const [started, setStarted] = useState(false);
+  const router = useRouter();
 
-  if (!started) {
-    return (
-      <TestInstructionsView testId={testId} onBegin={() => setStarted(true)} />
-    );
-  }
+  const { data: preview, isLoading: previewLoading } = useGetAssessmentPreview(
+    Number(testId),
+  );
 
-  return <TestRunner testId={testId} studentName="Damilare John" />;
+  const isInProgress = preview?.data?.attemptStatus === "IN_PROGRESS";
+
+  useEffect(() => {
+    if (!previewLoading && isInProgress) {
+      router.push(`/student/cbt/${testId}/progress`);
+    }
+  }, [isInProgress, previewLoading, router, testId]);
+
+  if (previewLoading || isInProgress) return null;
+
+  return (
+    <TestInstructionsView
+      testId={testId}
+      onBegin={() => router.push(`/student/cbt/${testId}/progress`)}
+    />
+  );
 };

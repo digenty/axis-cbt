@@ -3,6 +3,7 @@
 import { use, useMemo, useState } from "react";
 import {
   BookOpen,
+  Calendar,
   Check,
   ChevronDown,
   Cloud,
@@ -17,6 +18,7 @@ import {
   Timer,
   Trash2,
 } from "lucide-react";
+import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -63,7 +65,7 @@ import type { Question, QuestionType } from "@/types";
 import type { ApiTopic } from "@/types/question";
 import type { Topic } from "@/types";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import { Draft } from "@digenty/icons";
 import { utils as xlsxUtils, writeFile } from "xlsx";
 import jsPDF from "jspdf";
@@ -516,6 +518,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   const { data: questionsRes } = useGetQuestions({ classId, subjectId });
 
   const assessment = assessmentRes?.data;
+  console.log(assessment);
   const sections = useMemo(() => sectionsRes?.data ?? [], [sectionsRes]);
   const subjectTopics = useMemo(
     () => (topicsRes?.data ?? []).map(apiTopicToUI),
@@ -572,16 +575,15 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
   const [isExportingPasscodes, setIsExportingPasscodes] = useState(false);
-
   const handleConfirmDeleteSection = () => {
     if (deleteSectionTargetId === null) return;
     deleteSectionMutation.mutate(deleteSectionTargetId, {
       onSuccess: () => {
-        toast.success("Section deleted");
+        toast({ title: "Section deleted", type: "success" });
         setDeleteSectionTargetId(null);
       },
       onError: () => {
-        toast.error("Failed to delete section");
+        toast({ title: "Failed to delete section", type: "error" });
         setDeleteSectionTargetId(null);
       },
     });
@@ -591,11 +593,11 @@ export const TestEditor = ({ params }: TestEditorProps) => {
     if (removeQuestionTargetId === null) return;
     removeQuestionMutation.mutate(removeQuestionTargetId, {
       onSuccess: () => {
-        toast.success("Question removed");
+        toast({ title: "Question removed", type: "success" });
         setRemoveQuestionTargetId(null);
       },
       onError: () => {
-        toast.error("Failed to remove question");
+        toast({ title: "Failed to remove question", type: "error" });
         setRemoveQuestionTargetId(null);
       },
     });
@@ -612,11 +614,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   if (assessmentError || !assessment) {
     return (
       <div className="px-6 py-6">
-        <PageHeader
-          title="Test not found"
-          showBack
-          backHref={`${baseUrl}/assessments`}
-        />
+        <PageHeader title="Test not found" showBack />
       </div>
     );
   }
@@ -651,15 +649,15 @@ export const TestEditor = ({ params }: TestEditorProps) => {
         ...patch,
       },
       {
-        onError: () => toast.error("Failed to update test"),
+        onError: () => toast({ title: "Failed to update test", type: "error" }),
       },
     );
   };
 
   const handlePublish = () => {
     publishMutation.mutate(undefined, {
-      onSuccess: () => toast.success("Test published"),
-      onError: () => toast.error("Failed to publish test"),
+      onSuccess: () => toast({ title: "Test published", type: "success" }),
+      onError: () => toast({ title: "Failed to publish test", type: "error" }),
     });
   };
 
@@ -672,7 +670,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
         sectionOrder: sections.length + 1,
       },
       {
-        onError: () => toast.error("Failed to add section"),
+        onError: () => toast({ title: "Failed to add section", type: "error" }),
       },
     );
   };
@@ -718,7 +716,10 @@ export const TestEditor = ({ params }: TestEditorProps) => {
     try {
       const rows = await fetchPasscodeRows();
       if (rows.length === 0) {
-        toast.info("No passcodes found for this assessment.");
+        toast({
+          title: "No passcodes found for this assessment.",
+          type: "info",
+        });
         return;
       }
       const ws = xlsxUtils.json_to_sheet(rows);
@@ -726,7 +727,10 @@ export const TestEditor = ({ params }: TestEditorProps) => {
       xlsxUtils.book_append_sheet(wb, ws, "Passcodes");
       writeFile(wb, `passcodes-assessment-${assessmentId}.xlsx`);
     } catch {
-      toast.error("Failed to export passcodes. Please try again.");
+      toast({
+        title: "Failed to export passcodes. Please try again.",
+        type: "error",
+      });
     } finally {
       setIsExportingPasscodes(false);
     }
@@ -737,7 +741,10 @@ export const TestEditor = ({ params }: TestEditorProps) => {
     try {
       const rows = await fetchPasscodeRows();
       if (rows.length === 0) {
-        toast.info("No passcodes found for this assessment.");
+        toast({
+          title: "No passcodes found for this assessment.",
+          type: "info",
+        });
         return;
       }
       const doc = new jsPDF();
@@ -765,7 +772,10 @@ export const TestEditor = ({ params }: TestEditorProps) => {
       }
       doc.save(`passcodes-assessment-${assessmentId}.pdf`);
     } catch {
-      toast.error("Failed to export passcodes. Please try again.");
+      toast({
+        title: "Failed to export passcodes. Please try again.",
+        type: "error",
+      });
     } finally {
       setIsExportingPasscodes(false);
     }
@@ -788,7 +798,6 @@ export const TestEditor = ({ params }: TestEditorProps) => {
           />
         }
         showBack
-        backHref={`${baseUrl}/assessments`}
         right={
           <>
             <DropdownMenu>
@@ -891,6 +900,12 @@ export const TestEditor = ({ params }: TestEditorProps) => {
             </span>
           );
         })()}
+        {assessment.startDateTime && (
+          <span className="inline-flex items-center gap-1 rounded-md bg-bg-badge-teal px-2 py-1 h-7 border border-bg-basic-teal-accent text-[11px] text-(--teal-700)">
+            <Calendar className="h-3 w-3" />
+            {format(new Date(assessment.startDateTime), "do MMMM, h:mmaaa")}
+          </span>
+        )}
       </div>
 
       <div className="mt-5 flex flex-col gap-3">
@@ -920,8 +935,10 @@ export const TestEditor = ({ params }: TestEditorProps) => {
                   },
                 },
                 {
-                  onSuccess: () => toast.success("Section renamed"),
-                  onError: () => toast.error("Failed to rename section"),
+                  onSuccess: () =>
+                    toast({ title: "Section renamed", type: "success" }),
+                  onError: () =>
+                    toast({ title: "Failed to rename section", type: "error" }),
                 },
               )
             }
@@ -937,8 +954,13 @@ export const TestEditor = ({ params }: TestEditorProps) => {
                   },
                 },
                 {
-                  onSuccess: () => toast.success("Instructions saved"),
-                  onError: () => toast.error("Failed to save instructions"),
+                  onSuccess: () =>
+                    toast({ title: "Instructions saved", type: "success" }),
+                  onError: () =>
+                    toast({
+                      title: "Failed to save instructions",
+                      type: "error",
+                    }),
                 },
               )
             }
@@ -947,8 +969,10 @@ export const TestEditor = ({ params }: TestEditorProps) => {
               addQuestionsToSectionMutation.mutate(
                 { sectionId: section.id, questionIds: ids },
                 {
-                  onSuccess: () => toast.success("Questions added"),
-                  onError: () => toast.error("Failed to add questions"),
+                  onSuccess: () =>
+                    toast({ title: "Questions added", type: "success" }),
+                  onError: () =>
+                    toast({ title: "Failed to add questions", type: "error" }),
                 },
               )
             }
@@ -964,18 +988,28 @@ export const TestEditor = ({ params }: TestEditorProps) => {
                     addQuestionsToSectionMutation.mutate(
                       { sectionId, questionIds: [newId] },
                       {
-                        onSuccess: () => toast.success("Question duplicated"),
+                        onSuccess: () =>
+                          toast({
+                            title: "Question duplicated",
+                            type: "success",
+                          }),
                         onError: () =>
-                          toast.error(
-                            "Duplicated question, but failed to attach to section",
-                          ),
+                          toast({
+                            title:
+                              "Duplicated question, but failed to attach to section",
+                            type: "error",
+                          }),
                       },
                     );
                   } else {
-                    toast.success("Question duplicated");
+                    toast({ title: "Question duplicated", type: "success" });
                   }
                 },
-                onError: () => toast.error("Failed to duplicate question"),
+                onError: () =>
+                  toast({
+                    title: "Failed to duplicate question",
+                    type: "error",
+                  }),
               })
             }
           />
@@ -1028,10 +1062,11 @@ export const TestEditor = ({ params }: TestEditorProps) => {
         onSave={(patch) =>
           updateMutation.mutate(patch, {
             onSuccess: () => {
-              toast.success("Test updated");
+              toast({ title: "Test updated", type: "success" });
               setEditingDetails(false);
             },
-            onError: () => toast.error("Failed to update test"),
+            onError: () =>
+              toast({ title: "Failed to update test", type: "error" }),
           })
         }
         saving={updateMutation.isPending}

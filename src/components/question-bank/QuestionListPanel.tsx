@@ -135,7 +135,7 @@ export const QuestionListPanel = ({
   }
 
   return (
-    <section className="flex flex-1 flex-col bg-[var(--color-bg-default)]">
+    <section className="flex min-w-0 flex-1 flex-col bg-[var(--color-bg-default)]">
       <header className="border-b border-[var(--color-border-default)] px-5 py-4">
         <h1 className="text-base font-semibold text-[var(--color-text-default)]">
           {topic.name}

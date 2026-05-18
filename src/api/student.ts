@@ -6,6 +6,8 @@ import type {
   ApiStudentResult,
   ApiStudentPaper,
   ApiStartedAssessment,
+  ApiSubmitAssessmentResponse,
+  ApiAttemptReview,
   StartAssessmentPayload,
   StudentLoginResponse,
   SubmitAnswerPayload,
@@ -105,10 +107,23 @@ export const submitAnswer = async (
 
 export const submitAssessment = async (
   studentAssessmentId: number,
-): Promise<ApiStartedAssessment> => {
+): Promise<ApiSubmitAssessmentResponse> => {
   try {
     const { data } = await studentApi.post(
       `/api/cbt/assessments/submit/${studentAssessmentId}`,
+    );
+    return data;
+  } catch (e) {
+    return handleError(e);
+  }
+};
+
+export const getStudentAttemptReview = async (
+  studentAssessmentId: number,
+): Promise<{ data: ApiAttemptReview }> => {
+  try {
+    const { data } = await studentApi.get(
+      `/api/cbt/assessments/student-attempts/${studentAssessmentId}/review`,
     );
     return data;
   } catch (e) {

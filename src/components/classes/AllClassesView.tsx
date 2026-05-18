@@ -73,7 +73,6 @@ export const AllClassesView = () => {
       <PageHeader
         title="All Classes"
         showBack
-        backHref="/subjects"
         right={
           <>
             <BranchSelector

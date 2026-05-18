@@ -55,16 +55,18 @@ export const composeStartDateTime = ({
   const h12 = Number(startHour);
   const m = Number(startMinute);
   const h24 = amPm === "PM" ? (h12 % 12) + 12 : h12 === 12 ? 0 : h12;
-  // testDate is YYYY-MM-DD; build as local time then return ISO.
-  const d = new Date(`${testDate}T00:00:00`);
-  d.setHours(h24, m, 0, 0);
-  return d.toISOString();
+  return `${testDate}T${String(h24).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
 };
 
-export const addMinutes = (iso: string, minutes: number): string => {
-  const d = new Date(iso);
+export const addMinutes = (localIso: string, minutes: number): string => {
+  const d = new Date(localIso);
   d.setMinutes(d.getMinutes() + minutes);
-  return d.toISOString();
+  const yyyy = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mo}-${dd}T${hh}:${mm}:00`;
 };
 
 export const splitStartDateTime = (

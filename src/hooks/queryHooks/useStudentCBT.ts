@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   getAssessmentPaper,
   getAssessmentPreview,
+  getStudentAttemptReview,
   getStudentDashboard,
   getStudentResult,
   startAssessment,
@@ -9,7 +10,7 @@ import {
   submitAnswer,
   submitAssessment,
 } from "@/api/student";
-import { submitAnswersBatch } from "@/api/assessment";
+import { getStudentAttemptAnswers, submitAnswersBatch } from "@/api/assessment";
 import type {
   StartAssessmentPayload,
   SubmitAnswerPayload,
@@ -23,6 +24,10 @@ export const studentKeys = {
     ["student", "result", studentAssessmentId] as const,
   paper: (studentAssessmentId: number) =>
     ["student", "paper", studentAssessmentId] as const,
+  answers: (studentAssessmentId: number) =>
+    ["student", "answers", studentAssessmentId] as const,
+  review: (studentAssessmentId: number) =>
+    ["student", "review", studentAssessmentId] as const,
 };
 
 export const useGetStudentDashboard = () =>
@@ -56,6 +61,14 @@ export const useGetAssessmentPaper = (studentAssessmentId: number) =>
     staleTime: Infinity,
   });
 
+export const useGetStudentAttemptAnswers = (studentAssessmentId: number) =>
+  useQuery({
+    queryKey: studentKeys.answers(studentAssessmentId),
+    queryFn: () => getStudentAttemptAnswers(studentAssessmentId),
+    enabled: studentAssessmentId > 0,
+    staleTime: Infinity,
+  });
+
 export const useStartAssessment = () =>
   useMutation({
     mutationFn: (payload: StartAssessmentPayload) => startAssessment(payload),
@@ -75,6 +88,14 @@ export const useSubmitAssessment = () =>
   useMutation({
     mutationFn: (studentAssessmentId: number) =>
       submitAssessment(studentAssessmentId),
+  });
+
+export const useGetStudentAttemptReview = (studentAssessmentId: number) =>
+  useQuery({
+    queryKey: studentKeys.review(studentAssessmentId),
+    queryFn: () => getStudentAttemptReview(studentAssessmentId),
+    enabled: !!studentAssessmentId,
+    staleTime: Infinity,
   });
 
 export const useStudentLogin = () =>

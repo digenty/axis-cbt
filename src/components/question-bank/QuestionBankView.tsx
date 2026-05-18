@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import type { MaterialKind } from "./answer-editors/QuestionGroupEditor";
 import type { Question, Topic, QuestionType } from "@/types";
 import type { ApiTopic } from "@/types/question";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import {
   useAddCbtTopic,
   useCreateCbtQuestion,
@@ -141,7 +141,7 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
       {
         onSuccess: (res) => {
           if (res?.data?.id) setSelectedTopicId(String(res.data.id));
-          toast.success("Topic added");
+          toast({ title: "Topic added", type: "success" });
           setAddTopicOpen(false);
           setAddTopicVersion((v) => v + 1);
         },
@@ -154,7 +154,7 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
     { name, description }: TopicFormDraft,
   ) => {
     if (branchId === undefined) {
-      toast.error("Branch not resolved yet");
+      toast({ title: "Branch not resolved yet", type: "error" });
       return;
     }
     updateTopic.mutate(
@@ -171,7 +171,7 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
       },
       {
         onSuccess: () => {
-          toast.success("Topic updated");
+          toast({ title: "Topic updated", type: "success" });
           setEditingTopic(null);
         },
       },
@@ -181,11 +181,11 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   const handleDeleteTopic = (id: string) => {
     deleteTopic.mutate(Number(id), {
       onSuccess: () => {
-        toast.success("Topic deleted");
+        toast({ title: "Topic deleted", type: "success" });
         setDeletingTopic(null);
       },
       onError: () => {
-        toast.error("Failed to delete topic");
+        toast({ title: "Failed to delete topic", type: "error" });
         setDeletingTopic(null);
       },
     });
@@ -217,7 +217,7 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   // ─── Question handlers ────────────────────────────────────────────────────
   const handleAddQuestion = () => {
     if (!activeTopic) {
-      toast.error("Add a topic first");
+      toast({ title: "Add a topic first", type: "error" });
       return;
     }
     setAddQuestionOpen(true);
@@ -240,7 +240,7 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
     });
     createQuestion.mutate(payload, {
       onSuccess: () => {
-        toast.success("Question created");
+        toast({ title: "Question created", type: "success" });
         setNewQuestionType(null);
         setNewMaterialKind(null);
       },
@@ -267,7 +267,7 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
       topicId: activeTopicNumId,
     });
     createQuestion.mutate(payload, {
-      onSuccess: () => toast.success("Question duplicated"),
+      onSuccess: () => toast({ title: "Question duplicated", type: "success" }),
     });
   };
 
@@ -281,11 +281,11 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
     if (!deleteQuestionTargetId) return;
     deleteQuestion.mutate(Number(deleteQuestionTargetId), {
       onSuccess: () => {
-        toast.success("Question deleted");
+        toast({ title: "Question deleted", type: "success" });
         setDeleteQuestionTargetId(null);
       },
       onError: () => {
-        toast.error("Failed to delete question");
+        toast({ title: "Failed to delete question", type: "error" });
         setDeleteQuestionTargetId(null);
       },
     });
@@ -333,7 +333,6 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
         onRequestDeleteTopic={setDeletingTopic}
         onReorderTopics={handleReorderTopics}
         importHref={`${baseUrl}/question-bank/import`}
-        backHref={baseUrl}
       />
 
       {subjectTopics.length === 0 ? (

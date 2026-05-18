@@ -17,7 +17,7 @@ import { QuestionGroupEditor } from "./answer-editors/QuestionGroupEditor";
 import type { MaterialKind } from "./answer-editors/QuestionGroupEditor";
 import { generateId } from "@/lib/utils";
 import { uploadImage } from "@/lib/uploads";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import type { Question, QuestionType, Option, Blank } from "@/types";
 
 const SIMPLE_TYPES: QuestionType[] = [
@@ -96,7 +96,7 @@ export const InlineQuestionCard = ({
   const handleSave = () => {
     if (loading) return;
     if (!text && !isGrouped) {
-      toast.error("Question text required");
+      toast({ title: "Question text required", type: "error" });
       return;
     }
 
@@ -147,6 +147,7 @@ export const InlineQuestionCard = ({
           subQuestions,
           text: groupName || passage.slice(0, 60),
         };
+        console.log(payload, "777777777");
         break;
       case "multiple-blanks":
         payload = { ...base, blanks };
@@ -189,9 +190,10 @@ export const InlineQuestionCard = ({
                   const url = await uploadImage(file, "cbt/questions");
                   setQuestionImage(url);
                 } catch (err) {
-                  toast.error(
-                    err instanceof Error ? err.message : "Upload failed",
-                  );
+                  toast({
+                    title: err instanceof Error ? err.message : "Upload failed",
+                    type: "error",
+                  });
                 } finally {
                   setUploading(false);
                 }

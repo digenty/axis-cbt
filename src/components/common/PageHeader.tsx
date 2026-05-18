@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 interface PageHeaderProps {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
-  backHref?: string;
   showBack?: boolean;
   right?: React.ReactNode;
   className?: string;
@@ -16,7 +15,6 @@ export const PageHeader = ({
   title,
   subtitle,
   showBack,
-  backHref,
   right,
   className,
 }: PageHeaderProps) => (
@@ -27,7 +25,7 @@ export const PageHeader = ({
     )}
   >
     <div className="flex flex-wrap items-center gap-3">
-      {showBack && <BackButton href={backHref} />}
+      {showBack && <BackButton />}
       <div className="flex items-baseline gap-3">
         <h1 className="text-xl font-semibold capitalize text-[var(--color-text-default)]">
           {title}

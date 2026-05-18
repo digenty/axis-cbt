@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { useFormik } from "formik";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import { LegalModal } from "./LegalModal";
 import { PRIVACY_POLICY, TERMS_AND_CONDITIONS } from "./legal";
 
@@ -52,7 +52,11 @@ export const LoginPasswordForm = () => {
             const message =
               (error as { message?: string })?.message ??
               "Invalid credentials. Please try again.";
-            toast.error("Login failed", { description: message });
+            toast({
+              title: "Login failed",
+              description: message,
+              type: "error",
+            });
           },
         },
       );

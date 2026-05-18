@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useMemo, useState } from "react";
-import { Box, Loader2, Plus } from "lucide-react";
+import { Box, Check, Copy, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -17,7 +17,7 @@ import {
   useGetAssessments,
 } from "@/hooks/queryHooks/useAssessment";
 import { apiAssessmentToTest } from "@/types/assessment.mapper";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 
 interface TestListViewProps {
   params: Promise<{ classId: string; subjectId: string }>;
@@ -29,6 +29,15 @@ export const TestListView = ({ params }: TestListViewProps) => {
   const subjectId = Number(subjectIdStr);
   const [showModal, setShowModal] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const studentUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/student`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(studentUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const { data: classDetails } = useGetClassDetails(classId);
   const { data: classSubjects } = useGetSubjectsByClassId(classId);
@@ -61,11 +70,11 @@ export const TestListView = ({ params }: TestListViewProps) => {
     if (!deleteTargetId) return;
     deleteMutation.mutate(Number(deleteTargetId), {
       onSuccess: () => {
-        toast.success("Test deleted");
+        toast({ title: "Test deleted", type: "success" });
         setDeleteTargetId(null);
       },
       onError: () => {
-        toast.error("Failed to delete test");
+        toast({ title: "Failed to delete test", type: "error" });
         setDeleteTargetId(null);
       },
     });
@@ -94,7 +103,6 @@ export const TestListView = ({ params }: TestListViewProps) => {
       <PageHeader
         title="CBT"
         showBack
-        backHref={baseUrl}
         right={
           <Button onClick={() => setShowModal(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" />
@@ -102,6 +110,27 @@ export const TestListView = ({ params }: TestListViewProps) => {
           </Button>
         }
       />
+
+      <div className="mt-4 flex items-center gap-3 rounded-lg bg-bg-badge-green  px-4 py-3 text-sm">
+        <span className="flex-1 text-bg-basic-green-contrast border-l-2 pl-2">
+          <span className="font-medium">Student login link: </span>
+          <span className="font-mono font-semibold">{studentUrl}</span>
+          <span className="ml-1 text-xs opacity-70">
+            — share this with your students.
+          </span>
+        </span>
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 rounded-md border border-bg-basic-green-accent bg-white/20 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-white/30 text-bg-basic-green-contrast"
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+          {copied ? "Copied!" : "Copy"}
+        </button>
+      </div>
 
       {assessmentsLoading ? (
         <div className="mt-12 flex justify-center">

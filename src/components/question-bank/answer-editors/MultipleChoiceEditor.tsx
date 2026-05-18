@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ImageIcon, Loader2, Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,7 +60,10 @@ export const MultipleChoiceEditor = ({
               const url = await uploadImage(file, "cbt/options");
               update(opt.id, { imageUrl: url });
             } catch (err) {
-              toast.error(err instanceof Error ? err.message : "Upload failed");
+              toast({
+                title: err instanceof Error ? err.message : "Upload failed",
+                type: "error",
+              });
             } finally {
               setUploadingId(null);
             }
