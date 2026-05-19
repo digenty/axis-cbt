@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import Image from "next/image";
-import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { Award, CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { Modal } from "@/components/Modal";
 import {
   useGetAssessmentPreview,
   useGetStudentAttemptReview,
+  useGetStudentResult,
 } from "@/hooks/queryHooks/useStudentCBT";
 import type {
   ApiReviewQuestion,
@@ -416,11 +417,13 @@ export const TestReviewView = ({
   studentAssessmentId,
   assessmentId,
 }: TestReviewViewProps) => {
-  const router = useRouter();
+  const [scoreOpen, setScoreOpen] = useState(false);
+
   const { data: preview, isLoading: previewLoading } =
     useGetAssessmentPreview(assessmentId);
   const { data: reviewData, isLoading: reviewLoading } =
     useGetStudentAttemptReview(studentAssessmentId);
+  const { data: resultData } = useGetStudentResult(studentAssessmentId);
 
   const orderedQuestions = useMemo<OrderedQuestion[]>(() => {
     const out: OrderedQuestion[] = [];
@@ -444,6 +447,9 @@ export const TestReviewView = ({
   const p = preview?.data;
   const sections = reviewData?.data?.sections ?? [];
   const uiStatus = apiStatusToUi(p?.attemptStatus);
+  const feedbacks = orderedQuestions
+    .map((oq) => oq.question.feedback)
+    .filter((f): f is string => !!f);
 
   return (
     <div className="flex h-screen flex-col bg-[var(--color-bg-default)]">
@@ -463,7 +469,7 @@ export const TestReviewView = ({
           className="bg-bg-state-primary text-text-white-default"
           variant="outline"
           size="sm"
-          onClick={() => router.back()}
+          onClick={() => setScoreOpen(true)}
         >
           View Test Score
         </Button>
@@ -552,6 +558,45 @@ export const TestReviewView = ({
           </div>
         </main>
       </div>
+
+      <Modal open={scoreOpen} setOpen={setScoreOpen} showFooter={false}>
+        {/* Green hero */}
+        <div className="flex flex-col items-center gap-3 rounded-t-xl bg-[var(--color-bg-badge-green)] px-8 py-10">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/60">
+            <Award className="h-10 w-10 text-[var(--green-600)]" />
+          </div>
+          <div className="text-center">
+            <span className="text-5xl font-bold text-(--color-text-default)">
+              {resultData?.score ?? "—"}
+            </span>
+            <span className="text-2xl text-(--color-text-muted)">
+              /{resultData?.totalMarks ?? p?.totalMarks ?? "—"}
+            </span>
+          </div>
+          <p className="text-base font-semibold text-(--color-text-default)">
+            {p?.name} Score
+          </p>
+        </div>
+
+        {/* Teacher feedback */}
+        {feedbacks.length > 0 && (
+          <div className="px-6 py-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-(--color-text-muted)">
+              Teacher&apos;s Feedback
+            </p>
+            <div className="space-y-2">
+              {feedbacks.map((fb, i) => (
+                <p
+                  key={i}
+                  className="text-sm italic text-(--color-text-default)"
+                >
+                  &ldquo;{fb}&rdquo;
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
