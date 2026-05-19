@@ -57,12 +57,11 @@ export const AllClassesView = () => {
   });
 
   useEffect(() => {
-    if (termsRes?.data?.terms && termSelected === null) {
-      const active = termsRes.data.terms.find((t) => t.isActiveTerm);
-      setTermSelected(active ?? null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [termsRes]);
+    if (!termsRes?.data?.terms || termSelected !== null) return;
+    const active = termsRes.data.terms.find((t) => t.isActiveTerm) ?? null;
+    const id = setTimeout(() => setTermSelected(active), 0);
+    return () => clearTimeout(id);
+  }, [termsRes, termSelected]);
 
   const branches = useMemo(() => branchesRes?.data ?? [], [branchesRes]);
   const terms = useMemo(() => termsRes?.data?.terms ?? [], [termsRes]);
@@ -74,7 +73,6 @@ export const AllClassesView = () => {
       <PageHeader
         title="All Classes"
         showBack
-        backHref="/subjects"
         right={
           <>
             <BranchSelector

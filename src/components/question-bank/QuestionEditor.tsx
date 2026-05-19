@@ -28,7 +28,7 @@ import type {
   QuestionType,
 } from "@/types";
 import type { ApiTopic } from "@/types/question";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import {
   useCreateCbtQuestion,
   useGetQuestion,
@@ -240,11 +240,11 @@ const QuestionEditorBody = ({
 
   const handleSave = () => {
     if (!topicId) {
-      toast.error("Topic missing");
+      toast({ title: "Topic missing", type: "error" });
       return;
     }
     if (!text && !isGrouped) {
-      toast.error("Question text required");
+      toast({ title: "Question text required", type: "error" });
       return;
     }
 
@@ -311,7 +311,7 @@ const QuestionEditorBody = ({
         { id: Number(existing.id), payload },
         {
           onSuccess: () => {
-            toast.success("Question updated");
+            toast({ title: "Question updated", type: "success" });
             onClose();
           },
         },
@@ -325,19 +325,24 @@ const QuestionEditorBody = ({
               { sectionId, questionIds: [newQuestionId] },
               {
                 onSuccess: () => {
-                  toast.success("Question added to section");
+                  toast({
+                    title: "Question added to section",
+                    type: "success",
+                  });
                   onClose();
                 },
                 onError: () => {
-                  toast.error(
-                    "Question created but couldn't be added to the section. You can add it from the question bank.",
-                  );
+                  toast({
+                    title:
+                      "Question created but couldn't be added to the section. You can add it from the question bank.",
+                    type: "error",
+                  });
                   onClose();
                 },
               },
             );
           } else {
-            toast.success("Question created");
+            toast({ title: "Question created", type: "success" });
             onClose();
           }
         },
@@ -406,9 +411,13 @@ const QuestionEditorBody = ({
                         const url = await uploadImage(file, "cbt/questions");
                         setQuestionImageUrl(url);
                       } catch (err) {
-                        toast.error(
-                          err instanceof Error ? err.message : "Upload failed",
-                        );
+                        toast({
+                          title:
+                            err instanceof Error
+                              ? err.message
+                              : "Upload failed",
+                          type: "error",
+                        });
                       } finally {
                         setImageUploading(false);
                       }

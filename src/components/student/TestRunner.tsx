@@ -3,19 +3,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Clock, Flag, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+  ArrowLeft,
+  CalendarDays,
+  Clock,
+  FileText,
+  Loader2,
+  LogOut,
+  MessageSquare,
+  X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
+import { SubmitTestDialog } from "@/components/student/SubmitTestDialog";
 import {
   useGetAssessmentPaper,
+  useGetAssessmentPreview,
+  useGetStudentAttemptAnswers,
   useStartAssessment,
   useSubmitAnswer,
   useSubmitAnswersBatch,
@@ -28,10 +32,13 @@ import type {
   ApiSubQuestion,
   SubmitAnswerPayload,
 } from "@/types/student-api";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import type { StudentAttemptAnswer } from "@/types/question";
+import { toast } from "@/components/common/Toast";
+import { cn, formatDate } from "@/lib/utils";
+import { clearStudentSession } from "@/lib/auth-session";
 import { useLoggedInUser } from "@/hooks/useLoggedInUser";
 import { RichTextEditor } from "@/components/question-bank/RichTextEditor";
+import { TestWindowClosed } from "./TestWindowClosed";
 
 interface TestRunnerProps {
   // The route segment is named [testId] but the value is `assessmentId`.
@@ -49,6 +56,8 @@ interface AnswerState {
   textAnswer: string;
   subAnswers: Record<number, SubAnswer>;
 }
+
+const examEndTimeKey = (id: number) => `cbt_exam_end_${id}`;
 
 const emptySubAnswer = (): SubAnswer => ({
   selectedOptionIds: [],
@@ -118,6 +127,67 @@ const buildAnswerData = (
     return { subAnswers: subAnswerData };
   }
   return { answerText: a.textAnswer };
+};
+
+const parseApiAnswer = (answer: StudentAttemptAnswer): AnswerState => {
+  const type = answer.questionType.toUpperCase();
+  let parsed: Record<string, unknown> = {};
+  if (answer.answerData) {
+    try {
+      parsed = JSON.parse(answer.answerData) as Record<string, unknown>;
+    } catch {
+      // malformed JSON — fall back to empty
+    }
+  }
+
+  if (type === "TRUE_FALSE") {
+    const id = (parsed.selectedOptionId as number | null | undefined) ?? null;
+    return { ...emptyAnswer(), selectedOptionIds: id != null ? [id] : [] };
+  }
+
+  if (type === "MULTIPLE_CHOICE" || type === "MULTIPLE_ANSWERS") {
+    return {
+      ...emptyAnswer(),
+      selectedOptionIds: (parsed.selectedOptionIds as number[]) ?? [],
+    };
+  }
+
+  if (type === "QUESTION_GROUP") {
+    const rawSubs = (parsed.subAnswers ?? {}) as Record<
+      string,
+      {
+        selectedOptionId?: number;
+        selectedOptionIds?: number[];
+        answerText?: string;
+      }
+    >;
+    const subAnswers: Record<number, SubAnswer> = {};
+    for (const [sqId, sa] of Object.entries(rawSubs)) {
+      if ("selectedOptionId" in sa) {
+        const id = sa.selectedOptionId ?? null;
+        subAnswers[Number(sqId)] = {
+          ...emptySubAnswer(),
+          selectedOptionIds: id != null ? [id] : [],
+        };
+      } else if ("selectedOptionIds" in sa) {
+        subAnswers[Number(sqId)] = {
+          ...emptySubAnswer(),
+          selectedOptionIds: sa.selectedOptionIds ?? [],
+        };
+      } else {
+        subAnswers[Number(sqId)] = {
+          ...emptySubAnswer(),
+          textAnswer: sa.answerText ?? "",
+        };
+      }
+    }
+    return { ...emptyAnswer(), subAnswers };
+  }
+
+  return {
+    ...emptyAnswer(),
+    textAnswer: (parsed.answerText as string) ?? answer.answerText ?? "",
+  };
 };
 
 const getOptions = (q: ApiStudentQuestion): ApiStudentOption[] => {
@@ -546,6 +616,52 @@ interface OrderedQuestion {
   globalIndex: number;
 }
 
+// ─── Question row ─────────────────────────────────────────────────────────────
+
+interface QuestionRowProps {
+  q: ApiStudentQuestion;
+  globalIdx: number;
+  answer: AnswerState;
+  onAnswer: (q: ApiStudentQuestion, next: AnswerState) => void;
+}
+
+const QuestionRow = ({ q, globalIdx, answer, onAnswer }: QuestionRowProps) => (
+  <div className="border border-border-default rounded-lg p-6">
+    <div className="flex items-center gap-3">
+      <span className="flex size-7 items-center justify-center rounded-full bg-bg-basic-gray-accent text-xs font-medium text-white">
+        {globalIdx + 1}
+      </span>
+      <span className="text-xs text-(--color-text-muted)">
+        {q.marks} mark{q.marks === 1 ? "" : "s"}
+      </span>
+    </div>
+
+    {q.questionType.toUpperCase() !== "QUESTION_GROUP" && (
+      <>
+        <div
+          className="rounded-lg bg-(--color-bg-card) py-4 text-lg font-medium text-(--color-text-default)"
+          dangerouslySetInnerHTML={{ __html: q.questionHtml || q.questionText }}
+        />
+        {q.imageUrl && (
+          <div className="relative mt-3 max-h-80 overflow-hidden rounded-lg">
+            <Image
+              src={q.imageUrl}
+              height={80}
+              width={200}
+              alt="Question image"
+              className="rounded-lg"
+            />
+          </div>
+        )}
+      </>
+    )}
+
+    <div className="mt-4">
+      {renderAnswerInput(q, answer, (next) => onAnswer(q, next))}
+    </div>
+  </div>
+);
+
 export const TestRunner = ({ testId }: TestRunnerProps) => {
   const router = useRouter();
   const assessmentId = Number(testId);
@@ -553,6 +669,8 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
   // ─── Lifecycle: start the attempt on mount ──────────────────────────────
   const { id: studentId, isUserLoading } = useLoggedInUser();
   const startMutation = useStartAssessment();
+  const { data: previewData } = useGetAssessmentPreview(assessmentId);
+  const preview = previewData?.data;
   const [studentAssessmentId, setStudentAssessmentId] = useState<number | null>(
     null,
   );
@@ -565,6 +683,7 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
     startedRef.current = true;
 
     const browserInfo = navigator.userAgent;
+    console.log({ assessmentId, studentId, browserInfo });
 
     const doStart = async () => {
       let ipAddress: string | undefined;
@@ -590,9 +709,8 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
           onSuccess: (res) => {
             setStudentAssessmentId(res?.data?.id);
           },
-          onError: () => {
-            toast.error("Failed to start the assessment");
-          },
+
+          onError: () => {},
         },
       );
     };
@@ -601,8 +719,11 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessmentId, isUserLoading]);
 
-  // ─── Paper fetch ────────────────────────────────────────────────────────
+  // ─── Paper fetch + saved-answer hydration ───────────────────────────────
   const { data: paper, isLoading: paperLoading } = useGetAssessmentPaper(
+    studentAssessmentId ?? 0,
+  );
+  const { data: attemptAnswers } = useGetStudentAttemptAnswers(
     studentAssessmentId ?? 0,
   );
   const orderedQuestions = useMemo<OrderedQuestion[]>(() => {
@@ -620,29 +741,73 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
 
   // ─── Answer state per assessmentQuestionId ─────────────────────────────
   const [answers, setAnswers] = useState<Record<number, AnswerState>>({});
+
+  // Server-persisted answers seeded on mount; local `answers` wins on conflict.
+  const resolvedAnswers = useMemo<Record<number, AnswerState>>(() => {
+    const hydrated: Record<number, AnswerState> = {};
+    for (const a of attemptAnswers?.data ?? []) {
+      hydrated[a.assessmentQuestionId] = parseApiAnswer(a);
+    }
+    return { ...hydrated, ...answers };
+  }, [attemptAnswers, answers]);
+
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
 
-  // Initialize timer once paper is loaded
+  // Effect A: resume from localStorage instantly on refresh
   useEffect(() => {
-    if (paper && secondsLeft === null) {
-      setSecondsLeft(
-        paper?.data?.timeRemainingSeconds &&
-          paper?.data?.timeRemainingSeconds > 0
-          ? paper.data.timeRemainingSeconds!
-          : (paper?.data?.durationMinutes ?? 0) * 60,
-      );
-    }
-  }, [paper, secondsLeft]);
+    if (!studentAssessmentId) return;
+    const stored = localStorage.getItem(examEndTimeKey(studentAssessmentId));
+    if (!stored) return;
+    const remaining = Math.max(
+      0,
+      Math.floor((Number(stored) - Date.now()) / 1000),
+    );
+    // Don't restore an expired cache entry — wait for Effect B (server value) to handle it.
+    // This prevents a stale localStorage key from triggering an immediate auto-submit race.
+    if (remaining === 0) return;
+    const id = setTimeout(() => setSecondsLeft(remaining), 0);
+    return () => clearTimeout(id);
+  }, [studentAssessmentId]);
 
-  // Tick timer
+  // Effect B: seed countdown from API (server wins on conflict).
+  // Prefers timeRemainingSeconds (server-computed, clock-skew-immune) over examEndTime.
+  useEffect(() => {
+    if (!studentAssessmentId || !paper?.data) return;
+    const { timeRemainingSeconds, examEndTime } = paper.data;
+
+    let endMs: number;
+
+    if (timeRemainingSeconds != null && timeRemainingSeconds > 0) {
+      endMs = Date.now() + timeRemainingSeconds * 1000;
+    } else if (examEndTime) {
+      endMs = new Date(examEndTime).getTime();
+    } else {
+      return;
+    }
+
+    localStorage.setItem(examEndTimeKey(studentAssessmentId), String(endMs));
+    const remaining = Math.max(0, Math.floor((endMs - Date.now()) / 1000));
+    const id = setTimeout(() => setSecondsLeft(remaining), 0);
+    return () => clearTimeout(id);
+  }, [paper?.data, studentAssessmentId]);
+
+  // Effect C: wall-clock interval — recomputes from stored end time every second
   useEffect(() => {
     if (secondsLeft === null || secondsLeft <= 0) return;
     const id = setInterval(() => {
-      setSecondsLeft((s) => (s === null ? null : Math.max(0, s - 1)));
+      if (!studentAssessmentId) return;
+      const stored = localStorage.getItem(examEndTimeKey(studentAssessmentId));
+      if (!stored) return;
+      const remaining = Math.max(
+        0,
+        Math.floor((Number(stored) - Date.now()) / 1000),
+      );
+      setSecondsLeft(remaining);
     }, 1000);
     return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secondsLeft]);
 
   const submitAnswerMutation = useSubmitAnswer();
@@ -697,15 +862,39 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
 
   const handleSubmit = () => {
     if (studentAssessmentId === null) return;
+    if (studentAssessmentId)
+      localStorage.removeItem(examEndTimeKey(studentAssessmentId));
     flushPending();
     submitAssessmentMutation.mutate(studentAssessmentId, {
-      onSuccess: () => {
+      onSuccess: (response) => {
         setSubmitOpen(false);
-        router.push(`/student/cbt/${studentAssessmentId}/result`);
+        const id = response?.data?.studentAssessmentId ?? studentAssessmentId;
+        router.push(`/student/cbt/${id}/result?assessmentId=${assessmentId}`);
       },
-      onError: () => toast.error("Failed to submit assessment"),
+      onError: () =>
+        toast({ title: "Failed to submit assessment", type: "error" }),
     });
   };
+
+  // Effect D: auto-submit when time is up (placed after handleSubmit to avoid hoisting issues)
+  useEffect(() => {
+    if (secondsLeft !== 0) return;
+    handleSubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [secondsLeft]);
+
+  if (startMutation.isError) {
+    const errorMessage =
+      (startMutation.error as { message?: string })?.message ??
+      "This test is no longer available. Please contact your teacher if you believe this was an error.";
+
+    return (
+      <TestWindowClosed
+        description={errorMessage}
+        assessmentId={assessmentId}
+      />
+    );
+  }
 
   if (paperLoading || startMutation.isPending || !paper) {
     return (
@@ -728,11 +917,10 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
 
   const sections = paper?.data?.sections ?? [];
   const activeSection = sections[activeSectionIdx];
-  console.log(activeSection, "444");
   const minutes = Math.floor((secondsLeft ?? 0) / 60);
   const seconds = (secondsLeft ?? 0) % 60;
   const answeredCount = orderedQuestions.filter((oq) =>
-    isAnswered(answers[oq.question.assessmentQuestionId]),
+    isAnswered(resolvedAnswers[oq.question.assessmentQuestionId]),
   ).length;
 
   return (
@@ -777,7 +965,9 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
                   const isActive =
                     orderedQuestions[idx]?.section.sectionId ===
                     activeSection?.sectionId;
-                  const answered = isAnswered(answers[q.assessmentQuestionId]);
+                  const answered = isAnswered(
+                    resolvedAnswers[q.assessmentQuestionId],
+                  );
                   return (
                     <button
                       key={q.assessmentQuestionId}
@@ -824,54 +1014,16 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
                 (oq) =>
                   oq.question.assessmentQuestionId === q.assessmentQuestionId,
               );
-              const answer = answers[q.assessmentQuestionId] ?? emptyAnswer();
+              const answer =
+                resolvedAnswers[q.assessmentQuestionId] ?? emptyAnswer();
               return (
-                <div
+                <QuestionRow
                   key={q.assessmentQuestionId}
-                  className="border border-border-default rounded-lg p-6"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex size-7 items-center justify-center rounded-full bg-bg-basic-gray-accent text-xs font-medium text-white">
-                      {globalIdx + 1}
-                    </span>
-                    <span className="text-xs text-(--color-text-muted)">
-                      {q.marks} mark{q.marks === 1 ? "" : "s"}
-                    </span>
-                    <button
-                      type="button"
-                      className="ml-auto text-(--color-icon-default-muted) hover:text-(--color-icon-warning) bg-bg-state-soft p-1.5 rounded-sm cursor-pointer"
-                    >
-                      <Flag className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  {q.questionType.toUpperCase() !== "QUESTION_GROUP" && (
-                    <>
-                      <div
-                        className="rounded-lg bg-(--color-bg-card) py-4 text-lg font-medium text-(--color-text-default)"
-                        dangerouslySetInnerHTML={{
-                          __html: q.questionHtml || q.questionText,
-                        }}
-                      />
-
-                      {q.imageUrl && (
-                        <div className="relative mt-3 max-h-80 overflow-hidden rounded-lg">
-                          <Image
-                            src={q.imageUrl}
-                            height={80}
-                            width={200}
-                            alt="Question image"
-                            className="rounded-lg"
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  <div className="mt-4">
-                    {renderAnswerInput(q, answer, (next) => setAnswer(q, next))}
-                  </div>
-                </div>
+                  q={q}
+                  globalIdx={globalIdx}
+                  answer={answer}
+                  onAnswer={setAnswer}
+                />
               );
             })}
 
@@ -906,33 +1058,25 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
         <span className="text-[var(--blue-600)]">
           {answeredCount} / {orderedQuestions.length} answered
         </span>
+        <form action={clearStudentSession}>
+          <button
+            type="submit"
+            className="flex items-center gap-1.5 rounded px-2 py-1 hover:bg-[var(--color-bg-state-soft-hover)] hover:text-[var(--color-text-default)]"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Logout
+          </button>
+        </form>
       </footer>
 
-      <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Submit your test?</DialogTitle>
-            <DialogDescription>
-              You answered {answeredCount} out of {orderedQuestions.length}{" "}
-              questions. Submitted answers can&apos;t be changed.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitOpen(false)}>
-              Keep going
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={submitAssessmentMutation.isPending}
-            >
-              {submitAssessmentMutation.isPending && (
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-              )}
-              Submit
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SubmitTestDialog
+        open={submitOpen}
+        setOpen={setSubmitOpen}
+        onConfirm={handleSubmit}
+        isLoading={submitAssessmentMutation.isPending}
+        answeredCount={answeredCount}
+        totalQuestions={orderedQuestions.length}
+      />
     </div>
   );
 };

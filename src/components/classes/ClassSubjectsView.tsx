@@ -14,7 +14,7 @@ import {
   useGetSubjectsByArmId,
   useNotifyTeacher,
 } from "@/hooks/queryHooks/useSubjects";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import type { ApiClassArmSubject } from "@/types/subjects";
 
 // ─── Mobile card ────────────────────────────────────────────────────────────
@@ -146,12 +146,16 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
     (subjectId: number, subjectName: string) => {
       notifyTeacher(subjectId, {
         onSuccess: () =>
-          toast.success("Teacher notified", {
+          toast({
+            title: "Teacher notified",
             description: `A reminder has been sent for ${subjectName}.`,
+            type: "success",
           }),
         onError: () =>
-          toast.error("Failed to notify teacher", {
+          toast({
+            title: "Failed to notify teacher",
             description: "Please try again.",
+            type: "error",
           }),
       });
     },
@@ -251,7 +255,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
   if (subjectsError) {
     return (
       <div className="px-6 py-6">
-        <PageHeader title={className || "Class"} showBack backHref="/classes" />
+        <PageHeader title={className || "Class"} showBack />
         <div className="mt-20 flex justify-center">
           <ErrorComponent
             title="Failed to load subjects"
@@ -266,7 +270,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
-      <PageHeader title={className || "Class"} showBack backHref="/classes" />
+      <PageHeader title={className || "Class"} showBack />
 
       <div className="mt-5">
         {classSubjects.length === 0 ? (

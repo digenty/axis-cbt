@@ -7,27 +7,24 @@ export const useLoggedInUser = () => {
   const [currentUser, setCurrentUser] = useState<JWTPayload>();
   const [isUserLoading, setIsUserLoading] = useState(true);
 
-  const getLoggedInUser = async () => {
-    try {
-      const token = await getSessionToken();
-
-      const user = decodeJWT(token.token);
-
-      if (!token || !user) {
-        deleteSession();
-      } else {
-        setCurrentUser(user);
-      }
-    } catch (error) {
-      console.warn(error);
-    } finally {
-      setIsUserLoading(false);
-    }
-  };
-
   useEffect(() => {
-    getLoggedInUser();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const fetchUser = async () => {
+      try {
+        const token = await getSessionToken();
+        const user = decodeJWT(token.token);
+        if (!token || !user) {
+          deleteSession();
+        } else {
+          setCurrentUser(user);
+        }
+      } catch (error) {
+        console.warn(error);
+      } finally {
+        setIsUserLoading(false);
+      }
+    };
+
+    fetchUser();
   }, []);
 
   return {

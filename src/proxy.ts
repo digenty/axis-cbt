@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 
 const STUDENT_LOGIN = "/student/login";
 const STUDENT_CBT = "/student/cbt";
+const STUDENT_CBT_ROOT = "/student";
 
 const PUBLIC_PREFIXES = [
   "/auth-entry",
@@ -25,6 +26,10 @@ export function proxy(request: NextRequest) {
   const teacherToken = request.cookies.get("token")?.value;
 
   // ─── Student CBT routes ────────────────────────────────────────────────────
+  if (pathname === STUDENT_CBT_ROOT) {
+    return NextResponse.redirect(new URL(STUDENT_LOGIN, request.url));
+  }
+
   if (pathname.startsWith(STUDENT_CBT)) {
     if (!studentToken) {
       return NextResponse.redirect(new URL(STUDENT_LOGIN, request.url));

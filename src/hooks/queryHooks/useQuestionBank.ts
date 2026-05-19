@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import {
   addCbtQuestionBankTopic,
   createCbtQuestion,
@@ -70,7 +70,8 @@ export const useAddCbtTopic = () => {
         queryKey: questionBankKeys.topicsList(vars.classId, vars.subjectId),
       });
     },
-    onError: (e) => toast.error(errMsg(e, "Failed to add topic")),
+    onError: (e) =>
+      toast({ title: errMsg(e, "Failed to add topic"), type: "error" }),
   });
 };
 
@@ -96,7 +97,8 @@ export const useUpdateCbtTopic = () => {
         qc.invalidateQueries({ queryKey: ["question-bank", "topics"] });
       }
     },
-    onError: (e) => toast.error(errMsg(e, "Failed to update topic")),
+    onError: (e) =>
+      toast({ title: errMsg(e, "Failed to update topic"), type: "error" }),
   });
 };
 
@@ -109,7 +111,8 @@ export const useDeleteCbtTopic = () => {
       qc.invalidateQueries({ queryKey: ["question-bank", "questions"] });
       qc.invalidateQueries({ queryKey: ["question-bank", "stats"] });
     },
-    onError: (e) => toast.error(errMsg(e, "Failed to delete topic")),
+    onError: (e) =>
+      toast({ title: errMsg(e, "Failed to delete topic"), type: "error" }),
   });
 };
 
@@ -152,7 +155,8 @@ export const useCreateCbtQuestion = () => {
         queryKey: questionBankKeys.stats(vars.classId, vars.subjectId),
       });
     },
-    onError: (e) => toast.error(errMsg(e, "Failed to create question")),
+    onError: (e) =>
+      toast({ title: errMsg(e, "Failed to create question"), type: "error" }),
   });
 };
 
@@ -179,7 +183,8 @@ export const useUpdateCbtQuestion = () => {
         queryKey: questionBankKeys.questionDetail(vars.id),
       });
     },
-    onError: (e) => toast.error(errMsg(e, "Failed to update question")),
+    onError: (e) =>
+      toast({ title: errMsg(e, "Failed to update question"), type: "error" }),
   });
 };
 
@@ -203,7 +208,11 @@ export const useDuplicateCbtQuestion = (ctx?: {
         qc.invalidateQueries({ queryKey: ["question-bank", "stats"] });
       }
     },
-    onError: (e) => toast.error(errMsg(e, "Failed to duplicate question")),
+    onError: (e) =>
+      toast({
+        title: errMsg(e, "Failed to duplicate question"),
+        type: "error",
+      }),
   });
 };
 
@@ -224,7 +233,8 @@ export const useDeleteCbtQuestion = (ctx?: {
         qc.invalidateQueries({ queryKey: ["question-bank", "stats"] });
       }
     },
-    onError: (e) => toast.error(errMsg(e, "Failed to delete question")),
+    onError: (e) =>
+      toast({ title: errMsg(e, "Failed to delete question"), type: "error" }),
   });
 };
 
@@ -254,6 +264,7 @@ export const useImportQuestions = (classId: number, subjectId: number) => {
         queryKey: questionBankKeys.stats(classId, subjectId),
       });
     },
-    onError: (e) => toast.error(errMsg(e, "Failed to import questions")),
+    onError: (e) =>
+      toast({ title: errMsg(e, "Failed to import questions"), type: "error" }),
   });
 };

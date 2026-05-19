@@ -2,7 +2,7 @@
 
 import { use, useState } from "react";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,7 +130,10 @@ const AnswerCard = ({
   const onSave = () => {
     const parsed = Number(marks);
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > answer.maxMarks) {
-      toast.error(`Marks must be between 0 and ${answer.maxMarks}`);
+      toast({
+        title: `Marks must be between 0 and ${answer.maxMarks}`,
+        type: "error",
+      });
       return;
     }
     grade.mutate(
@@ -140,12 +143,12 @@ const AnswerCard = ({
         feedback: feedback.trim(),
       },
       {
-        onSuccess: () => toast.success("Marks saved"),
+        onSuccess: () => toast({ title: "Marks saved", type: "success" }),
         onError: (err) => {
           const msg =
             (err as { message?: string } | undefined)?.message ??
             "Failed to save marks";
-          toast.error(msg);
+          toast({ title: msg, type: "error" });
         },
       },
     );
@@ -238,9 +241,8 @@ const AnswerCard = ({
 };
 
 export const GradeAttemptView = ({ params }: GradeAttemptViewProps) => {
-  const { classId, subjectId, attemptId } = use(params);
+  const { attemptId } = use(params);
   const studentAssessmentId = Number(attemptId);
-  const baseUrl = `/classes/${classId}/subjects/${subjectId}`;
 
   const {
     data: result,
@@ -265,7 +267,7 @@ export const GradeAttemptView = ({ params }: GradeAttemptViewProps) => {
   if (resultError || !result) {
     return (
       <div className="px-6 py-6">
-        <BackButton href={`${baseUrl}/results`} label="Go Back" />
+        <BackButton label="Go Back" />
         <div className="mt-4">
           <EmptyState title="Attempt not found" />
         </div>
@@ -278,7 +280,7 @@ export const GradeAttemptView = ({ params }: GradeAttemptViewProps) => {
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
-      <BackButton href={`${baseUrl}/results`} label="Go Back" />
+      <BackButton label="Go Back" />
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Avatar className="h-9 w-9">

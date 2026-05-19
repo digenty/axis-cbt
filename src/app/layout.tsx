@@ -5,7 +5,7 @@ import { inter } from "./fonts";
 import { TanstackProvider } from "@/providers/Tanstack";
 
 export const metadata: Metadata = {
-  title: "Digenty",
+  title: "Axis CBT",
   description: "Your favourite management app",
 };
 

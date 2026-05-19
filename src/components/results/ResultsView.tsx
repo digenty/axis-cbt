@@ -26,7 +26,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { EmptyState } from "@/components/common/EmptyState";
 import { DataTable } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import {
   useGetClassDetails,
   useGetSubjectsByClassId,
@@ -147,6 +147,7 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
       }));
     return [...baseResults, ...synthetic];
   }, [baseResults, enrollment, activeTest?.totalMarks]);
+  console.log(baseResults);
 
   const { data: statsRes } = useGetAssessmentStats(activeTestId ?? 0);
   const apiStats = statsRes?.data;
@@ -187,7 +188,7 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
         header: "Percentage",
         cell: ({ row }) => {
           const a = row.original;
-          return a.percentage !== null ? `${a.percentage}%` : "-";
+          return a.percentage !== null ? `${a.percentage.toFixed(1)}%` : "-";
         },
       },
       {
@@ -235,8 +236,10 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
-                    toast.info("Retake request", {
+                    toast({
+                      title: "Retake request",
                       description: "Mock — no email sent.",
+                      type: "info",
                     })
                   }
                 >
@@ -261,7 +264,6 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
             : undefined
         }
         showBack
-        backHref={baseUrl}
       />
 
       <div className="mt-4 flex items-center justify-between gap-3">

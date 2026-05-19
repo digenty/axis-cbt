@@ -9,7 +9,7 @@ import {
   Loader2,
   Trash2,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/common/Toast";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -91,7 +91,10 @@ export const QuestionGroupEditor = ({
       const url = await uploadImage(file, "cbt/stimulus");
       onChangeStimulusImage(url);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed");
+      toast({
+        title: err instanceof Error ? err.message : "Upload failed",
+        type: "error",
+      });
     } finally {
       setUploading(false);
     }

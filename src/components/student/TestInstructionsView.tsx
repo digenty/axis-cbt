@@ -1,6 +1,6 @@
 "use client";
 
-import { BookMinus, Info, Loader2, Star } from "lucide-react";
+import { BookMinus, Info, Loader2, LogOut, Star } from "lucide-react";
 
 // ─── Instruction renderer ─────────────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ function renderInstructions(text: string): React.ReactNode {
   return <div className="space-y-1">{nodes}</div>;
 }
 import { useGetAssessmentPreview } from "@/hooks/queryHooks/useStudentCBT";
-import { BackButton } from "@/components/common/BackButton";
+import { clearStudentSession } from "@/lib/auth-session";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatCard } from "../common/StatCard";
@@ -89,7 +89,16 @@ export const TestInstructionsView = ({
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-8">
-      <BackButton href="/student/cbt" label="Go Back" />
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => clearStudentSession()}
+        >
+          <LogOut className="mr-1 h-3.5 w-3.5" />
+          Log out
+        </Button>
+      </div>
 
       <div className="mt-3 flex items-center gap-3">
         <h1 className="text-lg font-semibold text-[var(--color-text-default)]">

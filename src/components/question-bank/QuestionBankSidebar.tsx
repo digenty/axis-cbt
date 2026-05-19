@@ -44,7 +44,6 @@ interface QuestionBankSidebarProps {
   onRequestDeleteTopic: (topic: Topic) => void;
   onReorderTopics: (orderedIds: string[]) => void;
   importHref: string;
-  backHref: string;
 }
 
 const SortableTopicRow = ({
@@ -125,7 +124,6 @@ export const QuestionBankSidebar = ({
   onRequestDeleteTopic,
   onReorderTopics,
   importHref,
-  backHref,
 }: QuestionBankSidebarProps) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),

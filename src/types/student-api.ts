@@ -182,6 +182,7 @@ export interface ApiStudentPaper {
   totalMarks: number;
   instructions: string | null;
   timeRemainingSeconds: number | null;
+  examEndTime: string | null;
   sections: ApiStudentSection[];
 }
 
@@ -202,7 +203,7 @@ export interface SubmitAnswerPayload {
   flagged?: boolean;
 }
 
-// ─── Started assessment (response from start/submit) ─────────────────────────
+// ─── Started assessment (response from start) ────────────────────────────────
 
 export interface ApiStartedAssessment {
   id: number;
@@ -214,6 +215,70 @@ export interface ApiStartedAssessment {
   submissionTime: string | null;
   score: number | null;
   totalMarks: number | null;
+}
+
+// ─── Submit assessment response ───────────────────────────────────────────────
+
+export interface ApiSubmitAssessmentResponse {
+  data: {
+    studentAssessmentId: number;
+    status: AttemptStatus;
+    score: number;
+    totalMarks: number;
+    percentage: number;
+    passed: boolean;
+    lateSubmission: boolean;
+    submissionTime: string;
+    showResultsImmediately: boolean;
+  };
+}
+
+// ─── Answer review (GET /api/cbt/assessments/student-attempts/{id}/review) ────
+
+export interface ApiAnswerReview {
+  answerId: number;
+  assessmentQuestionId: number;
+  questionId: number;
+  questionText: string;
+  questionHtml: string;
+  questionType: string;
+  maxMarks: number;
+  marksAwarded: number;
+  isCorrect: boolean;
+  gradingStatus: StudentAnswerGradingStatus;
+  feedback: string;
+  answerData: string;
+  correctAnswer: unknown;
+}
+
+export interface ApiReviewQuestion {
+  answerId: number | null;
+  assessmentQuestionId: number;
+  questionId: number;
+  questionText: string;
+  questionHtml: string | null;
+  questionType: string;
+  imageUrl: string | null;
+  typeData: unknown;
+  maxMarks: number;
+  marksAwarded: number | null;
+  isCorrect: boolean | null;
+  gradingStatus: StudentAnswerGradingStatus | null;
+  feedback: string | null;
+  answerData: string | null;
+  correctAnswer: unknown;
+}
+
+export interface ApiReviewSection {
+  sectionId: number;
+  name: string;
+  instructions: string | null;
+  sectionOrder: number;
+  questions: ApiReviewQuestion[];
+}
+
+export interface ApiAttemptReview {
+  sections: ApiReviewSection[];
 }
 
 // ─── CBT Overview (teacher/admin dashboard) ───────────────────────────────────
