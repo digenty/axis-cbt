@@ -89,13 +89,8 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   });
 
   const topicQuestions = useMemo<Question[]>(
-    () =>
-      activeTopicNumId === null
-        ? []
-        : (questionsRes?.data ?? [])
-            .filter((q) => q.topicId === activeTopicNumId)
-            .map(apiQuestionToUI),
-    [questionsRes, activeTopicNumId],
+    () => (questionsRes ?? []).map(apiQuestionToUI),
+    [questionsRes],
   );
 
   // ─── Stats card data (for header) ─────────────────────────────────────────

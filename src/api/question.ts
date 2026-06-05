@@ -1,12 +1,15 @@
 import api from "@/lib/axios-auth";
 import { isAxiosError } from "axios";
 import type {
+  AiImportPayload,
+  AiImportQuestion,
+  AiImportResult,
+  ApiQuestion,
   CbtQueBankTopicPayload,
   CreateQuestionPayload,
-  ImportQuestionsResult,
+  ImportPreview,
   QuestionBankStatsResponse,
   QuestionResponse,
-  QuestionsListResponse,
   TopicResponse,
   TopicsResponse,
 } from "@/types/question";
@@ -21,6 +24,7 @@ export const getCbtQuestionBankTopics = async (payload: {
     const { data } = await api.get(
       `/api/cbt/question-bank/topics?classId=${payload?.classId}&subjectId=${payload?.subjectId}`,
     );
+
     return data;
   } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
@@ -74,16 +78,21 @@ export const getCbtQuestions = async (payload: {
   classId: number;
   subjectId: number;
   topicId?: number;
-}): Promise<QuestionsListResponse> => {
+}): Promise<ApiQuestion[]> => {
   try {
     const params = new URLSearchParams();
     if (payload?.topicId) params.set("topicId", String(payload?.topicId));
+    const qs = params.toString();
 
     const { data } = await api.get(
-      `/api/cbt/question-bank/questions/classes/${payload?.classId}/subjects/${payload?.subjectId}?${params.toString()}`,
+      `/api/cbt/question-bank/questions/classes/${payload?.classId}/subjects/${payload?.subjectId}${qs ? `?${qs}` : ""}`,
     );
 
-    return data;
+    return Array.isArray(data)
+      ? data
+      : Array.isArray(data?.data)
+        ? data.data
+        : [];
   } catch (error: unknown) {
     if (isAxiosError(error)) throw error.response?.data;
     throw error;
@@ -178,18 +187,79 @@ export const getQuestionBankStats = async (payload: {
 
 // ─── Import ───────────────────────────────────────────────────────────────────
 
-export const importCbtQuestions = async (payload: {
+export const previewCbtImport = async (payload: {
   classId: number;
   subjectId: number;
   file: File;
-}): Promise<{ data: ImportQuestionsResult; message: string }> => {
+}): Promise<{ data: ImportPreview; rawQuestions: AiImportQuestion[] }> => {
   try {
     const formData = new FormData();
-    formData.append("file", payload?.file);
+    formData.append("file", payload.file);
     const { data } = await api.post(
-      `/api/cbt/question-bank/questions/import?classId=${payload?.classId}&subjectId=${payload?.subjectId}`,
+      `/api/cbt/question-bank/questions/ai-extract?classId=${payload.classId}&subjectId=${payload.subjectId}`,
       formData,
       { headers: { "Content-Type": "multipart/form-data" } },
+    );
+
+    // Transform the API response shape → ImportPreview
+    const raw = data?.data ?? {};
+    const rawQuestions: AiImportQuestion[] = raw.questions ?? [];
+
+    const topicMap: Record<string, string> = {};
+    for (const t of raw.autoAssignedTopics ?? []) {
+      topicMap[t.section] = t.topicName;
+    }
+
+    const sectionOrder: string[] = [];
+    const sectionBuckets: Record<string, AiImportQuestion[]> = {};
+    for (const q of rawQuestions) {
+      const sec = q.section ?? "General";
+      if (!(sec in sectionBuckets)) {
+        sectionOrder.push(sec);
+        sectionBuckets[sec] = [];
+      }
+      sectionBuckets[sec].push(q);
+    }
+
+    let n = 1;
+    const sections = sectionOrder.map((name) => ({
+      name,
+      topicTag: topicMap[name] ?? name,
+      questions: sectionBuckets[name].map((q) => ({
+        id: `q-${n}`,
+        number: n++,
+        type: q.questionType,
+        status: (q.needsReview ? "needs_review" : "valid") as
+          | "valid"
+          | "needs_review",
+        text: q.questionText,
+        options: q.options?.map((o) => ({ label: o.label, text: o.text })),
+        correctAnswer: q.options?.find((o) => o.isCorrect)?.label,
+      })),
+    }));
+
+    return {
+      data: {
+        fileName: raw.sourceFilename ?? "",
+        curriculum: raw.curriculum,
+        totalQuestions: raw.totalQuestions ?? rawQuestions.length,
+        sections,
+      },
+      rawQuestions,
+    };
+  } catch (error) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
+
+export const importCbtQuestions = async (
+  payload: AiImportPayload,
+): Promise<{ data: AiImportResult; message: string }> => {
+  try {
+    const { data } = await api.post(
+      `/api/cbt/question-bank/questions/ai-import`,
+      payload,
     );
     return data;
   } catch (error) {
