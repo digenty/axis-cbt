@@ -525,7 +525,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
     [topicsRes],
   );
   const bankQuestions = useMemo<Question[]>(
-    () => (questionsRes?.data ?? []).map(apiQuestionToUI),
+    () => (questionsRes ?? []).map(apiQuestionToUI),
     [questionsRes],
   );
 
