@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Eye, Search } from "lucide-react";
+import { Check, Eye, Search, X } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { MobileDrawer } from "@/components/MobileDrawer";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -66,7 +66,7 @@ export const QuestionBankModal = ({
   const content = (
     <div className="flex flex-col">
       <div className="px-4 pt-3 pb-2">
-        <p className="text-xs text-[var(--color-text-muted)]">
+        <p className="text-xs text-(--color-text-muted)">
           {selectedIds.length} question{selectedIds.length === 1 ? "" : "s"}{" "}
           selected
         </p>
@@ -88,6 +88,18 @@ export const QuestionBankModal = ({
       {/* Topic filter tabs */}
       {topics.length > 0 && (
         <div className="flex gap-2 overflow-x-auto px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            onClick={() => setActiveTopicId(null)}
+            className={cn(
+              "shrink-0 rounded-full border px-3 py-1 text-sm transition-colors",
+              activeTopicId === null
+                ? "border-blue-500 text-blue-600 font-medium"
+                : "border-[var(--color-border-default)] text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)]",
+            )}
+          >
+            All
+          </button>
           {topics.map((t) => {
             const active = activeTopicId === t.id;
             return (
@@ -108,6 +120,31 @@ export const QuestionBankModal = ({
           })}
         </div>
       )}
+
+      {/* Select / Unselect all */}
+      <div className="flex items-center gap-2 px-4 pb-3">
+        <button
+          type="button"
+          onClick={() => setSelectedIds(filtered.map((q) => q.id))}
+          className="flex cursor-pointer items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+        >
+          <Check className="h-3 w-3" />
+          Select all
+        </button>
+        {selectedIds.length > 0 && (
+          <>
+            <span className="text-(--color-border-default)">·</span>
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="flex cursor-pointer items-center gap-1 text-xs font-medium text-(--color-text-muted) hover:text-(--color-text-default) transition-colors"
+            >
+              <X className="h-3 w-3" />
+              Unselect all
+            </button>
+          </>
+        )}
+      </div>
 
       {/* Question list */}
       <div className="max-h-[50vh] divide-y divide-[var(--color-border-default)] overflow-y-auto border-t border-[var(--color-border-default)]">
