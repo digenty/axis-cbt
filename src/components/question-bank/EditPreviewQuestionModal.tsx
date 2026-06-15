@@ -154,12 +154,13 @@ export const EditPreviewQuestionModal = ({
       { questionId: question.id, payload },
       {
         onSuccess: (response) => {
+          const updated = response.data;
           toast({
             title: "Question updated",
-            description: response.data.status === "needs_review" ? "Marked for review" : "Valid",
+            description: updated?.status === "needs_review" ? "Marked for review" : "Valid",
             type: "success",
           });
-          onSave?.(response.data);
+          if (updated) onSave?.(updated);
           onClose();
         },
         onError: () => {

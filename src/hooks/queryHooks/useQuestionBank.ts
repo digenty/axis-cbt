@@ -294,7 +294,7 @@ export const useEditPreviewQuestion = (classId: number, subjectId: number) => {
     }: {
       questionId: string;
       payload: EditPreviewQuestionPayload;
-    }) => editPreviewQuestion({ classId, subjectId, questionId, payload }),
+    }) => editPreviewQuestion({ questionId, payload }),
     onError: (e) =>
       toast({
         title: errMsg(e, "Failed to validate question edit"),
