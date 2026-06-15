@@ -6,6 +6,7 @@ import {
   deleteCbtQuestion,
   deleteCbtQuestionBankTopic,
   duplicateCbtQuestion,
+  editPreviewQuestion,
   getCbtQuestion,
   getCbtQuestions,
   getCbtQuestionBankTopics,
@@ -20,6 +21,7 @@ import type {
   CbtQueBankTopicPayload,
   CreateQuestionPayload,
 } from "@/types/question";
+import type { EditPreviewQuestionPayload } from "@/types/bulk-import";
 
 // ─── Query key factory ────────────────────────────────────────────────────────
 
@@ -281,5 +283,22 @@ export const useImportQuestions = (classId: number, subjectId: number) => {
     },
     onError: (e) =>
       toast({ title: errMsg(e, "Failed to import questions"), type: "error" }),
+  });
+};
+
+export const useEditPreviewQuestion = (classId: number, subjectId: number) => {
+  return useMutation({
+    mutationFn: ({
+      questionId,
+      payload,
+    }: {
+      questionId: string;
+      payload: EditPreviewQuestionPayload;
+    }) => editPreviewQuestion({ classId, subjectId, questionId, payload }),
+    onError: (e) =>
+      toast({
+        title: errMsg(e, "Failed to validate question edit"),
+        type: "error",
+      }),
   });
 };

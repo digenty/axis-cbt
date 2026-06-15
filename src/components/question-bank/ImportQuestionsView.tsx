@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/common/Toast";
+import { EditPreviewQuestionModal } from "./EditPreviewQuestionModal";
 import {
   usePreviewImport,
   useImportQuestions,
@@ -79,8 +80,6 @@ const Stepper = ({ active }: { active: 1 | 2 | 3 }) => (
   </div>
 );
 
-// ─── Type helpers ─────────────────────────────────────────────────────────────
-
 const TYPE_LABEL: Record<string, string> = {
   MULTIPLE_CHOICE: "Multiple Choice",
   ESSAY: "Essay",
@@ -101,9 +100,7 @@ const TYPE_COLOR: Record<string, string> = {
 
 const typeLabel = (t: string) =>
   TYPE_LABEL[t] ??
-  t
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 const typeColor = (t: string) =>
   TYPE_COLOR[t] ??
@@ -111,7 +108,13 @@ const typeColor = (t: string) =>
 
 // ─── QuestionCard ─────────────────────────────────────────────────────────────
 
-const QuestionCard = ({ q }: { q: ImportPreviewQuestion }) => {
+const QuestionCard = ({
+  q,
+  onEdit,
+}: {
+  q: ImportPreviewQuestion;
+  onEdit: (question: ImportPreviewQuestion) => void;
+}) => {
   const needsReview = q.status === "needs_review";
   return (
     <div
@@ -144,7 +147,8 @@ const QuestionCard = ({ q }: { q: ImportPreviewQuestion }) => {
         </div>
         <button
           type="button"
-          className="flex shrink-0 items-center gap-1 text-xs text-[var(--color-text-subtle)] hover:text-[var(--color-text-default)]"
+          onClick={() => onEdit(q)}
+          className="flex cursor-pointer shrink-0 items-center gap-1 text-xs text-[var(--blue-600)] hover:text-[var(--blue-700)] transition-colors font-medium"
         >
           <Pencil className="h-3 w-3" />
           Edit
@@ -190,6 +194,8 @@ export const ImportQuestionsView = ({ params }: ImportQuestionsViewProps) => {
   const [dragActive, setDragActive] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [rawQuestions, setRawQuestions] = useState<AiImportQuestion[]>([]);
+  const [editingQuestion, setEditingQuestion] =
+    useState<ImportPreviewQuestion | null>(null);
 
   const baseUrl = `/classes/${classIdStr}/subjects/${subjectIdStr}`;
 
@@ -230,6 +236,60 @@ export const ImportQuestionsView = ({ params }: ImportQuestionsViewProps) => {
         },
       },
     );
+  };
+
+  const handleEditQuestion = (question: ImportPreviewQuestion) => {
+    setEditingQuestion(question);
+  };
+
+  const handleSaveEditedQuestion = (updated: ImportPreviewQuestion) => {
+    // Update the preview sections
+    setPreview((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        sections: prev.sections.map((section) => ({
+          ...section,
+          questions: section.questions.map((q) =>
+            q.id === updated.id ? updated : q,
+          ),
+        })),
+      };
+    });
+
+    // Update rawQuestions to match - find the question and update it
+    setRawQuestions((prev) => {
+      let foundIndex = -1;
+      let questionCount = 0;
+
+      for (let i = 0; i < prev.length; i++) {
+        questionCount++;
+        if (questionCount === updated.number) {
+          foundIndex = i;
+          break;
+        }
+      }
+
+      if (foundIndex >= 0) {
+        return [
+          ...prev.slice(0, foundIndex),
+          {
+            ...prev[foundIndex],
+            questionText: updated.text,
+            questionType: updated.type,
+            options: updated.options?.map((opt) => ({
+              label: opt.label,
+              text: opt.text,
+              isCorrect: opt.label === updated.correctAnswer,
+            })),
+            needsReview: updated.status === "needs_review",
+          },
+          ...prev.slice(foundIndex + 1),
+        ];
+      }
+
+      return prev;
+    });
   };
 
   // ── Derived stats ──
@@ -296,7 +356,8 @@ export const ImportQuestionsView = ({ params }: ImportQuestionsViewProps) => {
                 </span>
               </p>
               <p className="text-xs text-[var(--color-text-muted)]">
-                Supported:&nbsp;.docx&nbsp;&middot;&nbsp;.pdf&nbsp;&middot;&nbsp;.csv&nbsp;&middot;&nbsp;.xlsx&nbsp;&nbsp;|&nbsp;&nbsp;Maximum 40MB
+                Supported:&nbsp;.docx&nbsp;&middot;&nbsp;.pdf&nbsp;&middot;&nbsp;.csv&nbsp;&middot;&nbsp;.xlsx&nbsp;&nbsp;|&nbsp;&nbsp;Maximum
+                40MB
               </p>
             </button>
 
@@ -361,10 +422,14 @@ export const ImportQuestionsView = ({ params }: ImportQuestionsViewProps) => {
               onClick={handleContinueStep1}
               disabled={!file || previewMutation.isPending}
             >
-              {previewMutation.isPending && (
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              {previewMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />{" "}
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <span>Process</span>
               )}
-              Continue
             </Button>
           </div>
         </div>
@@ -455,12 +520,24 @@ export const ImportQuestionsView = ({ params }: ImportQuestionsViewProps) => {
             <div className="divide-y divide-[var(--color-border-default)]">
               {section.questions.map((q) => (
                 <div key={q.id} className="p-4">
-                  <QuestionCard q={q} />
+                  <QuestionCard q={q} onEdit={handleEditQuestion} />
                 </div>
               ))}
             </div>
           </div>
         ))}
+
+        {/* Edit Modal */}
+        {editingQuestion && (
+          <EditPreviewQuestionModal
+            question={editingQuestion}
+            classId={classId}
+            subjectId={subjectId}
+            isOpen={!!editingQuestion}
+            onClose={() => setEditingQuestion(null)}
+            onSave={handleSaveEditedQuestion}
+          />
+        )}
 
         {/* Nav */}
         <div className="flex items-center justify-between rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] px-4 py-3">

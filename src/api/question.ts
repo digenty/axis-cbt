@@ -13,6 +13,10 @@ import type {
   TopicResponse,
   TopicsResponse,
 } from "@/types/question";
+import type {
+  EditPreviewQuestionPayload,
+  EditPreviewQuestionResponse,
+} from "@/types/bulk-import";
 
 // ─── Topics ───────────────────────────────────────────────────────────────────
 
@@ -259,6 +263,25 @@ export const importCbtQuestions = async (
   try {
     const { data } = await api.post(
       `/api/cbt/question-bank/questions/ai-import`,
+      payload,
+    );
+    return data;
+  } catch (error) {
+    if (isAxiosError(error)) throw error.response?.data;
+    throw error;
+  }
+};
+
+export const editPreviewQuestion = async ({
+  questionId,
+  payload,
+}: {
+  questionId: string;
+  payload: EditPreviewQuestionPayload;
+}): Promise<EditPreviewQuestionResponse> => {
+  try {
+    const { data } = await api.patch(
+      `/api/cbt/question-bank/questions/import/preview/${questionId}`,
       payload,
     );
     return data;
