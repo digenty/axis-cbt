@@ -1,3 +1,5 @@
+"use client";
+
 import { ImportQuestionsView } from "@/components/question-bank/ImportQuestionsView";
 
 export default function ImportQuestionsPage({

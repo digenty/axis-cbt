@@ -6,18 +6,22 @@ import {
   deleteCbtQuestion,
   deleteCbtQuestionBankTopic,
   duplicateCbtQuestion,
+  editPreviewQuestion,
   getCbtQuestion,
   getCbtQuestions,
   getCbtQuestionBankTopics,
   getQuestionBankStats,
   importCbtQuestions,
+  previewCbtImport,
   updateCbtQuestion,
   updateCbtQuestionBankTopic,
 } from "@/api/question";
 import type {
+  AiImportQuestion,
   CbtQueBankTopicPayload,
   CreateQuestionPayload,
 } from "@/types/question";
+import type { EditPreviewQuestionPayload } from "@/types/bulk-import";
 
 // ─── Query key factory ────────────────────────────────────────────────────────
 
@@ -251,12 +255,25 @@ export const useGetQuestionBankStats = (classId: number, subjectId: number) => {
 
 // ─── Import ───────────────────────────────────────────────────────────────────
 
+export const usePreviewImport = (classId: number, subjectId: number) => {
+  return useMutation({
+    mutationFn: (file: File) => previewCbtImport({ classId, subjectId, file }),
+    onError: (e) =>
+      toast({ title: errMsg(e, "Failed to analyze file"), type: "error" }),
+  });
+};
+
 export const useImportQuestions = (classId: number, subjectId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) =>
-      importCbtQuestions({ classId, subjectId, file }),
+    mutationFn: (payload: {
+      questions: AiImportQuestion[];
+      confirmNewTopics?: boolean;
+    }) => importCbtQuestions({ classId, subjectId, ...payload }),
     onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: questionBankKeys.topicsList(classId, subjectId),
+      });
       qc.invalidateQueries({
         queryKey: ["question-bank", "questions", classId, subjectId],
       });
@@ -266,5 +283,22 @@ export const useImportQuestions = (classId: number, subjectId: number) => {
     },
     onError: (e) =>
       toast({ title: errMsg(e, "Failed to import questions"), type: "error" }),
+  });
+};
+
+export const useEditPreviewQuestion = (classId: number, subjectId: number) => {
+  return useMutation({
+    mutationFn: ({
+      questionId,
+      payload,
+    }: {
+      questionId: string;
+      payload: EditPreviewQuestionPayload;
+    }) => editPreviewQuestion({ questionId, payload }),
+    onError: (e) =>
+      toast({
+        title: errMsg(e, "Failed to validate question edit"),
+        type: "error",
+      }),
   });
 };

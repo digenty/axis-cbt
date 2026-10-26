@@ -60,7 +60,7 @@ const defaultForm = {
   testType: "Continuous Assessment" as TestType,
   assessmentSettingId: null as number | null,
   testDate: "",
-  startHour: "00",
+  startHour: "12",
   startMinute: "00",
   amPm: "AM" as "AM" | "PM",
   duration: 60,
@@ -213,7 +213,7 @@ function FormBody({
                 )}
               >
                 {form.testDate ? (
-                  format(new Date(form.testDate + "T00:00:00"), "PPP")
+                  format(new Date(form.testDate + "T00:00:00"), "MMMM d yyyy")
                 ) : (
                   <span>dd / mm / yy</span>
                 )}
@@ -245,26 +245,40 @@ function FormBody({
           <Label className="text-sm font-medium">Select Time</Label>
           <div className="flex items-center gap-1.5">
             <Input
-              type="number"
-              min={1}
-              max={12}
+              type="text"
+              inputMode="numeric"
+              maxLength={2}
               value={form.startHour}
               onChange={(e) =>
-                set("startHour", e.target.value.padStart(2, "0"))
+                set("startHour", e.target.value.replace(/\D/g, ""))
               }
+              onBlur={() => {
+                const n = parseInt(form.startHour, 10);
+                if (!form.startHour || isNaN(n) || n < 1) set("startHour", "12");
+                else if (n > 12) set("startHour", "12");
+                else set("startHour", String(n).padStart(2, "0"));
+              }}
+              placeholder="12"
               className="w-14 text-center"
             />
             <span className="font-medium text-[var(--color-text-muted)]">
               :
             </span>
             <Input
-              type="number"
-              min={0}
-              max={59}
+              type="text"
+              inputMode="numeric"
+              maxLength={2}
               value={form.startMinute}
               onChange={(e) =>
-                set("startMinute", e.target.value.padStart(2, "0"))
+                set("startMinute", e.target.value.replace(/\D/g, ""))
               }
+              onBlur={() => {
+                const n = parseInt(form.startMinute, 10);
+                if (!form.startMinute || isNaN(n)) set("startMinute", "00");
+                else if (n > 59) set("startMinute", "59");
+                else set("startMinute", String(n).padStart(2, "0"));
+              }}
+              placeholder="00"
               className="w-14 text-center"
             />
             <div className="flex rounded-full border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] p-0.5">

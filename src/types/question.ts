@@ -316,9 +316,116 @@ export interface QuestionResponse {
 }
 
 export interface ImportQuestionsResult {
-  imported: number;
-  failed: number;
+  totalRecords: number;
+  successCount: number;
+  failureCount: number;
   errors: string[];
+  successful: boolean;
+}
+
+// ─── AI Import (ai-extract / ai-import endpoints) ─────────────────────────────
+
+export interface AiImportOption {
+  label: string;
+  text: string;
+  isCorrect: boolean;
+  optionHtml?: string | null;
+  imageUrl?: string | null;
+}
+
+export interface AiImportBlank {
+  label: string;
+  acceptedAnswers: string[];
+}
+
+export interface AiImportSubQuestion {
+  questionType: string;
+  questionText: string;
+  marks: number;
+  explanation?: string;
+  options?: AiImportOption[];
+  correctAnswers?: string[];
+  questionHtml?: string | null;
+  imageUrl?: string | null;
+  needsReview?: boolean;
+}
+
+export interface AiImportQuestion {
+  questionType: string;
+  questionText: string;
+  marks: number;
+  difficultyLevel?: string;
+  explanation?: string;
+  options?: AiImportOption[];
+  correctAnswers?: string[] | null;
+  blanks?: AiImportBlank[] | null;
+  stimulusType?: string | null;
+  stimulusContent?: string | null;
+  stimulusImageUrl?: string | null;
+  subQuestions?: AiImportSubQuestion[] | null;
+  suggestedTopicName?: string | null;
+  questionHtml?: string | null;
+  imageUrl?: string | null;
+  containsMath?: boolean | null;
+  notes?: string | null;
+  section?: string;
+  needsReview?: boolean;
+}
+
+export interface AiImportPayload {
+  classId: number;
+  subjectId: number;
+  questions: AiImportQuestion[];
+  confirmNewTopics?: boolean;
+}
+
+export interface AiImportResult {
+  totalQuestions: number;
+  valid: number;
+  needsReview: number;
+  sectionCount: number;
+  savedQuestions: number;
+  failedQuestions: number;
+  requiresConfirmation: boolean;
+  questionTypeBreakdown: { type: string; label: string; count: number }[];
+  autoAssignedTopics: {
+    section: string;
+    topicName: string;
+    newlyCreated: boolean;
+    questionCount: number;
+  }[];
+  errors: string[];
+  warnings: string[];
+}
+
+// ─── Import preview (AI-analyzed, not yet saved) ──────────────────────────────
+
+export interface ImportPreviewOption {
+  label: string;
+  text: string;
+}
+
+export interface ImportPreviewQuestion {
+  id: string;
+  number: number;
+  type: string;
+  status: "valid" | "needs_review";
+  text: string;
+  options?: ImportPreviewOption[];
+  correctAnswer?: string;
+}
+
+export interface ImportPreviewSection {
+  name: string;
+  topicTag: string;
+  questions: ImportPreviewQuestion[];
+}
+
+export interface ImportPreview {
+  fileName: string;
+  curriculum?: string;
+  totalQuestions: number;
+  sections: ImportPreviewSection[];
 }
 
 // ─── Assessment settings (school-level CA/Exam definitions) ───────────────────
