@@ -12,6 +12,7 @@ import type {
   StudentLoginResponse,
   SubmitAnswerPayload,
 } from "@/types/student-api";
+import type { StudentAttemptAnswersResponse } from "@/types/question";
 
 const handleError = (error: unknown): never => {
   if (isAxiosError(error)) throw error.response?.data;
@@ -124,6 +125,33 @@ export const getStudentAttemptReview = async (
   try {
     const { data } = await studentApi.get(
       `/api/cbt/assessments/student-attempts/${studentAssessmentId}/review`,
+    );
+    return data;
+  } catch (e) {
+    return handleError(e);
+  }
+};
+
+export const getStudentAttemptAnswers = async (
+  studentAssessmentId: number,
+): Promise<StudentAttemptAnswersResponse> => {
+  try {
+    const { data } = await studentApi.get(
+      `/api/cbt/assessments/student-attempts/${studentAssessmentId}/answers`,
+    );
+    return data;
+  } catch (e) {
+    return handleError(e);
+  }
+};
+
+export const submitAnswersBatch = async (
+  payload: SubmitAnswerPayload[],
+): Promise<{ message: string; status: string }> => {
+  try {
+    const { data } = await studentApi.post(
+      "/api/cbt/assessments/answers/batch",
+      payload,
     );
     return data;
   } catch (e) {
