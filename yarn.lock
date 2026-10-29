@@ -739,12 +739,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@digenty/icons@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "@digenty/icons@npm:1.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40digenty%2Ficons%2F1.0.0%2F5d0e160eb0533cf61e26a496542fad1b8f7fae87"
+"@digenty/icons@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "@digenty/icons@npm:1.1.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40digenty%2Ficons%2F1.1.0%2F86b2a3f5bd3a9506843c95df6fd26ede44fdaaa2"
   peerDependencies:
     react: ">=18"
-  checksum: 10c0/f637d20310df58ba2bcb004c30493ba5eefa19c2ea969923c4aacb474841941b4a8b3b6363b2fba24f414f52b24fb95d6fc6b13ba81d594ca46bfaef6ad5dcdc
+  checksum: 10c0/dec3fe27e41f4384c9a76e5085335ad011f64939c041e1bd07ac62ad893044530dc5cffe3f96f51024bb7c541e4a792e638390017700d2cebfc022b17ad99b59
   languageName: node
   linkType: hard
 
@@ -3722,7 +3722,7 @@ __metadata:
   resolution: "axis-cbt@workspace:."
   dependencies:
     "@aws-sdk/client-s3": "npm:^3.1045.0"
-    "@digenty/icons": "npm:^1.0.0"
+    "@digenty/icons": "npm:^1.1.0"
     "@dnd-kit/core": "npm:^6.3.1"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"

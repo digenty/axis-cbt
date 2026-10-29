@@ -44,7 +44,7 @@ import { deleteSession } from "@/lib/cookies";
 
 type NavItem = {
   title: string;
-  icon: (props: React.SVGProps<SVGSVGElement>) => React.JSX.Element;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   href?: string;
   externalPath?: string;
   matchPrefixes?: string[];
