@@ -2,15 +2,16 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   getAssessmentPaper,
   getAssessmentPreview,
+  getStudentAttemptAnswers,
   getStudentAttemptReview,
   getStudentDashboard,
   getStudentResult,
   startAssessment,
   studentLogin,
   submitAnswer,
+  submitAnswersBatch,
   submitAssessment,
 } from "@/api/student";
-import { getStudentAttemptAnswers, submitAnswersBatch } from "@/api/assessment";
 import type {
   StartAssessmentPayload,
   SubmitAnswerPayload,
