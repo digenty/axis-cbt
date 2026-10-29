@@ -28,7 +28,11 @@ studentApi.interceptors.request.use(
 studentApi.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    // 401 = invalid/expired session → log the student out.
+    // 403 = authenticated but not allowed to do this right now (e.g. test
+    // window closed, already attempted) — a business error the caller
+    // should handle (see TestRunner's TestWindowClosed path), not a logout.
+    if (error.response?.status === 401) {
       clearStudentSession();
     }
     return Promise.reject(error);

@@ -36,7 +36,7 @@ import type { StudentAttemptAnswer } from "@/types/question";
 import { toast } from "@/components/common/Toast";
 import { cn, formatDate } from "@/lib/utils";
 import { clearStudentSession } from "@/lib/auth-session";
-import { useLoggedInUser } from "@/hooks/useLoggedInUser";
+import { useLoggedInStudent } from "@/hooks/useLoggedInStudent";
 import { RichTextEditor } from "@/components/question-bank/RichTextEditor";
 import { TestWindowClosed } from "./TestWindowClosed";
 
@@ -667,7 +667,7 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
   const assessmentId = Number(testId);
 
   // ─── Lifecycle: start the attempt on mount ──────────────────────────────
-  const { id: studentId, isUserLoading } = useLoggedInUser();
+  const { id: studentId, isUserLoading } = useLoggedInStudent();
   const startMutation = useStartAssessment();
   const { data: previewData } = useGetAssessmentPreview(assessmentId);
   const preview = previewData?.data;
