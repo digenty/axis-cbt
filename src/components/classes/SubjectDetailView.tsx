@@ -43,6 +43,9 @@ export const SubjectDetailView = ({ params }: SubjectDetailViewProps) => {
   const searchParams = useSearchParams();
   const className = searchParams.get("className") ?? "";
   const subjectName = searchParams.get("subjectName") ?? "";
+  const armId = searchParams.get("armId") ?? "";
+  const canManage = searchParams.get("canManage") ?? "0";
+  const mine = searchParams.get("mine") ?? "0";
   const title =
     className && subjectName
       ? `${className.replace(/\+/g, "")}  ${subjectName}`
@@ -58,7 +61,7 @@ export const SubjectDetailView = ({ params }: SubjectDetailViewProps) => {
             key={card.key}
             href={{
               pathname: `/classes/${classId}/subjects/${subjectId}/${card.key}`,
-              query: { className, subjectName },
+              query: { className, subjectName, armId, canManage, mine },
             }}
             className="group rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-5 transition-colors hover:border-[var(--color-border-darker)] hover:bg-[var(--color-bg-card-subtle)]"
           >

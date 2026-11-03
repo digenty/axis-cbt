@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { toast } from "@/components/common/Toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -10,13 +11,15 @@ import { Label } from "@/components/ui/label";
 import { BackButton } from "@/components/common/BackButton";
 import { EmptyState } from "@/components/common/EmptyState";
 import {
-  useGetStudentAttemptAnswers,
+  useGetStudentAttempt,
   useGradeManually,
 } from "@/hooks/queryHooks/useAssessment";
-import { useGetStudentResult } from "@/hooks/queryHooks/useStudentCBT";
 import { cn } from "@/lib/utils";
-import type { GradingStatus, StudentAttemptAnswer } from "@/types/question";
-import type { AttemptStatus as ApiAttemptStatus } from "@/types/student-api";
+import type {
+  GradingStatus,
+  StudentAttemptAnswer,
+  TeacherAttemptStatus,
+} from "@/types/question";
 
 interface GradeAttemptViewProps {
   params: Promise<{
@@ -27,21 +30,12 @@ interface GradeAttemptViewProps {
   }>;
 }
 
-const statusLabel = (s: ApiAttemptStatus): string => {
-  switch (s) {
-    case "IN_PROGRESS":
-      return "In progress";
-    case "PENDING":
-      return "Pending grading";
-    case "COMPLETED":
-      return "Completed";
-    case "ABSENT":
-      return "Absent";
-    case "TIMED_OUT":
-      return "Timed out";
-    default:
-      return "Not started";
-  }
+// Exhaustive by TeacherAttemptStatus - no default case, so a status this doesn't cover
+// is a type error here rather than silently falling back to a wrong label.
+const STATUS_LABEL: Record<TeacherAttemptStatus, string> = {
+  IN_PROGRESS: "In progress",
+  PENDING: "Awaiting grading",
+  COMPLETED: "Completed",
 };
 
 const gradingBadge = (s: GradingStatus): { label: string; cls: string } => {
@@ -103,6 +97,7 @@ interface AnswerCardProps {
   answer: StudentAttemptAnswer;
   assessmentId: number;
   studentAssessmentId: number;
+  canManage: boolean;
 }
 
 const AnswerCard = ({
@@ -110,6 +105,7 @@ const AnswerCard = ({
   answer,
   assessmentId,
   studentAssessmentId,
+  canManage,
 }: AnswerCardProps) => {
   const [marks, setMarks] = useState<string>(
     answer.marksAwarded !== null && answer.marksAwarded !== undefined
@@ -206,7 +202,7 @@ const AnswerCard = ({
         {renderStudentAnswer(answer)}
       </div>
 
-      {needsManual && (
+      {needsManual && canManage && (
         <div className="mt-3 grid gap-3 sm:grid-cols-[120px_1fr_auto] sm:items-end">
           <div className="space-y-1">
             <Label className="text-xs">Marks</Label>
@@ -236,6 +232,11 @@ const AnswerCard = ({
           </Button>
         </div>
       )}
+      {needsManual && !canManage && (
+        <div className="mt-3 text-xs text-[var(--color-text-muted)]">
+          Awaiting grading.
+        </div>
+      )}
     </div>
   );
 };
@@ -243,20 +244,16 @@ const AnswerCard = ({
 export const GradeAttemptView = ({ params }: GradeAttemptViewProps) => {
   const { attemptId } = use(params);
   const studentAssessmentId = Number(attemptId);
+  const searchParams = useSearchParams();
+  const canManage = searchParams.get("canManage") === "1";
 
   const {
-    data: result,
-    isLoading: resultLoading,
-    isError: resultError,
-  } = useGetStudentResult(studentAssessmentId);
+    data: attemptRes,
+    isLoading,
+    isError,
+  } = useGetStudentAttempt(studentAssessmentId);
 
-  const {
-    data: answersRes,
-    isLoading: answersLoading,
-    isError: answersError,
-  } = useGetStudentAttemptAnswers(studentAssessmentId);
-
-  if (resultLoading || answersLoading) {
+  if (isLoading) {
     return (
       <div className="flex justify-center px-6 py-12">
         <Loader2 className="h-5 w-5 animate-spin text-[var(--color-icon-default-muted)]" />
@@ -264,7 +261,9 @@ export const GradeAttemptView = ({ params }: GradeAttemptViewProps) => {
     );
   }
 
-  if (resultError || !result) {
+  const attempt = attemptRes?.data;
+
+  if (isError || !attempt) {
     return (
       <div className="px-6 py-6">
         <BackButton label="Go Back" />
@@ -275,8 +274,8 @@ export const GradeAttemptView = ({ params }: GradeAttemptViewProps) => {
     );
   }
 
-  const answers = answersRes?.data ?? [];
-  const assessmentIdNum = result.assessmentId;
+  const isPending = attempt.status === "PENDING";
+  const answers = attempt.answers ?? [];
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
@@ -285,29 +284,42 @@ export const GradeAttemptView = ({ params }: GradeAttemptViewProps) => {
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Avatar className="h-9 w-9">
           <AvatarFallback className="bg-[var(--color-bg-muted)] text-xs">
-            S
+            {attempt.studentName?.[0]?.toUpperCase() ?? "S"}
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0">
           <h1 className="truncate text-base font-semibold text-[var(--color-text-default)]">
-            {result.assessmentName}
+            {attempt.studentName} · {attempt.assessmentName}
           </h1>
           <p className="text-xs text-[var(--color-text-muted)]">
-            {statusLabel(result.status)} •{" "}
-            {result.score !== null
-              ? `${result.score} / ${result.totalMarks}`
-              : "Not scored"}
-            {result.percentage !== null ? ` (${result.percentage}%)` : ""}
+            {attempt.admissionNumber} • {STATUS_LABEL[attempt.status]}
+            {attempt.score !== null && (
+              <>
+                {" "}
+                • {attempt.score} / {attempt.totalMarks}
+                {isPending ? " (Provisional)" : ""}
+                {attempt.percentage !== null ? ` (${attempt.percentage}%)` : ""}
+              </>
+            )}
           </p>
         </div>
       </div>
 
+      {isPending && attempt.pendingManualCount > 0 && (
+        <div className="mt-3 rounded-lg bg-[var(--color-bg-badge-orange)] p-3 text-xs text-[var(--orange-700)]">
+          {attempt.pendingManualCount} question
+          {attempt.pendingManualCount !== 1 ? "s" : ""} still need grading.
+        </div>
+      )}
+
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
-          <div className="text-xs text-[var(--color-text-muted)]">Score</div>
+          <div className="text-xs text-[var(--color-text-muted)]">
+            {isPending ? "Provisional score" : "Score"}
+          </div>
           <div className="mt-1 text-lg font-semibold text-[var(--color-text-default)]">
-            {result.score !== null
-              ? `${result.score} / ${result.totalMarks}`
+            {attempt.score !== null
+              ? `${attempt.score} / ${attempt.totalMarks}`
               : "—"}
           </div>
         </div>
@@ -316,7 +328,7 @@ export const GradeAttemptView = ({ params }: GradeAttemptViewProps) => {
             Percentage
           </div>
           <div className="mt-1 text-lg font-semibold text-[var(--color-text-default)]">
-            {result.percentage !== null ? `${result.percentage}%` : "—"}
+            {attempt.percentage !== null ? `${attempt.percentage}%` : "—"}
           </div>
         </div>
         <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4">
@@ -324,8 +336,8 @@ export const GradeAttemptView = ({ params }: GradeAttemptViewProps) => {
             Submitted
           </div>
           <div className="mt-1 text-sm font-semibold text-[var(--color-text-default)]">
-            {result.submissionTime
-              ? new Date(result.submissionTime).toLocaleString()
+            {attempt.submissionTime
+              ? new Date(attempt.submissionTime).toLocaleString()
               : "—"}
           </div>
         </div>
@@ -335,11 +347,7 @@ export const GradeAttemptView = ({ params }: GradeAttemptViewProps) => {
         Answers
       </h2>
 
-      {answersError ? (
-        <div className="mt-3">
-          <EmptyState title="Could not load answers" />
-        </div>
-      ) : answers.length === 0 ? (
+      {answers.length === 0 ? (
         <div className="mt-3 rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-card)] p-4 text-sm text-[var(--color-text-muted)]">
           This attempt has no recorded answers.
         </div>
@@ -350,8 +358,9 @@ export const GradeAttemptView = ({ params }: GradeAttemptViewProps) => {
               key={a.answerId}
               index={i}
               answer={a}
-              assessmentId={assessmentIdNum}
+              assessmentId={attempt.assessmentId}
               studentAssessmentId={studentAssessmentId}
+              canManage={canManage}
             />
           ))}
         </div>

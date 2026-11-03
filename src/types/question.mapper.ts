@@ -150,7 +150,6 @@ const buildPayloadTypeSpecificData = (
   >,
 ): PayloadTypeSpecificData => {
   const m = q.metadata ?? {};
-  console.log(q.metadata, "@@@@");
   switch (q.type) {
     case "multiple-choice":
       return {

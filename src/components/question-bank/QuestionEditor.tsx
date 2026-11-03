@@ -331,12 +331,11 @@ const QuestionEditorBody = ({
                   });
                   onClose();
                 },
-                onError: () => {
-                  toast({
-                    title:
-                      "Question created but couldn't be added to the section. You can add it from the question bank.",
-                    type: "error",
-                  });
+                onError: (err) => {
+                  const msg =
+                    (err as { message?: string } | undefined)?.message ??
+                    "Question created but couldn't be added to the section. You can add it from the question bank.";
+                  toast({ title: msg, type: "error" });
                   onClose();
                 },
               },

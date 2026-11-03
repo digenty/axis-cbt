@@ -5,6 +5,7 @@ import type {
   ApiTestType,
   ApiAssessmentStatus,
 } from "./question";
+import type { TeacherAssessmentListItem } from "./student-api";
 import type {
   Test,
   TermType,
@@ -116,6 +117,35 @@ export const apiAssessmentToTest = (
     studentResultAccess: a.showResultsImmediately ?? false,
     status: apiStatusToUi(a.status),
     sections: sections.map(apiSectionToTestSection),
+    totalMarks: a.totalMarks,
+    createdAt: "",
+    updatedAt: "",
+  };
+};
+
+// `/api/cbt/assessments/my` (the teacher-scoped list) returns a flatter shape than
+// `ApiAssessment` - no sections/settings/instructions - since it's read-only here.
+export const teacherAssessmentListItemToTest = (
+  a: TeacherAssessmentListItem,
+): Test => {
+  const split = splitStartDateTime(a.startDateTime ?? new Date().toISOString());
+  return {
+    id: String(a.id),
+    title: a.name,
+    subjectId: String(a.subjectId),
+    classId: String(a.classId),
+    term: apiTermToUi(a.term),
+    testType: apiTestTypeToUi(a.testType),
+    assessmentSettingId: null,
+    mappingLabel: "",
+    testDate: split.testDate,
+    startTime: `${split.startHour}:${split.startMinute}`,
+    questionCount: a.questionCount,
+    amPm: split.amPm,
+    duration: a.durationMinutes,
+    studentResultAccess: false,
+    status: apiStatusToUi(a.status),
+    sections: [],
     totalMarks: a.totalMarks,
     createdAt: "",
     updatedAt: "",

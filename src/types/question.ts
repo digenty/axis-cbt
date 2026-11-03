@@ -1,3 +1,5 @@
+import type { ApiCbtArmSummary } from "@/types/student-api";
+
 // ─── Question type enum ───────────────────────────────────────────────────────
 
 export type QuestionType =
@@ -677,6 +679,36 @@ export interface StudentAttemptAnswersResponse {
   status: string;
 }
 
+// ─── Teacher view of one student's attempt ────────────────────────────────────
+
+export type TeacherAttemptStatus = "IN_PROGRESS" | "PENDING" | "COMPLETED";
+
+export interface TeacherStudentAttempt {
+  studentAssessmentId: number;
+  assessmentId: number;
+  assessmentName: string;
+  studentId: number;
+  studentName: string;
+  admissionNumber: string;
+  status: TeacherAttemptStatus;
+  score: number | null;
+  totalMarks: number;
+  percentage: number | null;
+  passed: boolean | null;
+  lateSubmission: boolean;
+  startTime: string;
+  submissionTime: string | null;
+  timeSpentSeconds: number;
+  pendingManualCount: number;
+  answers: StudentAttemptAnswer[];
+}
+
+export interface TeacherStudentAttemptResponse {
+  data: TeacherStudentAttempt;
+  message: string;
+  status: string;
+}
+
 // ─── Teacher CBT overview (subjects-scoped) ───────────────────────────────────
 
 export interface TeacherCbtSubjectSummary {
@@ -691,7 +723,13 @@ export interface TeacherCbtSubjectSummary {
 }
 
 export interface TeacherCbtOverview {
+  scope: "ASSIGNED" | "BRANCH_WIDE";
   subjects: TeacherCbtSubjectSummary[];
+  branchWide: {
+    totalClasses: number;
+    totalSubjects: number;
+    arms: ApiCbtArmSummary[];
+  } | null;
 }
 
 export type StudentResultStatus =

@@ -39,6 +39,7 @@ interface QuestionListPanelProps {
   onCancelNew?: () => void;
   onUpdateQuestion?: (q: Question) => void;
   savingNew?: boolean;
+  canManage: boolean;
 }
 
 const Sortable = ({
@@ -48,6 +49,7 @@ const Sortable = ({
   onDuplicate,
   onDelete,
   onUpdate,
+  canManage,
 }: {
   question: Question;
   index: number;
@@ -55,9 +57,10 @@ const Sortable = ({
   onDuplicate: () => void;
   onDelete: () => void;
   onUpdate?: (q: Question) => void;
+  canManage: boolean;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id: question.id });
+    useSortable({ id: question.id, disabled: !canManage });
 
   return (
     <div
@@ -74,6 +77,7 @@ const Sortable = ({
         onDuplicate={onDuplicate}
         onDelete={onDelete}
         onUpdate={onUpdate}
+        canManage={canManage}
         dragHandleProps={
           {
             ...attributes,
@@ -99,6 +103,7 @@ export const QuestionListPanel = ({
   onCancelNew,
   onUpdateQuestion,
   savingNew = false,
+  canManage,
 }: QuestionListPanelProps) => {
   const [search, setSearch] = useState("");
 
@@ -150,14 +155,16 @@ export const QuestionListPanel = ({
             placeholder="Search questions"
           />
         </div>
-        <Button onClick={onAddQuestion} className="h-9">
-          <Plus className="mr-1 h-3.5 w-3.5" />
-          Add question
-        </Button>
+        {canManage && (
+          <Button onClick={onAddQuestion} className="h-9">
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            Add question
+          </Button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        {newQuestionType && topic && (
+        {canManage && newQuestionType && topic && (
           <div className="mb-4">
             <InlineQuestionCard
               key={newQuestionType}
@@ -177,10 +184,12 @@ export const QuestionListPanel = ({
             title="No questions yet"
             description="Questions added under this topic will appear here"
             action={
-              <Button variant="outline" size="sm" onClick={onAddQuestion}>
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Add Question
-              </Button>
+              canManage ? (
+                <Button variant="outline" size="sm" onClick={onAddQuestion}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add Question
+                </Button>
+              ) : undefined
             }
           />
         ) : filtered.length > 0 ? (
@@ -203,6 +212,7 @@ export const QuestionListPanel = ({
                     onDuplicate={() => onDuplicate(q.id)}
                     onDelete={() => onDelete(q.id)}
                     onUpdate={onUpdateQuestion}
+                    canManage={canManage}
                   />
                 ))}
               </div>
@@ -210,7 +220,7 @@ export const QuestionListPanel = ({
           </DndContext>
         ) : null}
 
-        {filtered.length > 0 && (
+        {filtered.length > 0 && canManage && (
           <button
             type="button"
             onClick={onAddQuestion}

@@ -28,7 +28,11 @@ studentApi.interceptors.request.use(
 studentApi.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    // Only an invalid/expired token ends the session. A 403 means the token is
+    // fine but this particular request isn't allowed right now (e.g. the
+    // assessment window is closed) - that should fail just that request, not
+    // force a logout.
+    if (error.response?.status === 401) {
       clearStudentSession();
     }
     return Promise.reject(error);

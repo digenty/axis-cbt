@@ -33,9 +33,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      // Unauthorized
-      // await redirect("/auth");
+    // Only an invalid/expired token ends the session. A 403 means the token is
+    // fine but this particular request isn't allowed for this user (e.g. an
+    // admin-only endpoint called on a teacher-facing page) - that should fail
+    // just that request, not force a logout.
+    if (error.response?.status === 401) {
       deleteSession();
     }
 
