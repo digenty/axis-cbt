@@ -28,10 +28,10 @@ studentApi.interceptors.request.use(
 studentApi.interceptors.response.use(
   (response) => response,
   async (error) => {
-    // Only an invalid/expired token ends the session. A 403 means the token is
-    // fine but this particular request isn't allowed right now (e.g. the
-    // assessment window is closed) - that should fail just that request, not
-    // force a logout.
+    // 401 = invalid/expired session → log the student out.
+    // 403 = authenticated but not allowed to do this right now (e.g. test
+    // window closed, already attempted) — a business error the caller
+    // should handle (see TestRunner's TestWindowClosed path), not a logout.
     if (error.response?.status === 401) {
       clearStudentSession();
     }
