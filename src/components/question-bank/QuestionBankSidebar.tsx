@@ -44,23 +44,26 @@ interface QuestionBankSidebarProps {
   onRequestDeleteTopic: (topic: Topic) => void;
   onReorderTopics: (orderedIds: string[]) => void;
   importHref: string;
+  canManage: boolean;
 }
 
 const SortableTopicRow = ({
   topic,
   active,
+  canManage,
   onSelect,
   onRequestRename,
   onRequestDelete,
 }: {
   topic: Topic;
   active: boolean;
+  canManage: boolean;
   onSelect: () => void;
   onRequestRename: () => void;
   onRequestDelete: () => void;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id: topic.id });
+    useSortable({ id: topic.id, disabled: !canManage });
 
   return (
     <div
@@ -76,14 +79,16 @@ const SortableTopicRow = ({
           : "text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)] hover:text-[var(--color-text-default)]",
       )}
     >
-      <button
-        type="button"
-        className="flex h-5 w-3 shrink-0 cursor-grab items-center justify-center text-[var(--color-icon-default-muted)] active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-3.5 w-3.5" />
-      </button>
+      {canManage && (
+        <button
+          type="button"
+          className="flex h-5 w-3 shrink-0 cursor-grab items-center justify-center text-[var(--color-icon-default-muted)] active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+      )}
       <button
         type="button"
         onClick={onSelect}
@@ -91,24 +96,26 @@ const SortableTopicRow = ({
       >
         {topic.name}
       </button>
-      <div className="hidden items-center gap-0.5 group-hover:flex">
-        <button
-          type="button"
-          onClick={onRequestRename}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--color-icon-default-muted)] hover:bg-[var(--color-bg-state-soft-press)]"
-          aria-label="Rename topic"
-        >
-          <Pencil className="h-3 w-3" />
-        </button>
-        <button
-          type="button"
-          onClick={onRequestDelete}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--color-icon-destructive)] hover:bg-[var(--color-bg-badge-red)]"
-          aria-label="Delete topic"
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
-      </div>
+      {canManage && (
+        <div className="hidden items-center gap-0.5 group-hover:flex">
+          <button
+            type="button"
+            onClick={onRequestRename}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--color-icon-default-muted)] hover:bg-[var(--color-bg-state-soft-press)]"
+            aria-label="Rename topic"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={onRequestDelete}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--color-icon-destructive)] hover:bg-[var(--color-bg-badge-red)]"
+            aria-label="Delete topic"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -124,6 +131,7 @@ export const QuestionBankSidebar = ({
   onRequestDeleteTopic,
   onReorderTopics,
   importHref,
+  canManage,
 }: QuestionBankSidebarProps) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -167,21 +175,23 @@ export const QuestionBankSidebar = ({
           </p>
         </div>
 
-        <div className="px-4">
-          <Button
-            asChild
-            variant="outline"
-            className="mt-3.5 w-full justify-center"
-          >
-            <Link href={importHref}>
-              <Import
-                fill="var(--color-icon-default-muted)"
-                className="size-3.5"
-              />
-              Import questions
-            </Link>
-          </Button>
-        </div>
+        {canManage && (
+          <div className="px-4">
+            <Button
+              asChild
+              variant="outline"
+              className="mt-3.5 w-full justify-center"
+            >
+              <Link href={importHref}>
+                <Import
+                  fill="var(--color-icon-default-muted)"
+                  className="size-3.5"
+                />
+                Import questions
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto py-3.5">
@@ -200,6 +210,7 @@ export const QuestionBankSidebar = ({
                   key={topic.id}
                   topic={topic}
                   active={topic.id === activeTopicId}
+                  canManage={canManage}
                   onSelect={() => onSelectTopic(topic.id)}
                   onRequestRename={() => onRequestRenameTopic(topic)}
                   onRequestDelete={() => onRequestDeleteTopic(topic)}
@@ -209,16 +220,18 @@ export const QuestionBankSidebar = ({
           </DndContext>
         </div>
 
-        <div className="hidden md:block border-b border-border-default px-4 pb-3.5">
-          <button
-            type="button"
-            onClick={onRequestAddTopic}
-            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border-strong)] py-2 text-sm text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)]"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New Topic
-          </button>
-        </div>
+        {canManage && (
+          <div className="hidden md:block border-b border-border-default px-4 pb-3.5">
+            <button
+              type="button"
+              onClick={onRequestAddTopic}
+              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border-strong)] py-2 text-sm text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Topic
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );

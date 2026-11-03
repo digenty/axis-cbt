@@ -53,6 +53,7 @@ interface EditTestDetailsModalProps {
   settingsLoading: boolean;
   onSave: (patch: UpdateAssessmentPayload) => void;
   saving: boolean;
+  error?: string | null;
 }
 
 const NONE_SETTING_VALUE = "none";
@@ -101,6 +102,7 @@ function FormBody({
   onSubmit,
   submitting,
   idPrefix,
+  error,
 }: {
   form: FormState;
   set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
@@ -112,6 +114,7 @@ function FormBody({
   onSubmit: () => void;
   submitting: boolean;
   idPrefix: string;
+  error?: string | null;
 }) {
   const [dateOpen, setDateOpen] = useState(false);
   return (
@@ -385,6 +388,9 @@ function FormBody({
             Enable to allow students view their scores, answers, and feedback
             after submission.
           </p>
+          {error && (
+            <p className="mt-2 text-xs text-[var(--red-600)]">{error}</p>
+          )}
         </div>
       </div>
 
@@ -415,6 +421,7 @@ export const EditTestDetailsModal = ({
   settingsLoading,
   onSave,
   saving,
+  error,
 }: EditTestDetailsModalProps) => {
   const [form, setForm] = useState<FormState>(() =>
     assessmentToForm(assessment),
@@ -471,6 +478,7 @@ export const EditTestDetailsModal = ({
     onCancel: () => setOpen(false),
     onSubmit: handleSubmit,
     submitting: saving,
+    error,
   };
 
   const modalTitle = (

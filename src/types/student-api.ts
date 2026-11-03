@@ -110,13 +110,15 @@ export interface ApiStudentResult {
   assessmentId: number;
   assessmentName: string;
   status: AttemptStatus;
-  score: number;
+  score: number | null;
   totalMarks: number;
-  percentage: number;
-  passed: boolean;
-  submissionTime: string;
+  percentage: number | null;
+  passed: boolean | null;
+  submissionTime: string | null;
   timeSpentSeconds: number;
-  answers?: StudentAnswerSummary[];
+  awaitingManualGrading: boolean;
+  ungradedQuestionCount: number;
+  answers?: StudentAnswerSummary[] | null;
 }
 
 // ─── Assessment paper ─────────────────────────────────────────────────────────

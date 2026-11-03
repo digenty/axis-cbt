@@ -683,7 +683,6 @@ export const TestRunner = ({ testId }: TestRunnerProps) => {
     startedRef.current = true;
 
     const browserInfo = navigator.userAgent;
-    console.log({ assessmentId, studentId, browserInfo });
 
     const doStart = async () => {
       let ipAddress: string | undefined;

@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Box, Check, Copy, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -8,15 +9,17 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { TestCard } from "./TestCard";
 import { CreateTestModal } from "./CreateTestModal";
 import { DeleteTestDialog } from "./DeleteTestDialog";
-import {
-  useGetClassDetails,
-  useGetSubjectsByClassId,
-} from "@/hooks/queryHooks/useSubjects";
+import { useLoggedInUser } from "@/hooks/useLoggedInUser";
+import { useGetSubjectsByArmId } from "@/hooks/queryHooks/useSubjects";
+import { useGetMyAssessments } from "@/hooks/queryHooks/useCbtOverview";
 import {
   useDeleteAssessment,
   useGetAssessments,
 } from "@/hooks/queryHooks/useAssessment";
-import { apiAssessmentToTest } from "@/types/assessment.mapper";
+import {
+  apiAssessmentToTest,
+  teacherAssessmentListItemToTest,
+} from "@/types/assessment.mapper";
 import { toast } from "@/components/common/Toast";
 
 interface TestListViewProps {
@@ -39,14 +42,30 @@ export const TestListView = ({ params }: TestListViewProps) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const { data: classDetails } = useGetClassDetails(classId);
-  const { data: classSubjects } = useGetSubjectsByClassId(classId);
+  const searchParams = useSearchParams();
+  const className = searchParams.get("className") ?? "";
+  const subjectName = searchParams.get("subjectName") ?? "";
+  const armIdParam = searchParams.get("armId") ?? "";
+  const armId = Number(armIdParam);
+  const canManageParam = searchParams.get("canManage") ?? "0";
+  const canManage = canManageParam === "1";
+  const mine = searchParams.get("mine") === "1";
 
-  const branchId = useMemo(
-    () => classSubjects?.data?.find((s) => s.id === subjectId)?.branchId,
-    [classSubjects, subjectId],
-  );
+  // Teachers can't call the admin class/subject lookup endpoints, so the branch
+  // is resolved from the arm (CBT-scoped, works for teacher and admin alike),
+  // falling back to the logged-in user's own branch if no armId made it into the URL.
+  const { data: armSubjects } = useGetSubjectsByArmId(armId);
+  const { branchIds } = useLoggedInUser();
+  const branchId = armSubjects?.data?.branchId ?? branchIds?.[0];
 
+  // The admin-only `/api/cbt/assessments?branchId=&classId=&subjectId=` listing 403s for a
+  // teacher token, so a teacher viewing their own subject uses the teacher-scoped
+  // `/api/cbt/assessments/my` listing instead, filtered down to this class/subject.
+  const {
+    data: myAssessmentsRes,
+    isLoading: myAssessmentsLoading,
+    isError: myAssessmentsError,
+  } = useGetMyAssessments({ enabled: mine });
   const {
     data: assessmentsRes,
     isLoading: assessmentsLoading,
@@ -55,12 +74,20 @@ export const TestListView = ({ params }: TestListViewProps) => {
     branchId: branchId ?? 0,
     classId,
     subjectId,
+    enabled: !mine,
   });
 
-  const tests = useMemo(
-    () => (assessmentsRes?.data ?? []).map((a) => apiAssessmentToTest(a)),
-    [assessmentsRes],
-  );
+  const tests = useMemo(() => {
+    if (mine) {
+      return (myAssessmentsRes?.data ?? [])
+        .filter((a) => a.classId === classId && a.subjectId === subjectId)
+        .map(teacherAssessmentListItemToTest);
+    }
+    return (assessmentsRes?.data ?? []).map((a) => apiAssessmentToTest(a));
+  }, [mine, myAssessmentsRes, assessmentsRes, classId, subjectId]);
+
+  const isTestsLoading = mine ? myAssessmentsLoading : assessmentsLoading;
+  const isTestsError = mine ? myAssessmentsError : assessmentsError;
 
   const deleteMutation = useDeleteAssessment(classId, subjectId, branchId ?? 0);
 
@@ -80,23 +107,14 @@ export const TestListView = ({ params }: TestListViewProps) => {
     });
   };
 
-  const subjectName = useMemo(
-    () => classSubjects?.data?.find((s) => s.id === subjectId)?.name ?? "",
-    [classSubjects, subjectId],
-  );
-
-  const className = useMemo(() => {
-    const raw = classDetails as
-      | { data?: { name?: string } }
-      | { name?: string }
-      | undefined;
-    if (!raw) return "";
-    if ("data" in raw && raw.data?.name) return raw.data.name;
-    if ("name" in raw && typeof raw.name === "string") return raw.name;
-    return "";
-  }, [classDetails]);
 
   const baseUrl = `/classes/${classIdStr}/subjects/${subjectIdStr}`;
+  const childQs = new URLSearchParams({
+    className,
+    subjectName,
+    armId: armIdParam,
+    canManage: canManageParam,
+  }).toString();
 
   return (
     <div className="px-4 py-5 md:px-6 md:py-6">
@@ -104,10 +122,12 @@ export const TestListView = ({ params }: TestListViewProps) => {
         title="CBT"
         showBack
         right={
-          <Button onClick={() => setShowModal(true)}>
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Create New Test
-          </Button>
+          canManage && (
+            <Button onClick={() => setShowModal(true)}>
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Create New Test
+            </Button>
+          )
         }
       />
 
@@ -132,11 +152,11 @@ export const TestListView = ({ params }: TestListViewProps) => {
         </button>
       </div>
 
-      {assessmentsLoading ? (
+      {isTestsLoading ? (
         <div className="mt-12 flex justify-center">
           <Loader2 className="h-5 w-5 animate-spin text-[var(--color-icon-default-muted)]" />
         </div>
-      ) : assessmentsError ? (
+      ) : isTestsError ? (
         <div className="mt-12">
           <EmptyState
             title="Failed to load tests"
@@ -150,14 +170,16 @@ export const TestListView = ({ params }: TestListViewProps) => {
             title="No Tests Yet"
             description="Add tests to view and manage their records here."
             action={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowModal(true)}
-              >
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Create New Test
-              </Button>
+              canManage ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowModal(true)}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Create New Test
+                </Button>
+              ) : undefined
             }
           />
         </div>
@@ -167,8 +189,8 @@ export const TestListView = ({ params }: TestListViewProps) => {
             <TestCard
               key={test.id}
               test={test}
-              href={`${baseUrl}/assessments/${test.id}`}
-              onDelete={() => handleDelete(test.id)}
+              href={`${baseUrl}/assessments/${test.id}?${childQs}`}
+              onDelete={canManage ? () => handleDelete(test.id) : undefined}
             />
           ))}
         </div>

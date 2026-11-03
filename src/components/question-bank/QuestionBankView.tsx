@@ -26,7 +26,8 @@ import {
   useUpdateCbtQuestion,
   useUpdateCbtTopic,
 } from "@/hooks/queryHooks/useQuestionBank";
-import { useGetSubjectsByClassId } from "@/hooks/queryHooks/useSubjects";
+import { useLoggedInUser } from "@/hooks/useLoggedInUser";
+import { useGetSubjectsByArmId } from "@/hooks/queryHooks/useSubjects";
 import {
   apiQuestionToUI,
   questionToCreatePayload,
@@ -59,9 +60,10 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   const searchParams = useSearchParams();
   const classDisplayName = searchParams.get("className") ?? "";
   const subjectName = searchParams.get("subjectName") ?? "Subject";
+  const armId = Number(searchParams.get("armId") ?? "");
+  const canManage = searchParams.get("canManage") === "1";
 
   // ─── Server data ──────────────────────────────────────────────────────────
-  const { data: classSubjects } = useGetSubjectsByClassId(classId);
   const {
     data: topicsRes,
     isLoading: topicsLoading,
@@ -96,11 +98,12 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
   // ─── Stats card data (for header) ─────────────────────────────────────────
   useGetQuestionBankStats(classId, subjectId);
 
-  // Resolve branchId for the current subject from /subjects/class/{classId}
-  const branchId = useMemo(() => {
-    const list = classSubjects?.data ?? [];
-    return list.find((s) => s.id === subjectId)?.branchId;
-  }, [classSubjects, subjectId]);
+  // Teachers can't call the admin /subjects/class/{classId} lookup, so the branch
+  // is resolved from the arm (CBT-scoped, works for teacher and admin alike),
+  // falling back to the logged-in user's own branch if no armId made it into the URL.
+  const { data: armSubjects } = useGetSubjectsByArmId(armId);
+  const { branchIds } = useLoggedInUser();
+  const branchId = armSubjects?.data?.branchId ?? branchIds?.[0];
 
   // ─── Mutations ────────────────────────────────────────────────────────────
   const addTopic = useAddCbtTopic();
@@ -328,6 +331,7 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
         onRequestDeleteTopic={setDeletingTopic}
         onReorderTopics={handleReorderTopics}
         importHref={`${baseUrl}/question-bank/import`}
+        canManage={canManage}
       />
 
       {subjectTopics.length === 0 ? (
@@ -337,14 +341,16 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
             title="No topics"
             description="Add topics to group your questions"
             action={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setAddTopicOpen(true)}
-              >
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Add Topic
-              </Button>
+              canManage ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAddTopicOpen(true)}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add Topic
+                </Button>
+              ) : undefined
             }
           />
         </section>
@@ -372,6 +378,7 @@ export const QuestionBankView = ({ params }: QuestionBankViewProps) => {
           }}
           onUpdateQuestion={handleInlineUpdateQuestion}
           savingNew={createQuestion.isPending}
+          canManage={canManage}
         />
       )}
 
