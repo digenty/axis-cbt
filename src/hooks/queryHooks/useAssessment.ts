@@ -12,7 +12,7 @@ import {
   getAssessmentSettingsByClass,
   getAssessmentStats,
   getAssessments,
-  getStudentAttemptAnswers,
+  getStudentAttempt,
   gradeManually,
   publishAssessment,
   removeQuestionFromSection,
@@ -37,13 +37,8 @@ export const assessmentKeys = {
   results: (id: number) => ["assessments", id, "results"] as const,
   stats: (id: number) => ["assessments", id, "stats"] as const,
   enrollment: (id: number) => ["assessments", id, "enrollment"] as const,
-  studentAttemptAnswers: (studentAssessmentId: number) =>
-    [
-      "assessments",
-      "student-attempts",
-      studentAssessmentId,
-      "answers",
-    ] as const,
+  studentAttempt: (studentAssessmentId: number) =>
+    ["assessments", "student-attempts", studentAssessmentId] as const,
   settingsByClass: (classId: number) =>
     ["assessment-settings", "class", classId] as const,
 };
@@ -65,6 +60,7 @@ export const useGetAssessments = (payload: {
   branchId: number;
   classId?: number;
   subjectId?: number;
+  enabled?: boolean;
 }) => {
   return useQuery({
     queryKey: assessmentKeys.list(
@@ -73,7 +69,7 @@ export const useGetAssessments = (payload: {
       payload.branchId,
     ),
     queryFn: () => getAssessments(payload),
-    enabled: !!payload.branchId,
+    enabled: (payload.enabled ?? true) && !!payload.branchId,
     staleTime: 1000 * 60 * 5,
   });
 };
@@ -87,10 +83,10 @@ export const useGetAssessmentEnrollment = (assessmentId: number) => {
   });
 };
 
-export const useGetStudentAttemptAnswers = (studentAssessmentId: number) => {
+export const useGetStudentAttempt = (studentAssessmentId: number) => {
   return useQuery({
-    queryKey: assessmentKeys.studentAttemptAnswers(studentAssessmentId),
-    queryFn: () => getStudentAttemptAnswers(studentAssessmentId),
+    queryKey: assessmentKeys.studentAttempt(studentAssessmentId),
+    queryFn: () => getStudentAttempt(studentAssessmentId),
     enabled: !!studentAssessmentId,
     staleTime: 1000 * 30,
   });
@@ -240,7 +236,7 @@ export const useGradeManually = (
       });
       if (studentAssessmentId !== undefined) {
         qc.invalidateQueries({
-          queryKey: assessmentKeys.studentAttemptAnswers(studentAssessmentId),
+          queryKey: assessmentKeys.studentAttempt(studentAssessmentId),
         });
       }
     },

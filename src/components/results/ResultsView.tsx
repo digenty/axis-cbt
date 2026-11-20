@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -28,10 +29,11 @@ import { DataTable } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/common/Toast";
 import {
-  useGetClassDetails,
-  useGetSubjectsByClassId,
+  useGetSubjectsByArmId,
   useGetTeacherSubjects,
 } from "@/hooks/queryHooks/useSubjects";
+import { useLoggedInUser } from "@/hooks/useLoggedInUser";
+import { useGetMyAssessments } from "@/hooks/queryHooks/useCbtOverview";
 import {
   useGetAssessmentEnrollment,
   useGetAssessments,
@@ -67,25 +69,21 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
   const classId = Number(classIdStr);
   const subjectId = Number(subjectIdStr);
 
-  const { data: classDetails } = useGetClassDetails(classId);
+  const searchParams = useSearchParams();
+  const className = searchParams.get("className") ?? "";
+  const armId = Number(searchParams.get("armId") ?? "");
+  const canManageParam = searchParams.get("canManage") ?? "0";
+  const canManage = canManageParam === "1";
+  const mine = searchParams.get("mine") === "1";
+
   const { data: teacherSubjects } = useGetTeacherSubjects();
-  const { data: classSubjects } = useGetSubjectsByClassId(classId);
 
-  const branchId = useMemo(
-    () => classSubjects?.data?.find((s) => s.id === subjectId)?.branchId,
-    [classSubjects, subjectId],
-  );
-
-  const className = useMemo(() => {
-    const raw = classDetails as
-      | { data?: { name?: string } }
-      | { name?: string }
-      | undefined;
-    if (!raw) return "";
-    if ("data" in raw && raw.data?.name) return raw.data.name;
-    if ("name" in raw && typeof raw.name === "string") return raw.name;
-    return "";
-  }, [classDetails]);
+  // Teachers can't call the admin class/subject lookup endpoints, so the branch
+  // is resolved from the arm (CBT-scoped, works for teacher and admin alike),
+  // falling back to the logged-in user's own branch if no armId made it into the URL.
+  const { data: armSubjects } = useGetSubjectsByArmId(armId);
+  const { branchIds } = useLoggedInUser();
+  const branchId = armSubjects?.data?.branchId ?? branchIds?.[0];
 
   const subjectName = useMemo(
     () =>
@@ -94,16 +92,27 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
     [teacherSubjects, subjectId],
   );
 
+  // The admin-only `/api/cbt/assessments?branchId=&classId=&subjectId=` listing 403s for a
+  // teacher token, so a teacher viewing their own subject uses the teacher-scoped
+  // `/api/cbt/assessments/my` listing instead, filtered down to this class/subject.
+  const { data: myAssessmentsRes, isLoading: myAssessmentsLoading } =
+    useGetMyAssessments({ enabled: mine });
   const { data: assessmentsRes, isLoading: assessmentsLoading } =
     useGetAssessments({
       branchId: branchId ?? 0,
       classId,
       subjectId,
+      enabled: !mine,
     });
-  const subjectTests = useMemo(
-    () => assessmentsRes?.data ?? [],
-    [assessmentsRes],
-  );
+  const subjectTests = useMemo(() => {
+    if (mine) {
+      return (myAssessmentsRes?.data ?? []).filter(
+        (a) => a.classId === classId && a.subjectId === subjectId,
+      );
+    }
+    return assessmentsRes?.data ?? [];
+  }, [mine, myAssessmentsRes, assessmentsRes, classId, subjectId]);
+  const isSubjectTestsLoading = mine ? myAssessmentsLoading : assessmentsLoading;
 
   const [selectedTestId, setSelectedTestId] = useState<number | null>(null);
   const activeTestId =
@@ -147,7 +156,6 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
       }));
     return [...baseResults, ...synthetic];
   }, [baseResults, enrollment, activeTest?.totalMarks]);
-  console.log(baseResults);
 
   const { data: statsRes } = useGetAssessmentStats(activeTestId ?? 0);
   const apiStats = statsRes?.data;
@@ -230,28 +238,32 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
-                  <Link href={`${baseUrl}/results/${a.studentAssessmentId}`}>
-                    Open / Grade
+                  <Link
+                    href={`${baseUrl}/results/${a.studentAssessmentId}?canManage=${canManageParam}`}
+                  >
+                    {canManage ? "Open / Grade" : "Open"}
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() =>
-                    toast({
-                      title: "Retake request",
-                      description: "Mock — no email sent.",
-                      type: "info",
-                    })
-                  }
-                >
-                  Request Retake
-                </DropdownMenuItem>
+                {canManage && (
+                  <DropdownMenuItem
+                    onClick={() =>
+                      toast({
+                        title: "Retake request",
+                        description: "Mock — no email sent.",
+                        type: "info",
+                      })
+                    }
+                  >
+                    Request Retake
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           );
         },
       },
     ],
-    [baseUrl],
+    [baseUrl, canManage, canManageParam],
   );
 
   return (
@@ -357,7 +369,7 @@ export const ResultsView = ({ params }: ResultsViewProps) => {
       </div>
 
       <div className="mt-5">
-        {assessmentsLoading || resultsLoading ? (
+        {isSubjectTestsLoading || resultsLoading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-5 w-5 animate-spin text-[var(--color-icon-default-muted)]" />
           </div>

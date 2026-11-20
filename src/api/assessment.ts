@@ -13,7 +13,7 @@ import type {
   GradeManuallyPayload,
   SectionResponse,
   SectionsResponse,
-  StudentAttemptAnswersResponse,
+  TeacherStudentAttemptResponse,
   UpdateAssessmentPayload,
   UpdateSectionPayload,
 } from "@/types/question";
@@ -232,12 +232,12 @@ export const getAssessmentEnrollment = async (
   }
 };
 
-export const getStudentAttemptAnswers = async (
+export const getStudentAttempt = async (
   studentAssessmentId: number,
-): Promise<StudentAttemptAnswersResponse> => {
+): Promise<TeacherStudentAttemptResponse> => {
   try {
     const { data } = await api.get(
-      `/api/cbt/assessments/student-attempts/${studentAssessmentId}/answers`,
+      `/api/cbt/assessments/student-attempts/${studentAssessmentId}`,
     );
     return data;
   } catch (error: unknown) {

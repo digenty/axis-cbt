@@ -147,7 +147,6 @@ export const InlineQuestionCard = ({
           subQuestions,
           text: groupName || passage.slice(0, 60),
         };
-        console.log(payload, "777777777");
         break;
       case "multiple-blanks":
         payload = { ...base, blanks };

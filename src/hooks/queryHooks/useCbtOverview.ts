@@ -16,16 +16,18 @@ export const useGetCbtOverview = (params?: {
     staleTime: 1000 * 60 * 5,
   });
 
-export const useGetMyAssessments = () =>
+export const useGetMyAssessments = (options?: { enabled?: boolean }) =>
   useQuery({
     queryKey: ["my-assessments"],
     queryFn: getMyAssessments,
     staleTime: 1000 * 60 * 2,
+    enabled: options?.enabled ?? true,
   });
 
-export const useGetMyCbtOverview = () =>
+export const useGetMyCbtOverview = (options?: { enabled?: boolean }) =>
   useQuery({
     queryKey: ["cbt-overview", "my"],
     queryFn: getMyCbtOverview,
     staleTime: 1000 * 60 * 5,
+    enabled: options?.enabled ?? true,
   });

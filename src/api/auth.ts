@@ -29,8 +29,6 @@ export async function reAuthenticateToken(
     cache: "no-store",
   });
 
-  console.log({ res });
-
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(

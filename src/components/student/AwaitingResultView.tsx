@@ -14,6 +14,8 @@ import { TimeFill } from "@digenty/icons";
 interface AwaitingResultViewProps {
   studentAssessmentId: number;
   assessmentId: number;
+  awaitingManualGrading?: boolean;
+  ungradedQuestionCount?: number;
 }
 
 const apiStatusToUi = (
@@ -28,6 +30,8 @@ const apiStatusToUi = (
 
 export const AwaitingResultView = ({
   assessmentId,
+  awaitingManualGrading = false,
+  ungradedQuestionCount = 0,
 }: AwaitingResultViewProps) => {
   const {
     data: preview,
@@ -91,8 +95,9 @@ export const AwaitingResultView = ({
             Awaiting Result
           </h2>
           <p className="mt-2 max-w-sm text-center text-sm text-(--color-text-muted)">
-            Your answers have been submitted successfully. Your teacher is
-            reviewing your answer for submitted tests
+            {awaitingManualGrading
+              ? `Your score will be available once your teacher has graded ${ungradedQuestionCount} question${ungradedQuestionCount !== 1 ? "s" : ""}.`
+              : "Your answers have been submitted successfully. Your teacher is reviewing your answer for submitted tests"}
           </p>
         </div>
 

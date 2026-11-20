@@ -19,7 +19,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -37,10 +37,10 @@ import {
   questionToCreatePayload,
 } from "@/types/question.mapper";
 import {
-  useGetClassDetails,
-  useGetSubjectsByClassId,
+  useGetSubjectsByArmId,
   useGetTeacherSubjects,
 } from "@/hooks/queryHooks/useSubjects";
+import { useLoggedInUser } from "@/hooks/useLoggedInUser";
 import {
   useAddQuestionsToSection,
   useAddSection,
@@ -98,9 +98,11 @@ const apiTopicToUI = (t: ApiTopic): Topic => ({
 const QuestionGroupPreview = ({
   question,
   onDelete,
+  canManage,
 }: {
   question: Question;
   onDelete: () => void;
+  canManage: boolean;
 }) => (
   <div className="flex flex-col gap-4 border-t border-[var(--color-border-default)] px-4 py-4">
     {question.passage && (
@@ -155,16 +157,18 @@ const QuestionGroupPreview = ({
       </div>
     ))}
 
-    <div className="flex items-center justify-end border-t border-[var(--color-border-default)] pt-3">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onDelete}
-        className="text-[var(--color-text-destructive)] hover:bg-[var(--color-bg-destructive-soft)]"
-      >
-        Remove
-      </Button>
-    </div>
+    {canManage && (
+      <div className="flex items-center justify-end border-t border-[var(--color-border-default)] pt-3">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onDelete}
+          className="text-[var(--color-text-destructive)] hover:bg-[var(--color-bg-destructive-soft)]"
+        >
+          Remove
+        </Button>
+      </div>
+    )}
   </div>
 );
 
@@ -182,6 +186,7 @@ interface QuestionRowProps {
   updateQuestion: ReturnType<typeof useUpdateCbtQuestion>;
   onDuplicateQuestion: (questionId: number, sectionId: number) => void;
   onRemoveQuestion: (assessmentQuestionId: number) => void;
+  canManage: boolean;
 }
 
 const QuestionRow = ({
@@ -196,9 +201,13 @@ const QuestionRow = ({
   updateQuestion,
   onDuplicateQuestion,
   onRemoveQuestion,
+  canManage,
 }: QuestionRowProps) => {
+  // View-only users can see the question list but not open the editable form,
+  // so the row never expands into it for them.
+  const expanded = isExpanded && canManage;
   const { data: individualRes, isLoading: questionLoading } = useGetQuestion(
-    isExpanded ? aq.id : 0,
+    expanded ? aq.id : 0,
   );
 
   const fullQuestion = individualRes?.data
@@ -209,14 +218,14 @@ const QuestionRow = ({
     <div
       className={cn(
         "rounded-lg border transition-colors hover:bg-[var(--color-bg-state-soft)]",
-        isExpanded
+        expanded
           ? "border-blue-500 ring-1 ring-blue-500/20"
           : "border-[var(--color-border-default)]",
       )}
     >
       <button
         type="button"
-        onClick={onToggle}
+        onClick={canManage ? onToggle : undefined}
         className="flex w-full items-center gap-2 px-3 py-4.5 text-left"
       >
         <GripVertical className="h-3.5 w-3.5 shrink-0 text-[var(--color-icon-default-muted)]" />
@@ -237,20 +246,23 @@ const QuestionRow = ({
             </span>
           </div>
         </div>
-        <ChevronDown
-          className={cn(
-            "h-4 w-4 shrink-0 text-[var(--color-icon-default-muted)] transition-transform",
-            isExpanded && "rotate-180",
-          )}
-        />
+        {canManage && (
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-[var(--color-icon-default-muted)] transition-transform",
+              expanded && "rotate-180",
+            )}
+          />
+        )}
       </button>
 
-      {isExpanded &&
+      {expanded &&
         (fullQuestion ? (
           aq.questionType === "QUESTION_GROUP" ? (
             <QuestionGroupPreview
               question={fullQuestion}
               onDelete={() => onRemoveQuestion(aq.assessmentQuestionId)}
+              canManage={canManage}
             />
           ) : (
             <QuestionEditForm
@@ -298,6 +310,7 @@ interface SectionPanelProps {
   onAddQuestion: (type: QuestionType, materialKind?: string) => void;
   onDuplicateQuestion: (questionId: number, sectionId: number) => void;
   busy: boolean;
+  canManage: boolean;
 }
 
 const SectionPanel = ({
@@ -315,6 +328,7 @@ const SectionPanel = ({
   onAddQuestion,
   onDuplicateQuestion,
   busy,
+  canManage,
 }: SectionPanelProps) => {
   const updateQuestion = useUpdateCbtQuestion();
   const [open, setOpen] = useState(true);
@@ -367,17 +381,19 @@ const SectionPanel = ({
           >
             <Pencil className="h-3.5 w-3.5" />
           </div> */}
-          <div
-            role="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDeleteSection();
-            }}
-            // disabled={busy}
-            className="text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-destructive)]"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </div>
+          {canManage && (
+            <div
+              role="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteSection();
+              }}
+              // disabled={busy}
+              className="text-[var(--color-icon-default-muted)] hover:text-[var(--color-icon-destructive)]"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </div>
+          )}
           <ChevronDown
             className={cn(
               "h-4 w-4 text-[var(--color-icon-default-muted)] transition-transform",
@@ -402,25 +418,28 @@ const SectionPanel = ({
                 }
                 setInstructionsDraft(null);
               }}
+              readOnly={!canManage}
               placeholder="Anything candidates should know about this section…"
               className="w-full rounded-md border border-[var(--color-border-default)] bg-[var(--color-bg-default)] px-3 py-2 text-sm focus:outline-none"
             />
           </div>
 
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={() => setShowAddItemModal(true)}>
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              Add Question
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowBankModal(true)}
-            >
-              <BookOpen className="mr-1 h-3.5 w-3.5" />
-              Add from Question Bank
-            </Button>
-          </div>
+          {canManage && (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={() => setShowAddItemModal(true)}>
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Add Question
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBankModal(true)}
+              >
+                <BookOpen className="mr-1 h-3.5 w-3.5" />
+                Add from Question Bank
+              </Button>
+            </div>
+          )}
 
           {section.questions.length === 0 ? (
             <EmptyState
@@ -428,14 +447,16 @@ const SectionPanel = ({
               title="No questions yet"
               description="Add question to get started"
               action={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowAddItemModal(true)}
-                >
-                  <Plus className="mr-1 h-3.5 w-3.5" />
-                  Add Question
-                </Button>
+                canManage ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddItemModal(true)}
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Add Question
+                  </Button>
+                ) : undefined
               }
             />
           ) : (
@@ -454,6 +475,7 @@ const SectionPanel = ({
                   updateQuestion={updateQuestion}
                   onDuplicateQuestion={onDuplicateQuestion}
                   onRemoveQuestion={onRemoveQuestion}
+                  canManage={canManage}
                 />
               ))}
             </div>
@@ -496,11 +518,13 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   const router = useRouter();
 
   const baseUrl = `/classes/${classIdStr}/subjects/${subjectIdStr}`;
+  const searchParams = useSearchParams();
+  const armId = Number(searchParams.get("armId") ?? "");
+  const canManage = searchParams.get("canManage") === "1";
 
   // ─── Server data ─────────────────────────────────────────────────────────
-  const { data: classDetails } = useGetClassDetails(classId);
   const { data: teacherSubjects } = useGetTeacherSubjects();
-  const { data: classSubjects } = useGetSubjectsByClassId(classId);
+  const { data: armSubjects } = useGetSubjectsByArmId(armId);
   const {
     data: assessmentRes,
     isLoading: assessmentLoading,
@@ -518,7 +542,6 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   const { data: questionsRes } = useGetQuestions({ classId, subjectId });
 
   const assessment = assessmentRes?.data;
-  console.log(assessment);
   const sections = useMemo(() => sectionsRes?.data ?? [], [sectionsRes]);
   const subjectTopics = useMemo(
     () => (topicsRes?.data ?? []).map(apiTopicToUI),
@@ -529,28 +552,29 @@ export const TestEditor = ({ params }: TestEditorProps) => {
     [questionsRes],
   );
 
-  const subjectName = useMemo(
-    () =>
-      teacherSubjects?.data?.find((s) => s.subjectId === subjectId)
-        ?.subjectName ?? "",
-    [teacherSubjects, subjectId],
-  );
+  const subjectName =
+    searchParams.get("subjectName") ??
+    teacherSubjects?.data?.find((s) => s.subjectId === subjectId)
+      ?.subjectName ??
+    "";
 
-  const className = useMemo(() => {
-    const raw = classDetails as
-      | { data?: { name?: string } }
-      | { name?: string }
-      | undefined;
-    if (!raw) return "";
-    if ("data" in raw && raw.data?.name) return raw.data.name;
-    if ("name" in raw && typeof raw.name === "string") return raw.name;
-    return "";
-  }, [classDetails]);
+  const className =
+    searchParams.get("className") ??
+    (() => {
+      const subject = teacherSubjects?.data?.find(
+        (s) => s.subjectId === subjectId,
+      );
+      return (
+        subject?.classArmReportDtos.find((a) => a.classId === classId)
+          ?.classArmName ?? ""
+      );
+    })();
 
-  const branchId = useMemo(
-    () => classSubjects?.data?.find((s) => s.id === subjectId)?.branchId,
-    [classSubjects, subjectId],
-  );
+  // Teachers can't call the admin class/subject lookup endpoints, so the branch
+  // is resolved from the arm (CBT-scoped, works for teacher and admin alike),
+  // falling back to the logged-in user's own branch if no armId made it into the URL.
+  const { branchIds } = useLoggedInUser();
+  const branchId = armSubjects?.data?.branchId ?? branchIds?.[0];
 
   // ─── Mutations ───────────────────────────────────────────────────────────
   const updateMutation = useUpdateAssessment(assessmentId);
@@ -574,6 +598,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   >(null);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
+  const [editDetailsError, setEditDetailsError] = useState<string | null>(null);
   const [isExportingPasscodes, setIsExportingPasscodes] = useState(false);
   const handleConfirmDeleteSection = () => {
     if (deleteSectionTargetId === null) return;
@@ -657,7 +682,12 @@ export const TestEditor = ({ params }: TestEditorProps) => {
   const handlePublish = () => {
     publishMutation.mutate(undefined, {
       onSuccess: () => toast({ title: "Test published", type: "success" }),
-      onError: () => toast({ title: "Failed to publish test", type: "error" }),
+      onError: (err) => {
+        const msg =
+          (err as { message?: string } | undefined)?.message ??
+          "Failed to publish test";
+        toast({ title: msg, type: "error" });
+      },
     });
   };
 
@@ -785,17 +815,21 @@ export const TestEditor = ({ params }: TestEditorProps) => {
     <div className="px-4 py-5 md:px-6 md:py-6">
       <PageHeader
         title={
-          <input
-            value={titleDraft ?? assessment.name}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={() => {
-              if (titleDraft !== null && titleDraft !== assessment.name) {
-                patchAssessment({ name: titleDraft });
-              }
-              setTitleDraft(null);
-            }}
-            className="bg-transparent text-lg font-semibold focus:outline-none"
-          />
+          canManage ? (
+            <input
+              value={titleDraft ?? assessment.name}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={() => {
+                if (titleDraft !== null && titleDraft !== assessment.name) {
+                  patchAssessment({ name: titleDraft });
+                }
+                setTitleDraft(null);
+              }}
+              className="bg-transparent text-lg font-semibold focus:outline-none"
+            />
+          ) : (
+            <span className="text-lg font-semibold">{assessment.name}</span>
+          )
         }
         showBack
         right={
@@ -826,7 +860,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            {assessment.status === "DRAFT" ? (
+            {assessment.status === "DRAFT" && canManage ? (
               <>
                 <Button
                   variant="outline"
@@ -856,7 +890,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
                   Publish Test
                 </Button>
               </>
-            ) : (
+            ) : assessment.status !== "DRAFT" ? (
               <Button
                 size="sm"
                 disabled
@@ -866,7 +900,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
                 {assessment.status.charAt(0) +
                   assessment.status.slice(1).toLowerCase()}
               </Button>
-            )}
+            ) : null}
           </>
         }
       />
@@ -915,6 +949,7 @@ export const TestEditor = ({ params }: TestEditorProps) => {
             section={section}
             classId={classId}
             subjectId={subjectId}
+            canManage={canManage}
             topicId={subjectTopics[0] ? Number(subjectTopics[0].id) : null}
             bankQuestions={bankQuestions}
             subjectTopics={subjectTopics}
@@ -971,8 +1006,12 @@ export const TestEditor = ({ params }: TestEditorProps) => {
                 {
                   onSuccess: () =>
                     toast({ title: "Questions added", type: "success" }),
-                  onError: () =>
-                    toast({ title: "Failed to add questions", type: "error" }),
+                  onError: (err) => {
+                    const msg =
+                      (err as { message?: string } | undefined)?.message ??
+                      "Failed to add questions";
+                    toast({ title: msg, type: "error" });
+                  },
                 },
               )
             }
@@ -993,12 +1032,13 @@ export const TestEditor = ({ params }: TestEditorProps) => {
                             title: "Question duplicated",
                             type: "success",
                           }),
-                        onError: () =>
-                          toast({
-                            title:
-                              "Duplicated question, but failed to attach to section",
-                            type: "error",
-                          }),
+                        onError: (err) => {
+                          const msg =
+                            (err as { message?: string } | undefined)
+                              ?.message ??
+                            "Duplicated question, but failed to attach to section";
+                          toast({ title: msg, type: "error" });
+                        },
                       },
                     );
                   } else {
@@ -1015,19 +1055,21 @@ export const TestEditor = ({ params }: TestEditorProps) => {
           />
         ))}
 
-        <button
-          type="button"
-          onClick={handleAddSection}
-          disabled={addSectionMutation.isPending}
-          className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border-strong)] bg-[var(--color-bg-card)] py-3 text-sm text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)] disabled:opacity-50"
-        >
-          {addSectionMutation.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Plus className="h-3.5 w-3.5" />
-          )}
-          Add New Section
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            onClick={handleAddSection}
+            disabled={addSectionMutation.isPending}
+            className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border-strong)] bg-[var(--color-bg-card)] py-3 text-sm text-[var(--color-text-subtle)] hover:bg-[var(--color-bg-state-soft-hover)] disabled:opacity-50"
+          >
+            {addSectionMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5" />
+            )}
+            Add New Section
+          </button>
+        )}
       </div>
 
       <DeleteSectionDialog
@@ -1050,7 +1092,10 @@ export const TestEditor = ({ params }: TestEditorProps) => {
 
       <EditTestDetailsModal
         open={editingDetails}
-        setOpen={setEditingDetails}
+        setOpen={(v) => {
+          setEditingDetails(v);
+          if (v) setEditDetailsError(null);
+        }}
         assessment={assessment}
         classId={classId}
         subjectId={subjectId}
@@ -1063,13 +1108,20 @@ export const TestEditor = ({ params }: TestEditorProps) => {
           updateMutation.mutate(patch, {
             onSuccess: () => {
               toast({ title: "Test updated", type: "success" });
+              setEditDetailsError(null);
               setEditingDetails(false);
             },
-            onError: () =>
-              toast({ title: "Failed to update test", type: "error" }),
+            onError: (err) => {
+              const msg =
+                (err as { message?: string } | undefined)?.message ??
+                "Failed to update test";
+              setEditDetailsError(msg);
+              toast({ title: msg, type: "error" });
+            },
           })
         }
         saving={updateMutation.isPending}
+        error={editDetailsError}
       />
     </div>
   );

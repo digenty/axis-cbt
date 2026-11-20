@@ -24,9 +24,11 @@ export const getCbtOverview = async (params?: {
   }
 };
 
-export const getMyAssessments = async (): Promise<
-  TeacherAssessmentListItem[]
-> => {
+export const getMyAssessments = async (): Promise<{
+  data: TeacherAssessmentListItem[];
+  message: string;
+  status: string;
+}> => {
   try {
     const { data } = await api.get("/api/cbt/assessments/my");
     return data;

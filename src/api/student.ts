@@ -63,7 +63,7 @@ export const getStudentResult = async (
     const { data } = await studentApi.get(
       `/cbt/student/results/${studentAssessmentId}`,
     );
-    return data;
+    return data.data;
   } catch (e) {
     return handleError(e);
   }

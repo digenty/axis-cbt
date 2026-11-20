@@ -14,6 +14,7 @@ import { useGetTermsBySchool } from "@/hooks/queryHooks/useTerms";
 import { useGetClassLevelNames } from "@/hooks/queryHooks/useClassLevels";
 import useDebounce from "@/hooks/useDebounce";
 import { useLoggedInUser } from "@/hooks/useLoggedInUser";
+import { canManageClassesAndSubjects } from "@/lib/permissions/classes-and-subjects";
 import { Branch } from "@/types/branch";
 import type { ApiCbtArmSummary } from "@/types/student-api";
 import type { Term } from "@/types/term";
@@ -33,7 +34,8 @@ export const AllClassesView = () => {
 
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
-  const { schoolId, isUserLoading } = useLoggedInUser();
+  const { schoolId, permissions, isUserLoading } = useLoggedInUser();
+  const canManage = canManageClassesAndSubjects(permissions ?? []);
   const { data: branchesRes, isLoading: branchesLoading } = useGetBranches();
   const { data: termsRes, isLoading: termsLoading } =
     useGetTermsBySchool(schoolId);
@@ -158,7 +160,7 @@ export const AllClassesView = () => {
       ) : (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {arms.map((arm) => (
-            <ArmCard key={arm.armId} arm={arm} />
+            <ArmCard key={arm.armId} arm={arm} canManage={canManage} />
           ))}
         </div>
       )}
@@ -166,7 +168,13 @@ export const AllClassesView = () => {
   );
 };
 
-const ArmCard = ({ arm }: { arm: ApiCbtArmSummary }) => {
+export const ArmCard = ({
+  arm,
+  canManage,
+}: {
+  arm: ApiCbtArmSummary;
+  canManage: boolean;
+}) => {
   const router = useRouter();
 
   return (
@@ -189,7 +197,7 @@ const ArmCard = ({ arm }: { arm: ApiCbtArmSummary }) => {
       <Button
         onClick={() =>
           router.push(
-            `/classes/${arm.armId}?className=${encodeURIComponent(arm.displayName)}`,
+            `/classes/${arm.armId}?className=${encodeURIComponent(arm.displayName)}&canManage=${canManage ? "1" : "0"}`,
           )
         }
         className="border cursor-pointer border-border-darker bg-bg-state-secondary! text-text-default flex h-7 items-center gap-2 rounded-md border p-2"

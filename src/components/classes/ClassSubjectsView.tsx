@@ -24,6 +24,7 @@ interface SubjectCardProps {
   armIdStr: string;
   classId: number;
   className: string;
+  canManage: boolean;
   isNotifying: boolean;
   onNotify: (subjectId: number, subjectName: string) => void;
 }
@@ -32,11 +33,11 @@ function SubjectCard({
   sub,
   armIdStr,
   className,
+  canManage,
   isNotifying,
   onNotify,
   classId,
 }: SubjectCardProps) {
-  console.log(className);
   const rows: { label: string; value: ReactNode }[] = [
     {
       label: "Subject",
@@ -85,16 +86,18 @@ function SubjectCard({
         </div>
       ))}
       <div className="flex gap-2 px-4 py-3">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 flex-1 gap-1.5 text-sm"
-          disabled={isNotifying}
-          onClick={() => onNotify(sub.subjectId, sub.subjectName)}
-        >
-          <Bell className="h-3.5 w-3.5" />
-          Notify Teacher
-        </Button>
+        {canManage && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 flex-1 gap-1.5 text-sm"
+            disabled={isNotifying}
+            onClick={() => onNotify(sub.subjectId, sub.subjectName)}
+          >
+            <Bell className="h-3.5 w-3.5" />
+            Notify Teacher
+          </Button>
+        )}
         <Button
           asChild
           variant="outline"
@@ -104,7 +107,12 @@ function SubjectCard({
           <Link
             href={{
               pathname: `/classes/${classId}/subjects/${sub.subjectId}`,
-              query: { className, subjectName: sub.subjectName },
+              query: {
+                className,
+                subjectName: sub.subjectName,
+                armId: armIdStr,
+                canManage: canManage ? "1" : "0",
+              },
             }}
           >
             <Eye className="h-3.5 w-3.5" />
@@ -125,6 +133,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
   const armId = Number(armIdStr);
   const searchParams = useSearchParams();
   const className = searchParams.get("className") ?? "";
+  const canManage = searchParams.get("canManage") === "1";
 
   const {
     data: subjectsRes,
@@ -212,16 +221,18 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
         const sub = row.original;
         return (
           <div className="flex items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 gap-1 text-xs"
-              disabled={isNotifying}
-              onClick={() => handleNotify(sub.subjectId, sub.subjectName)}
-            >
-              <Bell className="h-3 w-3" />
-              Notify Teacher
-            </Button>
+            {canManage && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                disabled={isNotifying}
+                onClick={() => handleNotify(sub.subjectId, sub.subjectName)}
+              >
+                <Bell className="h-3 w-3" />
+                Notify Teacher
+              </Button>
+            )}
             <Button
               asChild
               variant="outline"
@@ -231,7 +242,12 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
               <Link
                 href={{
                   pathname: `/classes/${classId}/subjects/${sub.subjectId}`,
-                  query: { className, subjectName: sub.subjectName },
+                  query: {
+                    className,
+                    subjectName: sub.subjectName,
+                    armId: armIdStr,
+                    canManage: canManage ? "1" : "0",
+                  },
                 }}
               >
                 <Eye className="h-3 w-3" />
@@ -293,6 +309,7 @@ export const ClassSubjectsView = ({ params }: ClassSubjectsViewProps) => {
                   sub={sub}
                   armIdStr={armIdStr}
                   className={className}
+                  canManage={canManage}
                   isNotifying={isNotifying}
                   onNotify={handleNotify}
                   classId={classId}

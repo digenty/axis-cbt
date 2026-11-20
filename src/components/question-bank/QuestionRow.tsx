@@ -28,6 +28,7 @@ interface QuestionRowProps {
   onDuplicate: () => void;
   onDelete: () => void;
   onUpdate?: (q: Question) => void;
+  canManage: boolean;
 }
 
 export const QuestionRow = ({
@@ -37,8 +38,11 @@ export const QuestionRow = ({
   onDuplicate,
   onDelete,
   onUpdate,
+  canManage,
 }: QuestionRowProps) => {
   const [open, setOpen] = useState(false);
+  // View-only users can see the question list but not open the editable form.
+  const expanded = open && canManage;
 
   const isGroup =
     question.type === "question-group" ||
@@ -62,22 +66,24 @@ export const QuestionRow = ({
     <div
       className={cn(
         "rounded-lg bg-[var(--color-bg-card)] transition-colors",
-        open
+        expanded
           ? "border-2 border-blue-500"
           : "border border-[var(--color-border-default)]",
       )}
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
+        {canManage && (
+          <button
+            type="button"
+            className="flex h-5 w-3 cursor-grab items-center justify-center text-[var(--color-icon-default-muted)] active:cursor-grabbing"
+            {...dragHandleProps}
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button
           type="button"
-          className="flex h-5 w-3 cursor-grab items-center justify-center text-[var(--color-icon-default-muted)] active:cursor-grabbing"
-          {...dragHandleProps}
-        >
-          <GripVertical className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={canManage ? () => setOpen((v) => !v) : undefined}
           className="flex flex-1 items-center text-left"
         >
           <div className="flex-1">
@@ -86,12 +92,14 @@ export const QuestionRow = ({
             </div>
             {meta}
           </div>
-          <ChevronDown
-            className={cn(
-              "mt-1 h-4 w-4 shrink-0 text-[var(--color-icon-default-muted)] transition-transform",
-              open && "rotate-180",
-            )}
-          />
+          {canManage && (
+            <ChevronDown
+              className={cn(
+                "mt-1 h-4 w-4 shrink-0 text-[var(--color-icon-default-muted)] transition-transform",
+                expanded && "rotate-180",
+              )}
+            />
+          )}
         </button>
         {/* <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -123,7 +131,7 @@ export const QuestionRow = ({
         </DropdownMenu> */}
       </div>
 
-      {open && onUpdate && (
+      {expanded && onUpdate && (
         <QuestionEditForm
           question={question}
           onUpdate={onUpdate}
