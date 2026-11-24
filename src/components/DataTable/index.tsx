@@ -73,6 +73,8 @@ export const DataTable = <TData, TValue>({
   classNames,
   meta,
 }: DataTableProps<TData, TValue>) => {
+  // TanStack Table's useReactTable returns non-memoizable functions; React Compiler skips this component.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,

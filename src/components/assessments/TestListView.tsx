@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useMemo, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { Box, Check, Copy, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,12 @@ export const TestListView = ({ params }: TestListViewProps) => {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const studentUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/student`;
+  const origin = useSyncExternalStore(
+    () => () => {},
+    () => window.location.origin,
+    () => "",
+  );
+  const studentUrl = `${origin}/student/login`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(studentUrl);
